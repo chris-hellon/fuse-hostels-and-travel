@@ -1,0 +1,14 @@
+﻿@model CardWithBackgroundComponent
+
+<div class="@Model.CssClass" @(Model.AnimationDelay.HasValue ? $"data-mdb-toggle=animation data-mdb-animation-start={Model.AnimationStart} data-mdb-animation-on-scroll=once data-mdb-animation=fade-in-up data-mdb-animation-delay=0 data-mdb-animation-duration=2000" : "")>
+    <div class="card rounded-0 offcut-image-border h-100 card-full-background">
+        <div class="position-absolute top-0 left-0 w-100 h-100">
+            <img class="h-100" style="object-fit: cover; filter: grayscale(100%);" src="@(!string.IsNullOrEmpty(Model.ImageSrc) ? Model.ImageSrc : "https://images.unsplash.com/photo-1504699439244-a7e34870c35d?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=3540&q=80")" />
+        </div>
+        <div class="position-absolute top-0 left-0 w-100 h-100" style="background: linear-gradient(rgba(@(Model.BackgroundColor),0.8),rgba(@(Model.BackgroundColor),0.8))"></div>
+        <div class="card-body p-8 d-flex flex-column">
+            <h6 class="card-title mb-4 display-6 text-white pt-5">@Html.Raw(Model.Title)</h6>
+            <p class="card-text text-white pb-5">@Html.Raw(Model.Body)</p>
+        </div>
+    </div>
+</div>

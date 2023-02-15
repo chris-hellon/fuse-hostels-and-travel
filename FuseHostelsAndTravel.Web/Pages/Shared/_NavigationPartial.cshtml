@@ -1,0 +1,130 @@
+﻿@model BasePageModel
+@using FuseHostelsAndTravel.Core
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
+
+<header>
+    @{
+        var httpContext = HttpContextAccessor.HttpContext;
+
+        if (httpContext != null)
+        {
+            var currentPath = httpContext.Request.Path.Value != null ? httpContext.Request.Path.Value : "/";
+
+            <nav class="navbar navbar-expand-lg navbar-dark d-lg-block bg-lg-white fixed-top py-4 py-lg-3 @(currentPath != "/" ? "shadow always-shadow" : "")">
+                <div class="container">
+                    <a class="navbar-brand navbar-brand-mobile position-absolute nav-link d-block d-lg-none" asp-page="/Home/Index">
+                        FUSE
+                    </a>
+                    <button class="navbar-toggler ms-auto" type="button" data-mdb-toggle="collapse" data-mdb-target="#navbarExample01"
+                            aria-controls="navbarExample01" aria-expanded="false" aria-label="Toggle navigation">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarExample01">
+                        <div class="col-lg-3 d-none d-lg-flex justify-content-start pt-5 pt-lg-0">
+                            <a class="navbar-brand navbar-brand-desktop nav-link position-absolute" asp-page="/Home/Index">
+                                <strong>FUSE</strong>
+                            </a>
+                        </div>
+                        <div class="col-md-12 col-lg-6 d-flex justify-content-lg-center pt-5 pt-lg-0">
+                            <ul class="navbar-nav">
+                                <li class="nav-item dropdown mt-3 mt-lg-0 mb-lg-0">
+                                    <a class="nav-link d-none d-lg-block dropdown-toggle @(currentPath.Contains("/hostels") ? "active" : "" )" asp-page="/Hostels/Index" asp-route-hostelName="" id="navbarDropdownSleepAndEat" role="button" aria-expanded="false" aria-haspopup="true">HOSTELS</a>
+                                    <ul class="dropdown-menu">
+                                        @{
+                                            foreach (var hostel in Model.Hostels)
+                                            {
+                                                <li>
+                                                    <a class="dropdown-item text-dark" asp-page="/Hostels/Index" asp-route-hostelName="@hostel.FriendlyUrl">@hostel.Name</a>
+                                                </li>
+                                            }
+                                        }
+                                    </ul>
+                                    <div class="accordion accordion-flush accordion-borderless d-lg-none d-block" id="hostelsAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header" id="hostelsAccordionHeading">
+                                                <button class="accordion-button collapsed @(currentPath.Contains("/hostels") ? "active" : "" )" data-mdb-toggle="collapse" data-mdb-target="#hostelsAccordionCollapse" aria-expanded="false" aria-controls="hostelsAccordionCollapse" type="button">
+                                                    HOSTELS <i class="fa-solid fa-caret-down ms-3"></i>
+                                                </button>
+                                            </h2>
+                                            <div id="hostelsAccordionCollapse" class="accordion-collapse collapse" aria-labelledby="hostelsAccordionHeading" data-mdb-parent="#hostelsAccordion">
+                                                <div class="accordion-body">
+                                                    <ul>
+                                                        @{
+                                                            foreach (var hostel in Model.Hostels)
+                                                            {
+                                                                <li class="nav-item">
+                                                                    <a class="nav-link" asp-page="/Hostels/Index" asp-route-hostelName="@hostel.FriendlyUrl">@hostel.Name</a>
+                                                                </li>
+                                                            }
+                                                        }
+                                                        <li class="nav-item">
+                                                            <a class="nav-link" asp-page="/Hostels/Index" asp-route-hostelName="">All Locations</a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="nav-item dropdown mt-3 mb-3 mt-lg-0 mb-lg-0">
+                                    <a class="nav-link d-none d-lg-block  dropdown-toggle @(currentPath.Contains("/tours") ? "active" : "" )" asp-page="/Tours/Index" asp-route-tourName="" id="navbarDropdownSleepAndEat" role="button" aria-expanded="false" aria-haspopup="true">TOURS</a>
+
+                                    <ul class="dropdown-menu">
+                                        @{
+                                            foreach (var tour in Model.Tours)
+                                            {
+                                                <li>
+                                                    <a class="dropdown-item text-dark" asp-page="/Tours/Index" asp-route-tourName="@tour.FriendlyUrl">@tour.Name</a>
+                                                </li>
+                                            }
+                                        }
+                                    </ul>
+
+                                    <div class="accordion accordion-flush accordion-borderless d-lg-none d-block" id="toursAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header" id="toursAccordionHeading">
+                                                <button class="accordion-button collapsed @(currentPath.Contains("/hostels") ? "active" : "" )" data-mdb-toggle="collapse" data-mdb-target="#toursAccordionCollapse" aria-expanded="false" aria-controls="toursAccordionCollapse" type="button">
+                                                    TOURS <i class="fa-solid fa-caret-down ms-3"></i>
+                                                </button>
+                                            </h2>
+                                            <div id="toursAccordionCollapse"
+                                                 class="accordion-collapse collapse"
+                                                 aria-labelledby="toursAccordionHeading"
+                                                 data-mdb-parent="#toursAccordion">
+                                                <div class="accordion-body">
+                                                    <ul>
+                                                        @{
+                                                            foreach (var tour in Model.Tours)
+                                                            {
+                                                                <li>
+                                                                    <a class="nav-link" asp-page="/Tours/Index" asp-route-tourName="@tour.FriendlyUrl">@tour.Name</a>
+                                                                </li>
+                                                            }
+                                                        }
+                                                        <li class="nav-item">
+                                                            <a class="nav-link" asp-page="/Tours/Index" asp-route-tourName="">All Tours</a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="nav-item mb-3 mb-lg-0">
+                                    <a class="nav-link" asp-page="/OurStory/Index">OUR STORY</a>
+                                </li>
+                                <li class="nav-item mb-3 mb-lg-0">
+                                    <a class="nav-link" asp-page="/Contact/Index">CONTACT</a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-12 col-lg-3 d-flex justify-content-lg-end">
+                            <partial name="_LoginNavigationPartial" />
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            <!-- Navbar -->
+        }
+    }
+</header>

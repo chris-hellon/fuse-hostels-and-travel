@@ -1,0 +1,16 @@
+﻿@model FuseHostelsAndTravel.Core.Models.WebComponents.BookNowComponent
+
+@if (Model.Floating)
+{
+    <div class="container-fluid position-absolute floating-book-banner">
+        <div class="container p-4 booking-banner w-80">
+            <partial name="_BookNowFormPartial" model="Model" />
+        </div>
+    </div>
+}
+else
+{
+    <div class="container bg-white py-4 p-lg-4 rounded booking-banner" style="background-color: rgba(255,255,255, 0.95) !important;">
+        <partial name="_BookNowFormPartial" model="Model" />
+    </div>
+}

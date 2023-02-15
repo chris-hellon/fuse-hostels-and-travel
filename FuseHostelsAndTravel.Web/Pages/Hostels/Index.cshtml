@@ -1,0 +1,70 @@
+﻿@page "/hostels/{hostelName?}"
+@model FuseHostelsAndTravel.Web.Pages.Hostels.IndexModel
+
+@if (Model.Hostel != null)
+{
+    <section id="headerBanner">
+        @Html.DisplayFor(x => x.HeaderBanner)
+        <partial name="_NavPillsPartial" model="Model.NavPills" />
+    </section>
+
+    <section id="about" class="overflow-hidden inherit-sticky-parent">
+        @Html.DisplayFor(x => x.IntroductionBanner)
+    </section>
+
+    <section id="accommodation" class="bg-light pb-8">
+        @Html.DisplayFor(x => x.AccommodationCards)
+        @Html.DisplayFor(x => x.FacilitiesTable)
+    </section>
+
+    <section id="bookBanner" class="bg-gray px-3 px-lg-0 py-5">
+        @Html.DisplayFor(x => x.BookNowBanner)
+    </section>
+
+    <section id="@($"tours-in-{Model.Hostel.FriendlyPageTitle}")" class="bg-light">
+        @Html.DisplayFor(x => x.ToursCards)
+    </section>
+
+    <section id="@($"getting-to-{Model.Hostel.FriendlyPageTitle}")">
+        @Html.DisplayFor(x => x.DirectionsNavPills)
+    </section>
+
+    <section id="events">
+        <div class="container">
+            <div class="row gx-4">
+                @Html.DisplayFor(x => x.EventsCards)
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    @section Styles {
+        <style type="text/css">
+            .header-banner-image-background {
+                background-position-y: 0%;
+            }
+        </style>
+    }
+
+    <section id="headerBanner" class="bg-light">
+        @Html.DisplayFor(x => x.HeaderBanner)
+    </section>
+
+    <section id="hostels" class="bg-light overflow-hidden">
+        @Html.DisplayFor(x => x.HostelsContainers)
+    </section>
+
+    <section id="events" class="pt-8">
+        <div class="container">
+            <div class="row gx-4">
+                @Html.DisplayFor(x => x.EventsCards)
+            </div>
+        </div>
+    </section>
+
+    <section id="bookBanner" class="bg-gray px-3 px-lg-0 py-5">
+        @Html.DisplayFor(x => x.BookNowBanner)
+    </section>
+}
+

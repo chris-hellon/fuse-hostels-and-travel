@@ -1,0 +1,103 @@
+﻿@model BasePageModel
+
+<!DOCTYPE html>
+<html lang="en" class="no-scrollbar">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Fuse Hostels & Travel</title>
+    <link href="/favicon.ico" rel="icon">
+    <style type="text/css">
+        @@font-face {
+            font-family: 'DIN 2014 Demi';
+            src: url('/fonts/din2014-demi-webfont.woff2') format('woff2'), url('/fonts/din2014-demi-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @@font-face {
+            font-family: 'DIN 2014 Narrow';
+            src: url('/fonts/din2014-narrow-webfont.woff2') format('woff2'), url('/fonts/din2014-narrow-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @@font-face {
+            font-family: 'DIN 2014 Narrow Bold';
+            src: url('/fonts/din2014-narrowbold-webfont.woff2') format('woff2'), url('/fonts/din2014-narrowbold-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @@font-face {
+            font-family: 'DIN 2014 Narrow Demi';
+            src: url('/fonts/din2014-narrowdemi-webfont.woff2') format('woff2'), url('/fonts/din2014-narrowdemi-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @@font-face {
+            font-family: 'DIN 2014 Narrow Extra Light';
+            src: url('/fonts/din2014-narrowextralight-webfont.woff2') format('woff2'), url('/fonts/din2014-narrowextralight-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @@font-face {
+            font-family: 'DIN 2014 Regular';
+            src: url('/fonts/din2014-regular-webfont.woff2') format('woff2'), url('/fonts/din2014-regular-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        @@font-face {
+            font-family: 'DIN 2014 Bold';
+            src: url('/fonts/din2014-bold-webfont.woff2') format('woff2'), url('/fonts/din2014-bold-webfont.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+    </style>
+
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"></noscript>
+
+    <link rel="stylesheet" href="~/mdb/css/mdb.css" />
+    <link rel="stylesheet" href="~/lib/owlcarousel/owlcarousel.min.css" />
+    <link rel="stylesheet" href="~/lib/owlcarousel/owlcarousel.theme.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+    <div class="vh-100 w-100 position-fixed top-0 start-0 bg-black text-center pre-loader">
+        <div class="spinner-border text-white d-block mb-3" role="status">
+
+        </div>
+    </div>
+
+    <partial name="_NavigationPartial" model="@Model" />
+
+    <main role="main" class="container-fluid p-0 m-0">
+        @Html.AntiForgeryToken()
+        @RenderBody()
+    </main>
+
+    <partial name="_FooterPartial" />
+    @Html.DisplayFor(x => x.LoginModal)
+    @Html.DisplayFor(x => x.RegisterModal)
+    <partial name="_BookNowModalPartial" model="new BookNowComponent(Model.Hostels) { IsModal = true }" />
+
+    <div class="alert fade mt-3" id="feedbackAlert" data-mdb-position="top-center" data-mdb-hidden="true" data-mdb-width="35%" role="alert" data-mdb-color="danger">
+        <span class="small" id="feedbackAlertMessage"></span>
+        <button type="button" class="btn-close position-absolute" aria-label="Close"></button>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <partial name="_ValidationScriptsPartial" />
+    <script type="text/javascript" src="~/mdb/js/mdb.min.js"></script>
+    <script type="text/javascript" src="~/lib/owlcarousel/owl.carousel.js" asp-append-version="true"></script>
+    <script type="text/javascript" src="~/js/site.js" asp-append-version="true"></script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

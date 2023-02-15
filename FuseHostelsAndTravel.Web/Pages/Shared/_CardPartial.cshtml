@@ -1,0 +1,36 @@
+﻿@model CardComponent
+
+<div class="@Model.CssClass @(Model.LightboxImages != null && Model.LightboxImages.Any() ? "lightbox-card" : "")" @(Model.AnimationDelay.HasValue ? $"data-mdb-toggle=animation data-mdb-animation-start={Model.AnimationStart} data-mdb-animation-on-scroll=once data-mdb-animation=fade-in-up data-mdb-animation-delay=0 data-mdb-animation-duration=2000" : "")>
+    <div class="card rounded-0 offcut-image-border">
+        @if (!string.IsNullOrEmpty(Model.ImageSrc))
+        {
+            <img src="@Model.ImageSrc" alt="@($"{Model.Title} image")" class="card-img-top rounded-0 @(Model.LightboxImages != null && Model.LightboxImages.Any() ? "object-fit-cover" : "")" />
+        }
+        else
+        {
+            <img src="https://images.unsplash.com/photo-1504699439244-a7e34870c35d?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=3540&q=80" class="card-img-top rounded-0 img-fluid @(Model.LightboxImages != null && Model.LightboxImages.Any() ? "object-fit-cover" : "")" alt="@($"{Model.Title} image")" />
+        }
+
+        @if (Model.LightboxImages == null || !Model.LightboxImages.Any())
+        {
+            <div class="card-body p-5 ">
+                <h6 class="card-title mb-4 display-6">@Html.Raw(Model.Title)</h6>
+                <p class="card-text">@Html.Raw(Model.Body)</p>
+
+                @if (Model.ButtonComponent != null)
+                {
+                    <partial name="_ButtonLinkPartial" model="Model.ButtonComponent" />
+                }
+            </div>
+        }
+        else
+        {
+            <h4 class="tilted position-absolute">@Model.Title</h4>
+        }
+    </div>
+
+    @if (Model.LightboxImages != null && Model.LightboxImages.Any())
+    {
+        <a class="text-purple">@Model.Title.ToUpper() INFO</a>
+    }
+</div>

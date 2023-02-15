@@ -1,0 +1,628 @@
+﻿body, html {
+    overscroll-behavior: none;
+    overflow-x:hidden;
+    padding-right:0px !important;
+}
+
+    html.no-scrollbar, html.no-scrollbar body {
+        overflow: hidden !important;
+    }
+
+footer {
+    font-size: 1rem !important;
+}
+
+    footer a:hover {
+        color: var(--mdb-light-purple-shadow-color) !important;
+    }
+
+    .pre-loader {
+        z-index: 100000;
+        display: flex;
+        flex-flow: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+.container-fluid {
+    padding: 0px !important
+}
+
+a[data-mdb-toggle], a[data-mdb-dismiss] {
+    cursor: pointer;
+}
+
+.btn-outline-primary:hover {
+    -webkit-box-shadow: 5px 5px 0px 0px var(--mdb-purple) !important;
+    box-shadow: 5px 5px 0px 0px var(--mdb-purple) !important;
+}
+
+.navbar-brand-desktop, .navbar-brand-mobile {
+    top: 5px
+}
+
+.navbar:not(.shadow) .nav-link:not(.navbar-brand):hover {
+    color: var(--mdb-nav-link-hover-color);
+    background: linear-gradient(to top, var(--mdb-purple) 55%, transparent 0);
+}
+
+.navbar-brand-mobile {
+    font-size: 1.7rem;
+    padding: 1.2rem 0.9rem
+}
+
+.navbar.no-shadow {
+box-shadow:none !important;
+transition:0s;
+}
+
+.navbar .dropdown-menu {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+    padding-bottom:0.85rem;
+}
+.dropdown-menu .dropdown-item {
+padding:0px;
+display:inline-block;
+width:auto;
+margin:0px 0px 10px 0px;
+}
+    .dropdown-menu .dropdown-item:first-of-type {
+        margin-top:10px;
+    }
+    .dropdown-menu .dropdown-item:last-of-type {
+        margin-bottom: 0px;
+    }
+    .dropdown-menu .dropdown-item:hover {
+        background: linear-gradient(to top, var(--mdb-light-purple-shadow-color) 55%, transparent 0);
+    }
+
+.navbar:not(.shadow) .dropdown-menu {
+    padding-top:0px; 
+}
+
+.nav-pills.menu-sidebar .nav-link:hover {
+    background:unset;
+    text-decoration:underline;
+}
+
+.accordion-button {
+    padding: 0px;
+    color: #fff;
+    font-size: var(--mdb-nav-link-font-size);
+    font-weight: var(--mdb-nav-link-font-weight);
+    text-shadow: none;
+    letter-spacing: 0.063rem;
+    margin-left: 0.1rem;
+    margin-right: 0.1rem;
+    font-family: var(--mdb-nav-link-font-family);
+}
+
+.accordion-borderless .accordion-item .accordion-button:not(.collapsed) {
+    color: #fff;
+    background-color:transparent;
+}
+.accordion-body ul {
+    list-style-type:none;
+    padding-left:0px;
+}
+    .accordion-body ul li {
+        margin-bottom:10px;
+    }
+        .accordion-body ul li:last-of-type {
+            margin-bottom:0px;
+        }
+
+.accordion-body {
+    padding: 20px 20px 10px 0px;
+}
+.accordion-button:after {
+    display: none;
+}
+.tilted {
+    transform: rotate(-4deg);
+    background-color: var(--mdb-eggplant);
+}
+
+h4.tilted {
+    font-size: 2rem;
+    line-height: 1.34;
+    letter-spacing: normal;
+    padding: 3px 14px 2px 11px;
+    color: var(--mdb-white);
+    display: table;
+    text-transform: uppercase;
+}
+    h4.tilted.display-6 {
+        font-size:1.5rem;
+    }
+
+    h2.tilted {
+        text-shadow: -3px 0px var(--mdb-purple);
+    }
+h1.display-3 {
+    text-shadow: -3px 0px var(--mdb-light-purple-shadow-color);
+}
+
+.header-banner-image-background {
+    height: 30rem;
+    min-height:70vh;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position-y: 80%;
+    position:relative;
+    z-index:2;
+}
+
+.header-banner h1 {
+    font-size: 5.5rem;
+    line-height: 5rem;
+    text-transform: uppercase;
+}
+
+    .header-banner h1 span {
+        font-size: 2.5rem;
+        line-height: 2.5rem;
+        transform: rotate(-8deg);
+        text-transform: uppercase;
+        position: absolute;
+        top: -50%;
+        left: -50px;
+        text-shadow: -3px 0px var(--mdb-purple);
+    }
+
+
+.floating-book-banner {
+    z-index: 1;
+    bottom:5%;
+}
+    .floating-book-banner .booking-banner {
+        width:60%;
+    }
+    .offset-background {
+        background-color: #FFFFFF;
+        background-image: -webkit-linear-gradient(-30deg, #FFFFFF 60%, #D1AC00 50%);
+    }
+
+    .offset-background .oval {
+        opacity: 0.4;
+    }
+
+.offcut-image-border {
+    position: relative;
+}
+
+
+    .offcut-image-border::before {
+        content: "";
+        border: solid 1px var(--mdb-eggplant);
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: 100%;
+        height: 100%;
+        z-index: 3;
+    }
+
+table td {
+    font-family: var(--mdb-navbar-brand-font-family);
+    font-size:1.25rem;
+    line-height:1.4;
+}
+
+.card {
+    white-space: normal;
+}
+.card-full-background:before {
+    border: solid 1px var(--mdb-purple) !important;
+}
+
+.card.offcut-image-border::before {
+    height: calc(100% - 10px);
+}
+
+.offcut-image-border.full-circle::before, .offcut-image-border.full-circle, .offcut-image-border.full-circle img {
+    border-radius: 50%;
+}
+
+.ovals-container-parent {
+    position: relative;
+}
+
+    .ovals-container-parent div:not(.ovals-container), .ovals-container-parent img, .row > div:not(.ovals-container) {
+        z-index: 2;
+        position: relative;
+    }
+
+    
+.ovals-container {
+    position: absolute;
+    width: auto;
+    z-index: 1;
+    transform: rotate(63deg);
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10 and IE 11 */
+    user-select: none; /* Standard syntax */
+}
+
+.oval {
+    margin: 0.1rem;
+    background-color: var(--mdb-white);
+    width: 0.55rem;
+    height: 0.55rem;
+    padding: 0rem;
+    display: inline-block;
+    border-radius: 0.5rem;
+    opacity: 0.6;
+}
+
+.oval-row {
+    display: block;
+    padding: 0;
+    margin: 0;
+    height: 1rem;
+}
+
+.object-fit-cover {
+    object-fit: cover;
+    height:100%;
+    display:none;
+}
+
+.card-body {
+    position: relative;
+    z-index: 4;
+}
+
+.card .bg-image, .card .card-img-top {
+    height: 320px;
+    object-fit: cover;
+}
+
+    .card .bg-image img, .card .card-img-top img {
+        object-fit: cover;
+        height: 100%;
+        width: 100%;
+    }
+
+.card-full-background {
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+}
+
+.lightbox-card h4 {
+    z-index: 4;
+    top: -20px;
+    left: -40px;
+}
+
+.lightbox-card a, td a {
+    font-size: 0.938rem;
+    font-family: var(--mdb-nav-link-font-family);
+    text-decoration: underline;
+    color: var(--mdb-purple);
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.lightbox-card a:hover, td a:hover {
+    opacity:0.6;
+}
+    .lightbox-card img {
+        min-width: 100%;
+    }
+
+.lightbox-card a:hover, td a:hover {
+    color: var(--mdb-dark-purple);
+    text-decoration: underline;
+}
+
+div p:last-of-type {
+    margin-bottom: 0px !important;
+}
+
+.sticky-top.is-pinned {
+    transition: 0s;
+    box-shadow: 0 0.5rem 1rem rgb(0 0 0 / 15%) !important;
+    background-color:var(--mdb-white) !important;
+}
+#stickySubNavigation {
+    top: 81px
+}
+.features-container h4.tilted {
+    top:-20px;
+}
+.form-outline, .form-outline .form-control {
+    min-height: 47px;
+}
+
+    .form-control, .form-label {
+        font-family: var(--mdb-nav-link-font-family);
+        font-size: 0.875rem;
+        color: var(--mdb-gray);
+        letter-spacing: 1px;
+    }
+.form-label {
+    text-transform: uppercase;
+}
+.select-wrapper, .select-wrapper .form-outline, .form-control.select-input {
+    height: 100%;
+}
+.cursor-pointer {
+ cursor:pointer;
+}
+/* Carousel styling */
+#fullPageCarousel,
+#fullPageCarousel .carousel-inner,
+#fullPageCarousel .carousel-item,
+#fullPageCarousel .carousel-item.active {
+    height: 100vh;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
+}
+
+
+    .carousel-item span {
+        font-size: 2.5rem;
+        font-family: 'DIN 2014 Narrow Bold';
+        text-shadow:0 0 transparent !important;
+    }
+
+    .carousel-item h1 {
+        font-family: 'DIN 2014 Narrow Bold' !important;
+        line-height:6.5rem;
+        
+    }
+
+.card-title {
+    font-size:2rem;
+}
+.card-text {
+    font-size: 1.125rem;
+}
+
+.fuse-validation {
+    display: block;
+    color: #FF6666;
+    font-size: 0.75rem;
+    position: absolute;
+    bottom: 6px;
+}
+
+#parallaxBanner {
+    padding-bottom: 8rem;
+}
+
+    #parallaxBanner .container-fluid {
+        width: 180%;
+        margin-left: -10%;
+        padding-left: 12.5%;
+        text-transform: uppercase;
+        font-size: 6.5rem;
+        line-height: 6.5rem;
+        position: relative;
+        z-index: 3;
+    }
+
+.book-now-login-titles {
+    display: none;
+}
+
+.marquee {
+    overflow: hidden;
+    white-space: nowrap;
+    animation: scrollText 60s infinite linear;
+    margin: 0;
+    display: inline-block;
+    border: none;
+    outline: none;
+}
+
+    .marquee:nth-of-type(2) {
+        animation: scrollTextOpposite 70s infinite linear;
+    }
+
+    .marquee:nth-of-type(3) {
+        animation: scrollText 80s infinite linear;
+    }
+
+#parallaxBanner .container-fluid div span {
+    display: inline-block;
+    border: none;
+    outline: none;
+}
+
+#feedbackAlert button {
+    top: 10px;
+    right: 10px;
+    height: 0.2em;
+    width: 0.2em;
+    color:#fff;
+}
+#feedbackAlert button:hover {
+    color: #fff;
+}
+
+#feedbackAlertMessage {
+    font-size: 0.9rem;
+    font-weight: normal;
+}
+
+.alert-danger {
+    background-color: #af233a;
+    color:#fff;
+}
+
+#feedbackAlertMessage p {
+    margin: 0px;
+}
+
+    @keyframes scrollText {
+        from {
+        transform: translateX(0%);
+    }
+
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+@keyframes scrollTextOpposite {
+    from {
+        transform: translateX(-50%);
+    }
+
+    to {
+        transform: translateX(0%);
+    }
+}
+
+.card-full-background h6.display-6 {
+    font-size: 6rem;
+    text-shadow: -5px 0px var(--mdb-purple);
+    font-family: 'DIN 2014 Narrow' !important;
+    font-weight: bold;
+    text-transform: uppercase;
+    line-height: 6rem;
+}
+
+
+.owl-theme .owl-dots .owl-dot span {
+    width: 12px !important;
+    height: 12px !important;
+    background-color: var(--mdb-light-purple-shadow-color) !important;
+    border-radius: 100% !important;
+}
+.owl-theme .owl-dots .owl-dot.active span, .owl-theme .owl-dots .owl-dot:hover span {
+    background-color: var(--mdb-purple) !important;
+}
+
+.owl-nav {
+    display: none;
+}
+
+.owl-dots {
+    margin-top: 30px;
+}
+
+.owl-stage-outer {
+    padding-left: 5px;
+    padding-right: 3px;
+}
+
+.modal .btn-close {
+    position:absolute; top:20px; right:20px;
+}
+
+@media(max-width:1200px) {
+
+    .carousel-item span {
+        font-size: 2rem;
+    }
+
+    .carousel-item h1 {
+        line-height: 4rem;
+    }
+
+
+    .floating-book-banner .booking-banner {
+        width: 80%;
+    }
+}
+
+    @media(max-width:991px) {
+        #parallaxBanner .container-fluid {
+            width: 280%;
+            font-size: 3.5rem;
+            line-height: 3.5rem;
+        }
+
+        .card-full-background h6.display-6 {
+            font-size: 5rem;
+            line-height: 5rem;
+        }
+
+        .carousel-item span {
+            font-size: 2rem;
+        }
+
+        .carousel-item h1 {
+            line-height: 4rem;
+        }
+
+        .carousel-item h1, .carousel-item span {
+            font-weight: normal;
+        }
+
+        h4.tilted {
+            font-size: 1.5rem;
+        }
+
+        .offset-background {
+            background-image: -webkit-linear-gradient(-40deg, #FFFFFF 60%, #D1AC00 50%);
+        }
+
+        #homePageIntroductionOvals1, #homePageIntroductionOvals2 {
+            display: none;
+        }
+
+        #homePageIntroductionOvals3 {
+            bottom: -43% !important;
+        }
+
+        #hostelPageHeaderBannerOvals1 {
+            top: -175% !important;
+            left: -60% !important;
+        }
+
+        .dropdown-toggle:after {
+            display: none;
+        }
+
+        .header-banner-image-background {
+            height: 280px !important;
+            min-height: unset;
+        }
+
+        .header-banner h1 {
+            font-size: 4.5rem;
+            line-height: 4rem;
+        }
+
+        .header-banner h2 {
+            font-size: 2rem;
+            line-height: 2rem;
+        }
+
+        .lightbox-card h4 {
+            left: 0px;
+        }
+
+        #stickySubNavigation {
+            top: 76px
+        }
+
+        .header-banner-image-background {
+            background-position: center;
+        }
+
+        .header-banner h1 span {
+            top: -66%;
+            left: -25%;
+        }
+
+        .nav-pills .nav-item {
+            display: block;
+            width: 100%;
+        }
+
+        .floating-book-banner {
+            bottom: 0%;
+        }
+
+            .floating-book-banner .booking-banner {
+                width: 100%;
+            }
+    }

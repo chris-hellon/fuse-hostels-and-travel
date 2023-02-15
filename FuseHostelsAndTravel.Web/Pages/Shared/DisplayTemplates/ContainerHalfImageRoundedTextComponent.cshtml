@@ -1,0 +1,45 @@
+﻿@model ContainerHalfImageRoundedTextComponent
+
+<div class="container-fluid position-relative @(!Model.SwapDirecion ? "offset-background" : "")">
+    <div class="container pt-8 pb-8@(Model.OvalContainers != null ? " position-relative" : "")">
+        <div class="row g-lg-10 @(Model.SwapDirecion ? "flex-row-reverse" : "")">
+            <div class="col-md-12 col-lg-6 pb-5 pb-lg-0 d-flex align-items-center position-relative">
+                <div class="mx-auto" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+                    @if (Model.Title != null)
+                    {
+                        <h4 class="mb-4 tilted">@Html.Raw(Model.Title)</h4>
+                    }
+                    else if (Model.Titles != null && Model.Titles.Any())
+                    {
+                        foreach (var title in Model.Titles)
+                        {
+                            <h4 class="@(title == Model.Titles.Last() ? "mb-5" : "mb-3") tilted">@Html.Raw(title)</h4>
+                        }
+                    }
+                    <p>@Html.Raw(Model.Body)</p>
+
+                    @if (Model.ButtonComponent != null)
+                    {
+                        <partial name="_ButtonLinkPartial" model="Model.ButtonComponent" />
+                    }
+                </div>
+            </div>
+            <div class="col-md-12 col-lg-6 d-flex justify-content-center @(Model.SwapDirecion ? "justify-content-lg-start" : "justify-content-lg-end") position-relative">
+                <div class="offcut-image-border full-circle" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+                    @if (!string.IsNullOrEmpty(Model.ImageSrc))
+                    {
+                        <img class="img-fluid shadow-4 object-fit-cover" src="@Model.ImageSrc" alt="@($"{Model.Title} image")">
+                    }
+                    else
+                    {
+                        <img class="img-fluid shadow-4 object-fit-cover" src="https://images.unsplash.com/photo-1504699439244-a7e34870c35d?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=3540&q=80" alt="@($"{Model.Title} image")">
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    @if (Model.OvalContainers != null)
+    {
+        @Html.DisplayFor(x => x.OvalContainers)
+    }
+</div>
