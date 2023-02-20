@@ -5,6 +5,8 @@ namespace FuseHostelsAndTravel.Web.Pages.Contact
     [ValidateReCaptcha]
     public class IndexModel : BasePageModel
     {
+        public IEnumerable<OvalContainerComponent> OvalContainers { get; private set; } = null;
+
         [BindProperty]
         [Required(ErrorMessage = "Please enter a Name.")]
         public string Name { get; set; } = string.Empty;
@@ -25,6 +27,12 @@ namespace FuseHostelsAndTravel.Web.Pages.Contact
         public async Task<IActionResult> OnGetAsync()
         {
             await base.OnGetDataAsync();
+
+            OvalContainers = new List<OvalContainerComponent>()
+            {
+                new OvalContainerComponent("contactPageOvals1", -20, null, -18, null),
+                new OvalContainerComponent("contactPageOvals2", null, -20, null, -18)
+            };
 
             return Page();
         }

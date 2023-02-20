@@ -8,13 +8,13 @@
                 </div>
             }
             <div class="col-md-12 offset-lg-1 col-lg-4 d-flex align-items-center position-relative px-4 p-lg-0 pb-5 pt-5">
-                <div data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+                <div class="has-parallax-scroll">
                     <h4 class="fw-bold mb-5 tilted">@Html.Raw(Model.Title)</h4>
                     <p class="mt-3">@Html.Raw(Model.Body)</p>
                     <partial name="_ButtonLinkPartial" model="Model.ButtonComponent" />
                 </div>
             </div>
-            <div class="col-md-12 @(Model.SwapDirection ? "col-lg-6" : "col-lg-6 offset-lg-1") p-0 offcut-image-border" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+            <div class="col-md-12 @(Model.SwapDirection ? "col-lg-6" : "col-lg-6 offset-lg-1") p-0 offcut-image-border has-parallax-scroll">
                 @if (!string.IsNullOrEmpty(Model.ImageSrc))
                 {
                     <img class="img-fluid shadow-4" src="@Model.ImageSrc" alt="@($"{Model.Title} image")">

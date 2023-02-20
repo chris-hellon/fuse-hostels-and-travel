@@ -1,7 +1,7 @@
 ﻿@model FeaturesTableComponent
 
 <div class="container-fluid">
-    <div class="container bg-white features-container"  data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+    <div class="container bg-white features-container has-parallax-scroll">
         <div class="row d-flex justify-content-center align-items-center">
             <div class="text-center col-lg-12 mb-n5">
                 <h4 class="tilted mb-0 d-inline-block position-relative">@Model.Title
@@ -15,7 +15,7 @@
                     @foreach (var featureColumn in Model.FeaturesParsed)
                     {
                         <div class="col-12 col-lg-auto">
-                            <div class="row flex-column">
+                            <div class="row flex-column text-center text-lg-start">
                                 @foreach (var feature in featureColumn)
                                 {
                                     <p class="mb-0 mb-lg-2"><i class="fa-solid fa-check me-2 text-mustard"></i> @feature</p>

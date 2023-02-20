@@ -82,7 +82,11 @@
                     item.ShortDescription,
                     item.BackgroundColor,
                     item.ImageUrl,
-                    null, null, null, null));
+                    null, null, null, null, null, null, new List<OvalContainerComponent>()
+                    {
+                        new OvalContainerComponent($"eventsCards{item.Id}OvalsContainer1", -60, null, -110, null),
+                        new OvalContainerComponent($"eventsCards{item.Id}OvalsContainer2", null, -60, null, -100)
+                    }));
 
                 animationDelay += 200M;
             }
@@ -107,7 +111,7 @@
                     item.ImageUrl,
                     new List<string>() { item.ImageUrl },
                     12, 6, 12,
-                    animationDelay, 5, 10,
+                    animationDelay, 8, 10,
                     animationStart));
 
                 animationDelay += 200M;

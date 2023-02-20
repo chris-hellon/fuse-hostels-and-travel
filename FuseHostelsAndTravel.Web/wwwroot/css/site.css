@@ -1,7 +1,23 @@
-﻿body, html {
+﻿body {
     overscroll-behavior: none;
-    overflow-x:hidden;
-    padding-right:0px !important;
+    padding-right: 0px !important;
+    overflow-y: scroll;
+    overflow-y: overlay;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent !important;
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 5px;
+    background: #e5e5e5;
+    border: 1px solid #d5d5d5;
 }
 
     html.no-scrollbar, html.no-scrollbar body {
@@ -32,11 +48,26 @@ a[data-mdb-toggle], a[data-mdb-dismiss] {
     cursor: pointer;
 }
 
+
+
 .btn-outline-primary:hover {
     -webkit-box-shadow: 5px 5px 0px 0px var(--mdb-purple) !important;
     box-shadow: 5px 5px 0px 0px var(--mdb-purple) !important;
 }
 
+footer .navbar-brand {
+    width: 80px;
+    height: 80px;
+    border: 1px solid white;
+    font-size:1.5rem;
+}
+footer h5 {
+    font-family: 'DIN 2014 Narrow';
+    font-weight:bold;
+}
+.navbar-brand strong {
+    margin-bottom: -5px;
+}
 .navbar-brand-desktop, .navbar-brand-mobile {
     top: 5px
 }
@@ -48,7 +79,7 @@ a[data-mdb-toggle], a[data-mdb-dismiss] {
 
 .navbar-brand-mobile {
     font-size: 1.7rem;
-    padding: 1.2rem 0.9rem
+    width:80px; height:80px;
 }
 
 .navbar.no-shadow {
@@ -132,6 +163,7 @@ h4.tilted {
     color: var(--mdb-white);
     display: table;
     text-transform: uppercase;
+    width:fit-content;
 }
     h4.tilted.display-6 {
         font-size:1.5rem;
@@ -145,8 +177,8 @@ h1.display-3 {
 }
 
 .header-banner-image-background {
-    height: 30rem;
-    min-height:70vh;
+    height: 480px;
+/*    min-height:70vh;*/
     background-size: cover;
     background-repeat: no-repeat;
     background-position-y: 80%;
@@ -234,7 +266,7 @@ table td {
         position: relative;
     }
 
-    
+
 .ovals-container {
     position: absolute;
     width: auto;
@@ -243,6 +275,13 @@ table td {
     -webkit-user-select: none; /* Safari */
     -ms-user-select: none; /* IE 10 and IE 11 */
     user-select: none; /* Standard syntax */
+    background: radial-gradient(ellipse at center, #fff 0%, #fff 30%, transparent 30%);
+    background-size: 20px 20px;
+    background-repeat: repeat;
+    background-position: 5px center;
+    width:500px;
+    height:500px;
+    opacity:0.3;
 }
 
 .oval {
@@ -291,6 +330,15 @@ table td {
     background-repeat: no-repeat !important;
 }
 
+#btn-back-to-top {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: none;
+    box-shadow:unset !important;
+    z-index:10;
+}
+
 .lightbox-card h4 {
     z-index: 4;
     top: -20px;
@@ -299,6 +347,8 @@ table td {
 
 .lightbox-card a, td a {
     font-size: 0.938rem;
+    line-height: 0.938rem;
+    display:block;
     font-family: var(--mdb-nav-link-font-family);
     text-decoration: underline;
     color: var(--mdb-purple);
@@ -306,9 +356,9 @@ table td {
     transition: 0.3s;
 }
 
-.lightbox-card a:hover, td a:hover {
-    opacity:0.6;
-}
+    .lightbox-card a:hover, td a:hover, a.text-decoration-underline.text-primary:hover {
+        opacity: 0.6;
+    }
     .lightbox-card img {
         min-width: 100%;
     }
@@ -318,9 +368,24 @@ table td {
     text-decoration: underline;
 }
 
-div p:last-of-type {
-    margin-bottom: 0px !important;
+.lighbox-modal a {
+    font-size: 0.938rem;
+    font-weight: normal;
+    font-stretch: normal;
+    font-style: normal;
+    line-height: normal;
+    letter-spacing: 1.07px;
+    display:inline-block;
+    cursor:pointer;
+    transition:0.3s;
 }
+    .lighbox-modal a:hover {
+        color: var(--mdb-light-purple-shadow-color) !important;
+    }
+
+    div p:last-of-type {
+        margin-bottom: 0px !important;
+    }
 
 .sticky-top.is-pinned {
     transition: 0s;
@@ -413,20 +478,20 @@ div p:last-of-type {
 .marquee {
     overflow: hidden;
     white-space: nowrap;
-    animation: scrollText 60s infinite linear;
+/*    animation: scrollText 60s infinite linear;*/
     margin: 0;
     display: inline-block;
     border: none;
     outline: none;
 }
 
-    .marquee:nth-of-type(2) {
+/*    .marquee:nth-of-type(2) {
         animation: scrollTextOpposite 70s infinite linear;
     }
 
     .marquee:nth-of-type(3) {
         animation: scrollText 80s infinite linear;
-    }
+    }*/
 
 #parallaxBanner .container-fluid div span {
     display: inline-block;
@@ -458,6 +523,21 @@ div p:last-of-type {
 #feedbackAlertMessage p {
     margin: 0px;
 }
+
+.datepicker-cell.current .datepicker-cell-content, .datepicker-day-cell.current{
+    border: unset;
+    background-color: transparent !important;
+    background:transparent !important;
+}
+.datepicker-day-cell.current:hover .datepicker-cell-content {
+        background-color: var(--mdb-datepicker-cell-hover-background-color) !important;
+    }
+
+    .datepicker-day-cell.current.selected .datepicker-cell-content {
+        background-color: var(--mdb-datepicker-cell-selected-background-color) !important;
+        color: var(--mdb-datepicker-cell-selected-color) !important;
+    }
+
 
     @keyframes scrollText {
         from {
@@ -512,8 +592,19 @@ div p:last-of-type {
     padding-right: 3px;
 }
 
+.owl-item .offcut-image-border {
+    margin-left:5px;
+}
+
 .modal .btn-close {
-    position:absolute; top:20px; right:20px;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: unset;
+}
+.modal .btn-close i {
+    font-size:30px;
+    line-height:20px;
 }
 
 @media(max-width:1200px) {
@@ -561,11 +652,20 @@ div p:last-of-type {
         }
 
         .offset-background {
-            background-image: -webkit-linear-gradient(-40deg, #FFFFFF 60%, #D1AC00 50%);
+            background-image: -webkit-linear-gradient(-40deg, #FFFFFF 60%, #D1AC00 50%) !important;
         }
 
         #homePageIntroductionOvals1, #homePageIntroductionOvals2 {
             display: none;
+        }
+
+        #hostelPageIntroductionOvals1 {
+            top: -5% !important;
+            right: -74% !important;
+        }
+        #hostelPageIntroductionOvals2 {
+            bottom: -10% !important;
+            right: 88% !important;
         }
 
         #homePageIntroductionOvals3 {
@@ -610,7 +710,7 @@ div p:last-of-type {
 
         .header-banner h1 span {
             top: -66%;
-            left: -25%;
+            left: -5%;
         }
 
         .nav-pills .nav-item {
@@ -625,4 +725,95 @@ div p:last-of-type {
             .floating-book-banner .booking-banner {
                 width: 100%;
             }
+
+        .nav-pills {
+            margin-left:0px !important;
+        }
+
+            .nav-pills:not(.menu-sidebar) {
+                background-color: var(--mdb-gray);
+                padding: 1.5rem;
+                border-radius: 8px 8px 0px 0px;
+            }
+
+            .nav-pills:not(.menu-sidebar) .nav-item {
+                margin:0px 0px 10px 0px !important;
+            }
+
+                .nav-pills:not(.menu-sidebar) .nav-item:last-of-type {
+                    margin:0px !important;
+                }
+
+                .nav-pills:not(.menu-sidebar) .nav-item .nav-link {
+                    margin: 0px !important;
+                    text-align:center;
+                    border-radius: 8px;
+                }
+
+                    .nav-pills:not(.menu-sidebar) .nav-item .nav-link.active {
+                        border: solid 1px var(--mdb-white);
+                    }
+
+
+
+        .tab-content {
+            border-radius: 0px 0px 8px 8px;
+        }
+
+        .tab-pane iframe {
+            min-height:473px;
+        }
+
+        .owl-item .ovals-container:nth-child(2) {
+            left: -125% !important;
+        }
+        .owl-item .ovals-container:nth-child(3) {
+            right:-115% !important;
+        }
     }
+
+
+.holder {
+    position: absolute;
+    width: 200px;
+    height: 50px;
+    top:0px;
+    right:0px;
+}
+
+.clip {
+    /* Clip edges, as some of the lines don't terminate nicely. */
+    overflow: hidden;
+}
+
+.line {
+    position: absolute;
+    width: 200px;
+    /* Height set to clip correctly basically background-size/2 + line width */
+    height: 26px;
+}
+
+.line1 {
+    background: linear-gradient(45deg, transparent, transparent 49%, red 49%, transparent 51%);
+}
+
+.line2 {
+    background: linear-gradient(-45deg, transparent, transparent 49%, red 49%, transparent 51%);
+}
+
+.line {
+    /* Must be after background definition. */
+    background-size: 50px 50px;
+}
+
+.has-parallax-scroll {
+/*    opacity: 0;*/
+    transform: translateY(50px);
+    transition: opacity 1.2s, transform 1.2s;
+    z-index:2;
+}
+
+.has-parallax-scroll.fade-in {
+    opacity: 1;
+    transform: translateY(0);
+}

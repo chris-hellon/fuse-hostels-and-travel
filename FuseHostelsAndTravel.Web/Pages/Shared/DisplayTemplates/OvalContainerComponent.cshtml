@@ -1,7 +1,7 @@
 ﻿@model OvalContainerComponent
 
 <div class="ovals-container" id="@Model.Id" style="@(Model.Style != null ? Model.Style : "")">
-    @{
+    @*@{
         int ovalCount = 900;
         int itemsPerRow = 30;
         int rows = (int)Math.Ceiling((double)ovalCount / itemsPerRow);
@@ -15,5 +15,5 @@
                 }
             </div>
         }
-    }
+    }*@
 </div>

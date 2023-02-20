@@ -13,12 +13,18 @@
             @if (SignInManager.IsSignedIn(User))
             {
                 <li class="nav-item dropdown mt-0 mt-lg-0 mb-lg-0">
-                    <a class="nav-link d-none d-lg-block dropdown-toggle @(currentPath.Contains("/my-account") ? "active" : "" )" asp-area="Identity" asp-page="/Account/Manage/Index"  id="navbarDropdownMyAccount" role="button" aria-expanded="false" aria-haspopup="true">MY ACCOUNT</a>
+                    <a class="nav-link d-none d-lg-block dropdown-toggle @(currentPath.Contains("/my-account") ? "active" : "" )" id="navbarDropdownMyAccount" role="button" aria-expanded="false" aria-haspopup="true">MY ACCOUNT</a>
 
                     <ul class="dropdown-menu" style="right:1rem; left:unset;">
                         <li class="dropdown-item text-dark float-end">
+                            <a class="nav-link p-0 m-0 text-dark" asp-area="Identity" asp-page="/Account/Manage/Index">Manage</a>
+                        </li>
+                        <li class="dropdown-item text-dark float-end">
+                            <a class="nav-link p-0 m-0 text-dark" asp-area="Identity" asp-page="/Account/Manage/Bookings">My Bookings</a>
+                        </li>
+                        <li class="dropdown-item text-dark float-end">
                             <form class="form-inline" asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Page("/", new { area = "" })" method="post">
-                                <button type="submit" class="me-lg-2 bg-transparent border-0 text-dark">
+                                <button type="submit" class="m-0 bg-transparent border-0 text-dark nav-link p-0">
                                     Logout
                                 </button>
                             </form>
@@ -36,7 +42,10 @@
                                     <div class="accordion-body">
                                         <ul>
                                             <li class="nav-item">
-                                                <a class="nav-link" asp-area="Identity" asp-page="/Manage/Index">Manage</a>
+                                                <a class="nav-link" asp-area="Identity" asp-page="/Account/Manage/Index">Manage</a>
+                                            </li>
+                                            <li class="nav-item">
+                                                <a class="nav-link" asp-area="Identity" asp-page="/Account/Manage/Bookings">My Bookings</a>
                                             </li>
                                             <li class="nav-item">
                                                 <form class="form-inline" asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Page("/", new { area = "" })" method="post">

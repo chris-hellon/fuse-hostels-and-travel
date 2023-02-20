@@ -68,12 +68,13 @@ namespace FuseHostelsAndTravel.Web.Areas.Identity.Pages.Account
 
             if (result.Succeeded)
             {
+                bool localRedirect = returnUrl == null;
                 returnUrl = returnUrl ?? "/my-account/profile";
 
                 if (returnUrl != null && returnUrl.Contains("hostel-booking"))
                     returnUrl = returnUrl += $"/{userId}";
 
-                return LocalRedirect(returnUrl);
+                return localRedirect ? LocalRedirect(returnUrl) : Redirect(returnUrl);
             }
             else if (result.IsLockedOut)
             {

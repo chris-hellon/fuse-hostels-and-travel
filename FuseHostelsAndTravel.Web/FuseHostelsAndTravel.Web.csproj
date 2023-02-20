@@ -20,9 +20,17 @@
   <ItemGroup>
     <None Remove="Microsoft.AspNetCore.Identity.UI" />
     <None Remove="AspNetCore.ReCaptcha" />
+    <None Remove="Pages\TermsAndConditions\" />
+    <None Remove="Pages\PrivacyPolicy\" />
+    <None Remove="Pages\CookiePolicy\" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="6.0.13" />
     <PackageReference Include="AspNetCore.ReCaptcha" Version="1.7.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Pages\TermsAndConditions\" />
+    <Folder Include="Pages\PrivacyPolicy\" />
+    <Folder Include="Pages\CookiePolicy\" />
   </ItemGroup>
 </Project>

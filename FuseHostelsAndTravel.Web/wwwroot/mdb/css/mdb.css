@@ -29523,7 +29523,7 @@ fieldset:disabled .btn {
 .modal-backdrop {
     --mdb-backdrop-zindex: 1050;
     --mdb-backdrop-bg: #000;
-    --mdb-backdrop-opacity: 0.5;
+    --mdb-backdrop-opacity: 0.85;
     position: fixed;
     top: 0;
     left: 0;
@@ -42155,11 +42155,14 @@ hr.divider-vertical-blurry {
 .navbar-brand {
     display: flex;
     align-items: center;
+    justify-content: center;
     margin: 0;
-    padding: 1.2rem 1.2rem;
     background-color: var(--mdb-eggplant);
     border-radius: 50%;
-    letter-spacing:0px;
+    letter-spacing: 0px;
+    width: 90px;
+    height: 90px;
+    line-height: 1.75rem;
 }
 
     .navbar-brand img {

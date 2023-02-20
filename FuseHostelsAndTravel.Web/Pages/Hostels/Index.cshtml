@@ -1,5 +1,6 @@
 ﻿@page "/hostels/{hostelName?}"
 @model FuseHostelsAndTravel.Web.Pages.Hostels.IndexModel
+@using FuseHostelsAndTravel.Core.Utils
 
 @if (Model.Hostel != null)
 {
@@ -36,6 +37,70 @@
             </div>
         </div>
     </section>
+
+    var roomsCount = Model.AccommodationCards.Cards.Count;
+
+    for (int i = 0; i < roomsCount; i++)
+    {
+        var accommodation = Model.AccommodationCards.Cards[i];
+        var isLightbox = accommodation.LightboxImages != null && accommodation.LightboxImages.Any();
+
+        @if (isLightbox)
+        {
+            var id = $"lightbox{accommodation.Title.ConvertToCamelCase()}Modal";
+            var label = $"{id}Label";
+            var url = $"/hostel-booking/{Model.Hostel.FriendlyUrl}{(Model.UserId != null ? $"/{Model.UserId}" : "")}";
+
+            <div class="modal fade lighbox-modal" id="@id" tabindex="-1" aria-labelledby="@label" aria-hidden="true">
+                <button type="button" class="text-white btn-close" data-mdb-dismiss="modal" aria-label="Close"><i class="fa fa-xmark"></i></button>
+
+                <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content rounded-0 bg-transparent">
+                        <div class="modal-body">
+                            <div class="container-fluid">
+                                <div class="row g-0">
+                                    <div class="col-6 text-start">
+                                        @if (i > 0)
+                                        {
+                                            var previousElement = Model.AccommodationCards.Cards[i - 1];
+                                            var previousId = $"lightbox{previousElement.Title.ConvertToCamelCase()}Modal";
+
+                                            <a class="text-white mb-3" data-mdb-toggle="modal" data-mdb-target="#@previousId"><i class="fas fa-arrow-left-long me-2"></i> PREVIOUS ROOM</a>
+                                        }
+                                    </div>
+                                    <div class="col-6 text-end">
+                                        @if (i + 1 < roomsCount)
+                                        {
+                                            var nextElement = Model.AccommodationCards.Cards[i + 1];
+                                            var nextId = $"lightbox{nextElement.Title.ConvertToCamelCase()}Modal";
+
+                                            <a class="text-white mb-3" data-mdb-toggle="modal" data-mdb-target="#@nextId">NEXT ROOM <i class="fas fa-arrow-right-long ms-2"></i></a>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="row g-0">
+                                    <div class="col-lg-4 py-5 px-4 bg-white">
+                                        <div class="d-flex flex-column h-100">
+                                            <h4 class="tilted mb-5">@accommodation.Title</h4>
+                                            @Html.Raw(accommodation.Body)
+
+                                            <div class="mt-5 mt-lg-auto">
+                                                <a class="btn btn-primary align-bottom pe-5 ps-5" href="@url">BOOK NOW</a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-8">
+                                        <img class="img-fluid" src="@accommodation.ImageSrc" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        }
+    }
 }
 else
 {

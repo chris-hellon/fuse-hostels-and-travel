@@ -35,7 +35,8 @@
                        {
                              new OvalContainerComponent("aboutPageIntroductionOvals1", 15, null, null, -28),
                              new OvalContainerComponent("aboutPageIntroductionOvals2", null, 15, null, 18)
-                       });
+                       })
+            { AnimationStart = "onLoad"};
 
             AboutBanner = new ContainerHalfImageRoundedTextComponent(new List<string>() { "WHAT WE DO" }, null, "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p><p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, in culpa qui officia deserunt mollit.</p>",
                      "https://vietnambackpackerhostels.azureedge.net/main/fuse-staff-1.jpeg", null, new List<OvalContainerComponent>()

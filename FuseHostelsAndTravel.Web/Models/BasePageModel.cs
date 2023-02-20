@@ -2,33 +2,21 @@
 
 namespace FuseHostelsAndTravel.Web.Models
 {
-	public class BasePageModel : PageModel
+	public class BasePageModel : Travaloud.Core.Models.TravaloudBasePageModel
     {
-        protected string _tenant => "fuse";
-
-        private IHttpContextAccessor _httpContextAccessor;
-        protected IHttpContextAccessor HttpContextAccessor => _httpContextAccessor ??= HttpContext.RequestServices.GetService<IHttpContextAccessor>();
-
-        private IErrorLoggerService _errorLoggerService;
-        protected IErrorLoggerService ErrorLoggerService => _errorLoggerService ??= HttpContext.RequestServices.GetService<IErrorLoggerService>();
+        protected override string SetTenantId()
+        {
+            return "fuse";
+        }
 
         private IMockData _mockData;
         protected IMockData MockData => _mockData ??= HttpContext.RequestServices.GetService<IMockData>();
-
-        private IUsersRepository _usersRepository;
-        protected IUsersRepository UsersRepository => _usersRepository ??= HttpContext.RequestServices.GetService<IUsersRepository>();
 
         private SignInManager<ApplicationUser> _signInManager;
         protected SignInManager<ApplicationUser> SignInManager => _signInManager ??= HttpContext.RequestServices.GetService<SignInManager<ApplicationUser>>();
 
         private ApplicationUserManager<ApplicationUser> _userManager;
         protected ApplicationUserManager<ApplicationUser> UserManager => _userManager ??= HttpContext.RequestServices.GetService<ApplicationUserManager<ApplicationUser>>();
-
-        private IUserStore<ApplicationUser> _userStore;
-        protected IUserStore<ApplicationUser> UserStore => _userStore ??= HttpContext.RequestServices.GetService<IUserStore<ApplicationUser>>();
-
-        private IUserEmailStore<ApplicationUser> _emailStore;
-        protected IUserEmailStore<ApplicationUser> EmailStore => _emailStore ??= HttpContext.RequestServices.GetService<IUserEmailStore<ApplicationUser>>();
 
         public List<Hostel> Hostels { get; set; }
         public List<Tour> Tours { get; set; }
@@ -40,6 +28,8 @@ namespace FuseHostelsAndTravel.Web.Models
         [BindProperty]
         public RegisterModalComponent RegisterModal { get; set; } = new RegisterModalComponent();
 
+       
+
         public BasePageModel()
         {
             
@@ -47,15 +37,21 @@ namespace FuseHostelsAndTravel.Web.Models
 
         public async Task OnGetDataAsync()
         {
+            //await base.OnGetDataAsync();
+
+            //var properties = PropertiesRepository.GetProperties(_tenant());
+
             var hostels = MockData.GetHostels();
             var tours = MockData.GetTours();
             var events = MockData.GetEvents();
 
             await Task.WhenAll(hostels, tours, events);
 
+            //Properties = properties.Result;
             Hostels = hostels.Result;
             Tours = tours.Result;
             Events = events.Result;
+            UserId = Helpers.GetUserId(HttpContextAccessor);
         }
 
         public async Task<IActionResult> OnPostSignInAsync()
@@ -66,11 +62,13 @@ namespace FuseHostelsAndTravel.Web.Models
             {
                 var userId = Helpers.GetUserId(HttpContextAccessor);
 
+                bool localRedirect = returnUrl == null;
+
                 if (returnUrl != null && returnUrl.Contains("hostel-booking"))
                     returnUrl = returnUrl += $"/{userId}";
 
                 returnUrl = returnUrl ?? "/my-account/profile";
-                return LocalRedirect(returnUrl);
+                return localRedirect ? LocalRedirect(returnUrl) : Redirect(returnUrl);
             }
             if (result.RequiresTwoFactor)
             {
@@ -167,7 +165,7 @@ namespace FuseHostelsAndTravel.Web.Models
                 UserName = RegisterModal.Email,
                 Email = RegisterModal.Email,
                 SignUpDate = DateTime.Now,
-                TenantId = _tenant,
+                TenantId = TenantId,
                 IsActive = true,
                 RefreshTokenExpiryTime = DateTime.Now
             };
@@ -187,11 +185,13 @@ namespace FuseHostelsAndTravel.Web.Models
                         await SignInManager.SignInAsync(user, isPersistent: false);
 
                         var returnUrl = RegisterModal.ReturnUrl;
+                        var localRedirect = returnUrl == null;
+
                         if (returnUrl != null && returnUrl.Contains("hostel-booking"))
                             returnUrl = returnUrl += $"/{user.Id}";
 
                         returnUrl = returnUrl ?? "/my-account/profile";
-                        return LocalRedirect(returnUrl);
+                        return localRedirect ? LocalRedirect(returnUrl) : Redirect(returnUrl);
                     }
                 } 
             }

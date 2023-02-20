@@ -1,12 +1,12 @@
 ﻿@model NavPillsComponent
 
 <div class="container pt-8 pb-8 ovals-container-parent" >
-    <div class="row mb-5 justify-content-lg-center text-center" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+    <div class="row mb-5 justify-content-lg-center text-center has-parallax-scroll">
         <div class="col-12">
             <h2>@Model.Title</h2>
         </div>
     </div>
-    <div class="row justify-content-lg-center" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+    <div class="row justify-content-lg-center has-parallax-scroll">
         <div class="col-12">
             <!-- Pills navs -->
             <ul class="nav nav-pills mb-0" id="directionsTabs" role="tablist">
@@ -22,7 +22,7 @@
             </ul>
             <!-- Pills navs -->
             <!-- Pills content -->
-            <div class="tab-content bg-gray text-white p-7" id="directionsTabsContent">
+            <div class="tab-content bg-gray text-white p-4 p-lg-7" id="directionsTabsContent">
                 @foreach (var navPill in Model.NavPills)
                 {
                     var pillId = $"{navPill.FriendlyTitle}-pill";
@@ -32,7 +32,7 @@
                         <div class="row">
                             @foreach (var content in navPill.Content)
                             {
-                                <div class="col-lg-6" style="@content.Style">
+                                <div class="col-lg-6 @(content != navPill.Content.Last() ? "mb-5 mb-lg-0" : "")" style="@content.Style">
                                     @Html.Raw(content.Body)
                                 </div>
                             }

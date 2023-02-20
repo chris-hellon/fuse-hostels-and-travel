@@ -6,6 +6,9 @@
         public Hostel Hostel { get; private set; }
 
         [BindProperty]
+        public Travaloud.Core.Entities.Catalog.Property Property { get; private set; }
+
+        [BindProperty]
         public ContainerHalfImageRoundedTextComponent IntroductionBanner { get; private set; }
 
         [BindProperty]
@@ -72,7 +75,8 @@
                        {
                              new OvalContainerComponent("hostelPageIntroductionOvals1", 15, null, null, -28),
                              new OvalContainerComponent("hostelPageIntroductionOvals2", null, 15, null, 18)
-                       });
+                       })
+                    {  AnimationStart = "onLoad"};
                     ToursCards = WebComponentsBuilder.GetToursCarouselCards(Tours, "onScroll", $"TOURS IN {pageTitle.ToUpper()}", null);
                     AccommodationCards = WebComponentsBuilder.GetHostelAccommodationCards(Hostel.Rooms, "onScroll");
                     

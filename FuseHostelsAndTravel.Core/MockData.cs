@@ -77,6 +77,8 @@
 
                 if (hostel != null)
                 {
+                    var hostelAddressGoogleFormat = $"{hostel.AddressLine1.Replace(" ", "+").Replace(",", "")}+{hostel.AddressLine2.Replace(" ", "+").Replace(",", "")}";
+
                     hostelDirections = new List<HostelDirection>()
                     {
                         new HostelDirection(1, 1, "HOW TO FIND US", new List<HostelDirectionContent>()
@@ -85,7 +87,8 @@
                                                 <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud.</p>
                                                 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
                                                 <h5>FUSE {hostel.PageSubTitle}</h5>
-                                                <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>"),
+                                                <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>
+                                                <a class=""text-decoration-underline text-primary d-block mt-3"" target=""_blank"" href=""http://maps.google.com?saddr=My+Location&daddr={hostelAddressGoogleFormat}"">DIRECTIONS</a>"),
                             new HostelDirectionContent(2, 1, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/place?q=place_id:{hostel.GoogleMapsPlaceId}&key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ"" allowfullscreen=""""></iframe>",
                             "-webkit-filter: grayscale(100%); filter: grayscale(100%);")
                         }),
@@ -96,7 +99,7 @@
                                                 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
                                                 <h5>FUSE {hostel.PageSubTitle}</h5>
                                                 <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>"),
-                             new HostelDirectionContent(4, 2, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/directions?key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ&&origin=Da+Nang+Vietnam&destination={hostel.AddressLine1.Replace(" ", "+").Replace(",", "")}+{hostel.AddressLine2.Replace(" ", "+").Replace(",", "")}&avoid=tolls|highways"" allowfullscreen=""""></iframe>",
+                             new HostelDirectionContent(4, 2, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/directions?key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ&&origin=Da+Nang+Vietnam&destination={hostelAddressGoogleFormat}&avoid=tolls|highways"" allowfullscreen=""""></iframe>",
                              "-webkit-filter: grayscale(100%); filter: grayscale(100%);")
                         }),
                         new HostelDirection(3, 2, "HOW TO FIND US", new List<HostelDirectionContent>()
@@ -105,7 +108,8 @@
                                                 <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud.</p>
                                                 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
                                                 <h5>FUSE {hostel.PageSubTitle}</h5>
-                                                <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>"),
+                                                <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>
+                                                <a class=""text-decoration-underline text-primary d-block mt-3"" target=""_blank"" href=""http://maps.google.com?saddr=My+Location&daddr={hostelAddressGoogleFormat}"">DIRECTIONS</a>"),
                             new HostelDirectionContent(2, 1, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/place?q=place_id:{hostel.GoogleMapsPlaceId}&key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ"" allowfullscreen=""""></iframe>",
                             "-webkit-filter: grayscale(100%); filter: grayscale(100%);")
                         }),
@@ -116,7 +120,7 @@
                                                 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
                                                 <h5>FUSE {hostel.PageSubTitle}</h5>
                                                 <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>"),
-                             new HostelDirectionContent(4, 2, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/directions?key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ&&origin=Da+Nang+Vietnam&destination={hostel.AddressLine1.Replace(" ", "+").Replace(",", "")}+{hostel.AddressLine2.Replace(" ", "+").Replace(",", "")}&avoid=tolls|highways"" allowfullscreen=""""></iframe>",
+                             new HostelDirectionContent(4, 2, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/directions?key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ&&origin=Da+Nang+Vietnam&destination={hostelAddressGoogleFormat}&avoid=tolls|highways"" allowfullscreen=""""></iframe>",
                              "-webkit-filter: grayscale(100%); filter: grayscale(100%);")
                         }),
                         new HostelDirection(5, 3, "HOW TO FIND US", new List<HostelDirectionContent>()
@@ -125,7 +129,8 @@
                                                 <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud.</p>
                                                 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
                                                 <h5>FUSE {hostel.PageSubTitle}</h5>
-                                                <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>"),
+                                                <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>
+                                                <a class=""text-decoration-underline text-primary d-block mt-3"" target=""_blank"" href=""http://maps.google.com?saddr=My+Location&daddr={hostelAddressGoogleFormat}"">DIRECTIONS</a>"),
                             new HostelDirectionContent(2, 1, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/place?q=place_id:{hostel.GoogleMapsPlaceId}&key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ"" allowfullscreen=""""></iframe>",
                             "-webkit-filter: grayscale(100%); filter: grayscale(100%);")
                         }),
@@ -136,7 +141,7 @@
                                                 <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
                                                 <h5>FUSE {hostel.PageSubTitle}</h5>
                                                 <p>{hostel.AddressLine1}<br />{hostel.AddressLine2}</p>"),
-                             new HostelDirectionContent(4, 2, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/directions?key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ&&origin=Da+Nang+Vietnam&destination={hostel.AddressLine1.Replace(" ", "+").Replace(",", "")}+{hostel.AddressLine2.Replace(" ", "+").Replace(",", "")}&avoid=tolls|highways"" allowfullscreen=""""></iframe>",
+                             new HostelDirectionContent(4, 2, $@"<iframe id=""google-map"" class=""w-100 h-100 m-0 p-0 rounded"" frameborder=""0"" style=""border:0"" src=""https://www.google.com/maps/embed/v1/directions?key=AIzaSyAiYLmSCzYGXOdsJwXiu8GZ9c9UnHTtlgQ&&origin=Da+Nang+Vietnam&destination={hostelAddressGoogleFormat}&avoid=tolls|highways"" allowfullscreen=""""></iframe>",
                              "-webkit-filter: grayscale(100%); filter: grayscale(100%);")
                         })
                     };
@@ -156,15 +161,15 @@
             {
                 hostelRooms = new List<HostelRoom>()
                 {
-                    new HostelRoom(1, 1, "Shared Dorms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408321158.jpg?k=6c595f92c6aa40181ba9b04bfae30abe5614363366a0c9cc5b9b3d48f36a6aff&o=&hp=1"),
-                    new HostelRoom(2, 1, "Twin private rooms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472105.jpg?k=610d7f59a8ab25e54c7a18daa5e4094cffd598221500e172708af48d8311ae8d&o=&hp=1"),
-                    new HostelRoom(3, 1, "Double private rooms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472073.jpg?k=8c727440849a10fb60ee9d46e4853fa5ccd573a65e67f26ececbc0211eda1d85&o=&hp=1"),
-                    new HostelRoom(4, 2, "Shared Dorms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408321158.jpg?k=6c595f92c6aa40181ba9b04bfae30abe5614363366a0c9cc5b9b3d48f36a6aff&o=&hp=1"),
-                    new HostelRoom(5, 2, "Twin private rooms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472105.jpg?k=610d7f59a8ab25e54c7a18daa5e4094cffd598221500e172708af48d8311ae8d&o=&hp=1"),
-                    new HostelRoom(6, 2, "Double private rooms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472073.jpg?k=8c727440849a10fb60ee9d46e4853fa5ccd573a65e67f26ececbc0211eda1d85&o=&hp=1"),
-                    new HostelRoom(7, 3, "Shared Dorms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408321158.jpg?k=6c595f92c6aa40181ba9b04bfae30abe5614363366a0c9cc5b9b3d48f36a6aff&o=&hp=1"),
-                    new HostelRoom(8, 3, "Twin private rooms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472105.jpg?k=610d7f59a8ab25e54c7a18daa5e4094cffd598221500e172708af48d8311ae8d&o=&hp=1"),
-                    new HostelRoom(9, 3, "Double private rooms", "Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472073.jpg?k=8c727440849a10fb60ee9d46e4853fa5ccd573a65e67f26ececbc0211eda1d85&o=&hp=1"),
+                    new HostelRoom(1, 1, "Shared Dorms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408321158.jpg?k=6c595f92c6aa40181ba9b04bfae30abe5614363366a0c9cc5b9b3d48f36a6aff&o=&hp=1"),
+                    new HostelRoom(2, 1, "Twin private rooms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472105.jpg?k=610d7f59a8ab25e54c7a18daa5e4094cffd598221500e172708af48d8311ae8d&o=&hp=1"),
+                    new HostelRoom(3, 1, "Double private rooms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472073.jpg?k=8c727440849a10fb60ee9d46e4853fa5ccd573a65e67f26ececbc0211eda1d85&o=&hp=1"),
+                    new HostelRoom(4, 2, "Shared Dorms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408321158.jpg?k=6c595f92c6aa40181ba9b04bfae30abe5614363366a0c9cc5b9b3d48f36a6aff&o=&hp=1"),
+                    new HostelRoom(5, 2, "Twin private rooms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472105.jpg?k=610d7f59a8ab25e54c7a18daa5e4094cffd598221500e172708af48d8311ae8d&o=&hp=1"),
+                    new HostelRoom(6, 2, "Double private rooms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472073.jpg?k=8c727440849a10fb60ee9d46e4853fa5ccd573a65e67f26ececbc0211eda1d85&o=&hp=1"),
+                    new HostelRoom(7, 3, "Shared Dorms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408321158.jpg?k=6c595f92c6aa40181ba9b04bfae30abe5614363366a0c9cc5b9b3d48f36a6aff&o=&hp=1"),
+                    new HostelRoom(8, 3, "Twin private rooms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472105.jpg?k=610d7f59a8ab25e54c7a18daa5e4094cffd598221500e172708af48d8311ae8d&o=&hp=1"),
+                    new HostelRoom(9, 3, "Double private rooms", "<p>Hoi An inspired shared rooms come with fully equipped bathrooms and brand new extra comfy beds for maximum rest when you most need it. Reading lights, charging dock & lock spaces are also provided.</p>", "", "https://cf.bstatic.com/xdata/images/hotel/max1280x900/408472073.jpg?k=8c727440849a10fb60ee9d46e4853fa5ccd573a65e67f26ececbc0211eda1d85&o=&hp=1"),
                 };
 
                 if (hostelId.HasValue)

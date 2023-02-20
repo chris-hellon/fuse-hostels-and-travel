@@ -1,10 +1,10 @@
 ﻿@model ContainerHalfImageRoundedTextComponent
 
 <div class="container-fluid position-relative @(!Model.SwapDirecion ? "offset-background" : "")">
-    <div class="container pt-8 pb-8@(Model.OvalContainers != null ? " position-relative" : "")">
+    <div class="container pt-8 pb-8@(Model.OvalContainers != null ? " position-relative" : "")  has-parallax-scroll">
         <div class="row g-lg-10 @(Model.SwapDirecion ? "flex-row-reverse" : "")">
             <div class="col-md-12 col-lg-6 pb-5 pb-lg-0 d-flex align-items-center position-relative">
-                <div class="mx-auto" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+                <div class="mx-auto">
                     @if (Model.Title != null)
                     {
                         <h4 class="mb-4 tilted">@Html.Raw(Model.Title)</h4>
@@ -25,7 +25,7 @@
                 </div>
             </div>
             <div class="col-md-12 col-lg-6 d-flex justify-content-center @(Model.SwapDirecion ? "justify-content-lg-start" : "justify-content-lg-end") position-relative">
-                <div class="offcut-image-border full-circle" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="fade-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="2000">
+                <div class="offcut-image-border full-circle">
                     @if (!string.IsNullOrEmpty(Model.ImageSrc))
                     {
                         <img class="img-fluid shadow-4 object-fit-cover" src="@Model.ImageSrc" alt="@($"{Model.Title} image")">

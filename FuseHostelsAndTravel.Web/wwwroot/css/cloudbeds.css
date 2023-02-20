@@ -1,0 +1,152 @@
+﻿@font-face {
+    font-family: 'DIN 2014 Demi';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-demi-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-demi-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DIN 2014 Narrow';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrow-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrow-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DIN 2014 Narrow Bold';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrowbold-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrowbold-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DIN 2014 Narrow Demi';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrowdemi-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrowdemi-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DIN 2014 Narrow Extra Light';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrowextralight-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-narrowextralight-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DIN 2014 Regular';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-regular-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-regular-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'DIN 2014 Bold';
+    src: url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-bold-webfont.woff2') format('woff2'), url('https://vietnambackpackerhostels.azureedge.net/site-content/din2014-bold-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+body, p, span, div {
+    font-family: "DIN 2014 Regular",Arial,Helvetica,sans-serif !important;
+}
+
+.btn {
+    font-family: 'DIN 2014 Regular';
+    box-shadow: 5px 5px 0px 0px #EACFFF !important;
+    -webkit-box-shadow: 5px 5px 0px 0px #EACFFF !important;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.125;
+    font-weight: bold;
+    letter-spacing: 0.063rem;
+}
+
+    .datepicker_search_button, .btn.dropdown-toggle {
+        font-size: 1.2rem;
+    }
+
+.green.btn, .green.btn.disabled {
+    line-height: 2.8rem;
+}
+
+.page-bar {
+    font-family: 'DIN 2014 Narrow Bold';
+}
+
+.page-md.page-full-width .container {
+    max-width: 100%;
+    width: 100%;
+    padding: 0px;
+}
+
+.page-header-wrap .hotel_name {
+    font-family: 'BrandonPrinted',"Roboto",Arial,Helvetica,sans-serif !important;
+    text-transform: uppercase;
+    color: #000000;
+    font-size: 0rem;
+}
+
+.page-header-wrap.navbar {
+    min-height: 36px;
+}
+
+#lang_currency_switchers {
+    margin-right: 0px;
+}
+
+#map_canvas, .property_info .portlet-body .text:first-of-type, .property_info .portlet-body hr:first-of-type, .page-container.property_info {
+    display: none !important;
+}
+
+.ui-datepicker input {
+    font-family: 'DIN 2014 Demi';
+    font-size: 1.2rem;
+    color: #323031;
+    letter-spacing: 1px;
+}
+
+.page-breadcrumb li.active > span {
+    background-color: #646364 !important;
+}
+
+    .page-breadcrumb li.active > span:after {
+        border-left: 30px solid #646364 !important;
+    }
+
+    
+
+    .page-header.navbar {
+        background-color: transparent;
+    }
+
+
+.reserve_success .reserve_info h2, .checkout .reserve_info h2 {
+    color: #090511 !important;
+}
+
+.bold_blue {
+    background: #090511 !important;
+}
+
+.btn.dropdown-toggle, .btn-group:not(.rooms_select) .btn.dropdown-toggle {
+    box-shadow: 5px 5px 0px 0px #dcdcdc !important;
+    -webkit-box-shadow: 5px 5px 0px 0px #dcdcdc !important;
+}
+
+.rooms_select .btn {
+    background-color: #D1AC00 !important;
+    box-shadow: 5px 5px 0px 0px #E5D27C !important;
+    -webkit-box-shadow: 5px 5px 0px 0px #E5D27C !important;
+}
+
+.form-group.form-md-line-input.has-info .form-control.edited:not([readonly]) ~ label:after {
+    background: #ab3dff !important;
+}
+
+.bg-green-jungle {
+    border-color: #D1AC00 !important;
+    background-image: none !important;
+    background-color: #ab3dff !important;
+    color: #FFFFFF !important;
+}

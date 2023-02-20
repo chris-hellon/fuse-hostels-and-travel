@@ -5,7 +5,7 @@
         public string Title { get; private set; }
         public string Body { get; private set; }
         public string ImageSrc { get; private set; }
-        public string AnimationStart { get; private set; } = "onScroll";
+        public string AnimationStart { get; set; } = "onScroll";
         public decimal? AnimationDelay { get; set; } = 200;
         public List<string> LightboxImages { get; private set; }
         public ButtonComponent ButtonComponent { get; set; }

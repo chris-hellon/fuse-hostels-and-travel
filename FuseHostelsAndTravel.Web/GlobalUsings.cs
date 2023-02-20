@@ -14,6 +14,7 @@ global using Travaloud.Core.Interfaces.Services;
 global using Travaloud.Infrastructure.Services;
 global using Travaloud.Infrastructure.Contexts;
 global using Travaloud.Core.Interfaces.Repositories;
+//global using Travaloud.Core.Entities.Catalog;
 global using FuseHostelsAndTravel.Web.Models;
 global using FuseHostelsAndTravel.Core.Models.WebComponents;
 global using FuseHostelsAndTravel.Core.Utils;

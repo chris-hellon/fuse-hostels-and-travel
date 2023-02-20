@@ -1,11 +1,12 @@
-﻿namespace FuseHostelsAndTravel.Web.Pages.HostelBooking
+﻿using Microsoft.AspNetCore.Http.Extensions;
+
+namespace FuseHostelsAndTravel.Web.Pages.HostelBooking
 {
 	public class IndexModel : BasePageModel
     {
         private ApplicationUser _applicationUser { get; set; } = null;
         public string HostelName { get; set; } = string.Empty;
         public int HostelId { get; set; }
-        public string UserId { get; set; }
         public string IframeUrl { get; set; }
 
         [BindProperty]
@@ -15,8 +16,8 @@
         {
             await base.OnGetDataAsync();
 
-            var location = new Uri($"{Request.Path}{Request.QueryString}");
-            var url = location.AbsoluteUri.Replace("file://", "");
+            //var location = new Uri($"{Request.Path}{Request.QueryString}");
+            var url = Request.GetEncodedUrl();
 
             base.LoginModal.ReturnUrl = url;
             base.RegisterModal.ReturnUrl = url;
