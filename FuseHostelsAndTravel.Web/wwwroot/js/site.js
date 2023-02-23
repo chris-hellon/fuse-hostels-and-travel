@@ -34,6 +34,7 @@ $(window).on("load", function () {
     configureDatepickers();
     configureSelects();
     setParallaxMarquee();
+    getCookie();
 
     $('.navbar-toggler').on('click', function () {
         if ($('.navbar').hasClass('bg-dark')) {
@@ -341,7 +342,15 @@ var configureSelects = function () {
 
             if (!$(inputField).hasClass('active'))
                 $(inputField).addClass('active');
-        })
+        });
+
+        let value = $(this).val();
+        if (value != undefined && value.length > 0) {
+            let inputField = $(this).parent().find('.form-control.select-input');
+
+            if (!$(inputField).hasClass('active'))
+                $(inputField).addClass('active');
+        }
     });
 }
 
@@ -363,9 +372,32 @@ var configureDatepickers = function () {
             let id = e.srcElement.children[0].id;
             let date = e.date;
 
-            if (id == "BookNowBanner_CheckInDate") {
+            let correspondingId = ""
+
+            switch (id) {
+                case "CarouselComponent_CheckInDate":
+                    correspondingId = "CarouselComponent_CheckOutDate"
+                    break;
+                case "BookNowBanner_CheckInDate":
+                    correspondingId = "BookNowBanner_CheckOutDate"
+                    break;
+                case "CheckInDate":
+                    correspondingId = "CheckOutDate"
+                    break;
+                case "CarouselComponent_CheckOutDate":
+                    correspondingId = "CarouselComponent_CheckInDate"
+                    break;
+                case "BookNowBanner_CheckOutDate":
+                    correspondingId = "BookNowBanner_CheckInDate"
+                    break;
+                case "CheckOutDate":
+                    correspondingId = "CheckInDate"
+                    break;
+            }
+
+            if (id == "CarouselComponent_CheckInDate" || id == "BookNowBanner_CheckInDate" || id == "CheckInDate") {
                 let minDate = date.addDays(1);
-                let checkOutDatepicker = document.getElementById("checkOutDatePicker");
+                let checkOutDatepicker = document.getElementById(correspondingId).parentElement;
                 let instance = mdb.Datepicker.getInstance(checkOutDatepicker);
 
                 if (instance) {
@@ -378,9 +410,9 @@ var configureDatepickers = function () {
                     });
                 }
             }
-            else if (id == "BookNowBanner_CheckOutDate") {
+            else if (id == "CarouselComponent_CheckOutDate" || id == "BookNowBanner_CheckOutDate" || id == "CheckOutDate") {
                 let maxDate = date;
-                let checkInDatePicker = document.getElementById("checkInDatePicker");
+                let checkInDatePicker = document.getElementById(correspondingId).parentElement;
                 let instance = mdb.Datepicker.getInstance(checkInDatePicker);
 
                 if (instance) {
@@ -549,57 +581,86 @@ var postAjax = function (url, formData, callback, skipLoader = false) {
         success: function (data) {
             callback(data);
         },
-        error: function () {
+        error: function (xhr, ajaxOptions, thrownError) {
+            console.log(xhr, ajaxOptions, thrownError);
             //window.location.href = "/error";
         }
     });
 }
 
+//Url Manipulation
+function getBaseUrl() {
+    var pathArray = location.href.split('/');
+    var protocol = pathArray[0];
+    var host = pathArray[2];
+    var url = protocol + '//' + host + '/';
+
+    return url;
+}
+
 var setParallaxMarquee = function () {
-    var banners = [
-        { element: $('.marquee:nth-of-type(1)'), direction: 'left', factor: 7 },
-        { element: $('.marquee:nth-of-type(2)'), direction: 'right', factor: 8 },
-        { element: $('.marquee:nth-of-type(3)'), direction: 'left', factor: 9 }
-    ];
+    if ($('.marquee').length > 0) {
+        var banners = [
+            { element: $('.marquee:nth-of-type(1)'), direction: 'left', factor: 7 },
+            { element: $('.marquee:nth-of-type(2)'), direction: 'right', factor: 8 },
+            { element: $('.marquee:nth-of-type(3)'), direction: 'left', factor: 9 }
+        ];
 
-    banners.forEach(function (banner) {
-        var bannerOffset = banner.element.offset().left;
-        var bannerWidth = banner.element.width();
-        var lastScrollPosition = -1;
+        banners.forEach(function (banner) {
+            var bannerOffset = banner.element.offset().left;
+            var bannerWidth = banner.element.width();
+            var lastScrollPosition = -1;
 
-        if (banner.direction === 'left') {
-            banner.element.css({
-                'transform': 'translateX(' + (-bannerWidth) + 'px)'
-            });
-        } else {
-            banner.element.css({
-                'transform': 'translateX(' + ($(window).width() - bannerOffset) + 'px)'
-            });
-        }
+            if (banner.direction === 'left') {
+                banner.element.css({
+                    'transform': 'translateX(' + (-bannerWidth) + 'px)'
+                });
+            } else {
+                banner.element.css({
+                    'transform': 'translateX(' + ($(window).width() - bannerOffset) + 'px)'
+                });
+            }
 
-        $(window).scroll(function () {
-            var scroll = $(window).scrollTop();
-            var delta = lastScrollPosition === -1 ? 0 : scroll - lastScrollPosition;
-            lastScrollPosition = scroll;
-            requestAnimationFrame(function () {
-                if (banner.direction === 'left') {
-                    var bannerPosition = -scroll / banner.factor - bannerOffset;
-                    if (bannerPosition < -bannerWidth) {
-                        bannerPosition += bannerWidth;
+            $(window).scroll(function () {
+                var scroll = $(window).scrollTop();
+                var delta = lastScrollPosition === -1 ? 0 : scroll - lastScrollPosition;
+                lastScrollPosition = scroll;
+                requestAnimationFrame(function () {
+                    if (banner.direction === 'left') {
+                        var bannerPosition = -scroll / banner.factor - bannerOffset;
+                        if (bannerPosition < -bannerWidth) {
+                            bannerPosition += bannerWidth;
+                        }
+                        banner.element.css({
+                            'transform': 'translateX(' + bannerPosition + 'px)'
+                        });
+                    } else {
+                        var bannerPosition = scroll / banner.factor + ($(window).width() - bannerOffset);
+                        if (bannerPosition > $(window).width()) {
+                            bannerPosition -= bannerWidth;
+                        }
+                        banner.element.css({
+                            'transform': 'translateX(' + bannerPosition + 'px)'
+                        });
                     }
-                    banner.element.css({
-                        'transform': 'translateX(' + bannerPosition + 'px)'
-                    });
-                } else {
-                    var bannerPosition = scroll / banner.factor + ($(window).width() - bannerOffset);
-                    if (bannerPosition > $(window).width()) {
-                        bannerPosition -= bannerWidth;
-                    }
-                    banner.element.css({
-                        'transform': 'translateX(' + bannerPosition + 'px)'
-                    });
-                }
+                });
             });
         });
-    });
+    }
+}
+
+var getCookie = function () {
+    var cookie = Cookie.get('fuse-hostels-and-travel');
+
+    if (cookie == undefined) {
+        window.setTimeout(function () {
+            let cookiesModalEl = document.getElementById('cookiesModal');
+            let modal = new mdb.Modal(cookiesModalEl);
+            modal.show();
+        }, 2000);
+    }
+}
+var confirmCookie = function () {
+    Cookie.set('fuse-hostels-and-travel', new Date(), { expires: 365 });
+    $('#cookiesModal').modal('hide');
 }

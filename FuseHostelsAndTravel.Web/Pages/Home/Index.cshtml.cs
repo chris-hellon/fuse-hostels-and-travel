@@ -2,7 +2,7 @@
 
 namespace FuseHostelsAndTravel.Web.Pages.Home;
 
-public class IndexModel : BasePageModel
+public class IndexModel : TravaloudBasePageModel
 {
     [BindProperty]
     public List<ContainerHalfImageTextComponent> HostelsContainers { get; private set; } = new List<ContainerHalfImageTextComponent>();
@@ -25,6 +25,9 @@ public class IndexModel : BasePageModel
     [BindProperty]
     public FullImageCarouselComponent CarouselComponent { get; private set; }
 
+    [BindProperty]
+    public OvalContainerComponent MarqueeOvals { get; private set; }
+
     public IndexModel()
     {
 
@@ -34,8 +37,10 @@ public class IndexModel : BasePageModel
     {
         await base.OnGetDataAsync();
 
+        MarqueeOvals = new OvalContainerComponent("parallaxBannerOvals", 20, null, -10, null);
+
         IntroductionBanner = new ContainerHalfImageRoundedTextComponent(new List<string>() { "THE LATEST ACCOMMODATION", "& TRAVEL EXPERIENCES", "IN VIETNAM" }, null, "Opening in 2 impressive locations in Hoi An in late 2022 and with over 15 years’ experience in Vietnam the FUSE Crew offer up everything travelers need to explore, kick back and have fun in Vietnam.",
-            "https://images.unsplash.com/photo-1555979864-7a8f9b4fddf8?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=3542&q=80", new ButtonComponent("/Hostels/Index", "View Locations"), new List<OvalContainerComponent>()
+            "https://fusehostelsandtravel.azureedge.net/images/birdseye-beach-view.webp", new ButtonComponent("/Hostels/Index", "View Locations"), new List<OvalContainerComponent>()
             {
                  new OvalContainerComponent("homePageIntroductionOvals1", -40, null, null, -14),
                  new OvalContainerComponent("homePageIntroductionOvals2", null, -7, null, 36),
@@ -51,13 +56,28 @@ public class IndexModel : BasePageModel
             }
         );
 
-        HostelsContainers = WebComponentsBuilder.GetHostelsContainers(Hostels);
-        ToursCards = WebComponentsBuilder.GetToursCards(Tours);
-        ToursCarousel = WebComponentsBuilder.GetToursCarouselCards(Tours, "onScroll", "TAILORED TOURS");
-        EventsCards = WebComponentsBuilder.GetEventsCarouselCards(Events);
-        CarouselComponent = new FullImageCarouselComponent(await MockData.GetHomePageCarouselImages(), new BookNowComponent(Hostels, null, true));
+        HostelsContainers = WebComponentsBuilder.FuseHostelsAndTravel.GetHostelsContainers(Properties);
+        ToursCards = WebComponentsBuilder.FuseHostelsAndTravel.GetToursCards(Tours);
+        ToursCarousel = WebComponentsBuilder.FuseHostelsAndTravel.GetToursCarouselCards(Tours, "onScroll", "TAILORED TOURS");
+        EventsCards = WebComponentsBuilder.FuseHostelsAndTravel.GetEventsCarouselCards(Events);
+        CarouselComponent = new FullImageCarouselComponent(await GetHomePageCarouselImages(), new BookNowComponent(Properties, null, true));
 
         return Page();
+    }
+
+    public async Task<List<Image>> GetHomePageCarouselImages()
+    {
+        var images = new List<Image>();
+
+        await Task.Run(() =>
+        {
+            images = new List<Image>()
+                {
+                    new Image("https://fusehostelsandtravel.azureedge.net/images/home-page-banner-1.webp", new Guid("F28C2D2C-1C90-40A5-B13E-31D323C14E1E"), "Page", "HOSTEL<br/>EXPERIENCE", "THE ULTIMATE", "BEGINS AT FUSE", "")
+                };
+        });
+
+        return images;
     }
 }
 

@@ -3,6 +3,8 @@
 
 @if (Model.Tour != null)
 {
+    ViewData["Title"] = Model.Tour.Name;
+
     @section Styles {
         <style type="text/css">
             .header-banner-image-background {
@@ -19,93 +21,52 @@
         <div class="container-fluid">
             <div class="container pb-8 pt-8">
                 <div class="row">
-                    <div class="col-md-12 col-lg-6 mb-5 mb-lg-0" data-mdb-toggle="animation" data-mdb-animation-start="onLoad" data-mdb-animation-on-scroll="once" data-mdb-animation="slide-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="1000">
+                    <div class="col-md-12 col-lg-6 mb-5 mb-lg-0 has-parallax-scroll">
                         <h1 class="display-3">@Model.Tour.Name.ToUpper()</h1>
                         @Html.Raw(Model.Tour.Description)
                     </div>
-                    <div class="p-0 mt-5 mt-lg-0 col-md-12 col-lg-6 d-flex align-items-center justify-content-center" data-mdb-toggle="animation" data-mdb-animation-start="onLoad" data-mdb-animation-on-scroll="once" data-mdb-animation="slide-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="1000">
+                    <div class="p-0 mt-5 mt-lg-0 col-md-12 col-lg-6 d-lg-flex align-items-center justify-content-center has-parallax-scroll d-none">
                         <div class="bg-white p-7">
                             <div class="text-center">
                                 <h4 class="tilted mt-n7 mb-4 display-6">BOOK YOUR TOUR</h4>
                             </div>
-                            <p><i class="fa-solid fa-clock me-2"></i> @Model.Tour.Duration</p>
-                            <p><i class="fa-solid fa-circle-dollar-to-slot me-2"></i> @Model.Tour.Price</p>
+                            <p><i class="fa-solid fa-clock me-2"></i> @Model.Tour.HourDuration hours</p>
+                            <p><i class="fa-solid fa-circle-dollar-to-slot me-2"></i> $@Model.Tour.Price @Model.Tour.PriceLabel</p>
                             <div class="text-center mb-n7 mt-4">
-                                <button class="btn btn-primary" data-mdb-toggle="modal" data-mdb-target="#enquireNowModal">Enqure Now</button>
+                                <button class="btn btn-primary" data-mdb-toggle="modal" data-mdb-target="#enquireNowModal">Enquire Now</button>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="mt-5 mt-lg-0 col-md-12 col-lg-6 d-flex align-items-center justify-content-center has-parallax-scroll d-lg-none bg-white">
+                        <div class="bg-white pt-6 pb-6">
+                            <div class="text-center">
+                                <h4 class="tilted mt-n7 mb-4 display-6">BOOK YOUR TOUR</h4>
+                            </div>
+                            <p><i class="fa-solid fa-clock me-2"></i> @Model.Tour.HourDuration hours</p>
+                            <p><i class="fa-solid fa-circle-dollar-to-slot me-2"></i> $@Model.Tour.Price @Model.Tour.PriceLabel</p>
+
+                        </div>
+                        <button class="btn btn-primary" id="tourEnquireNowMobileButton" data-mdb-toggle="modal" data-mdb-target="#enquireNowModal">Enquire Now</button>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <div class="modal fade" id="enquireNowModal" tabindex="-1" aria-labelledby="enquireNowModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header bg-primary">
-                    <h5 class="modal-title text-white" id="enquireNowModalLabel">ENQUIRE NOW</h5>
-                </div>
-                <form method="post">
-                    <input asp-for="EnquireNowInput.TourName" type="hidden" />
-                    <div class="modal-body">
-                        <div class="container-fluid">
-                            <div class="row">
-                                <div class="col-lg-12">
-                                    <div class="form-outline mb-4">
-                                        <input asp-for="EnquireNowInput.Name" class="form-control" aria-required="true" />
-                                        <label asp-for="EnquireNowInput.Name" class="form-label"></label>
-                                    </div>
-                                    <span asp-validation-for="EnquireNowInput.Name" class="fuse-validation"></span>
-                                </div>
-                                <div class="col-lg-12">
-                                    <div class="form-outline mb-4">
-                                        <input asp-for="EnquireNowInput.Email" class="form-control" aria-required="true" />
-                                        <label asp-for="EnquireNowInput.Email" class="form-label"></label>
-                                    </div>
-                                    <span asp-validation-for="EnquireNowInput.Email" class="fuse-validation"></span>
-                                </div>
-                                <div class="col-lg-12">
-                                    <div class="form-outline mb-4 datepicker-disable-past position-relative" data-mdb-toggle-button="false" data-mdb-format="dd/mm/yyyy">
-                                        <input asp-for="EnquireNowInput.Date" type="text" class="form-control" data-mdb-toggle="datepicker" />
-                                        <label asp-for="EnquireNowInput.Date" class="form-label"></label>
-                                    </div>
-                                    <span asp-validation-for="EnquireNowInput.Date" class="fuse-validation"></span>
-                                </div>
-                                <div class="col-lg-12">
-                                    <div class="form-outline mb-4">
-                                        <input asp-for="EnquireNowInput.NumberOfPeople" class="form-control" aria-required="true" />
-                                        <label asp-for="EnquireNowInput.NumberOfPeople" class="form-label"></label>
-                                    </div>
-                                    <span asp-validation-for="EnquireNowInput.NumberOfPeople" class="fuse-validation"></span>
-                                </div>
-                                <div class="col-lg-12">
-                                    <div class="form-outline">
-                                        <textarea class="form-control" asp-for="EnquireNowInput.AdditionalInformation" rows="4"></textarea>
-                                        <label class="form-label" asp-for="EnquireNowInput.AdditionalInformation"></label>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-primary me-auto" data-mdb-dismiss="modal">Close</button>
-                        <button type="submit" class="btn btn-primary">Submit</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    @Html.DisplayFor(x => x.EnquireNowComponent)
 }
 else
 {
+    ViewData["Title"] = "Tours";
+
     <section id="tours" class="bg-light">
         @Html.DisplayFor(x => x.ToursCards)
     </section>
 
     <section id="contactUs">
         <div class="container-fluid bg-gray">
-            <div class="container pt-5 pb-5"  data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="slide-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="1000">
+            <div class="container pt-5 pb-5" data-mdb-toggle="animation" data-mdb-animation-start="onScroll" data-mdb-animation-on-scroll="once" data-mdb-animation="slide-in-up" data-mdb-animation-delay="0" data-mdb-animation-duration="1000">
                 <div class="row justify-content-lg-between align-items-center">
                     <div class="col-lg-auto mb-3 mb-lg-0">
                         <div class="row flex-column">

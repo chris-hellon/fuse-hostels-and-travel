@@ -1,11 +1,12 @@
 ﻿@model CardComponent
-@using FuseHostelsAndTravel.Core.Utils
+@using Travaloud.Core.Utils
 
 @{
     var isLightbox = Model.LightboxImages != null && Model.LightboxImages.Any();
+    var id = $"lightbox{Model.Title.ConvertToCamelCase()}Modal";
 
     <div class="@Model.CssClass @(isLightbox ? "lightbox-card" : "") @(Model.AnimationDelay.HasValue ? "has-parallax-scroll" : "")">
-        <div class="card rounded-0 offcut-image-border @(isLightbox ? "mb-4" : "")">
+        <div class="card rounded-0 offcut-image-border @(isLightbox ? "mb-4" : "")" @(isLightbox ? $"data-mdb-toggle=modal data-mdb-target=#{id} role=button" : "")>
             @if (!string.IsNullOrEmpty(Model.ImageSrc))
             {
                 <img src="@Model.ImageSrc" alt="@($"{Model.Title} image")" class="card-img-top rounded-0 @(isLightbox ? "object-fit-cover" : "")" />
@@ -18,7 +19,7 @@
             @if (Model.LightboxImages == null || !Model.LightboxImages.Any())
             {
                 <div class="card-body p-5 ">
-                    <h6 class="card-title mb-4 display-6">@Html.Raw(Model.Title)</h6>
+                    <span class="card-title mb-4 display-6">@Html.Raw(Model.Title)</span>
                     <p class="card-text">@Html.Raw(Model.Body)</p>
 
                     @if (Model.ButtonComponent != null)
@@ -29,13 +30,13 @@
             }
             else
             {
-                <h4 class="tilted position-absolute">@Model.Title</h4>
+                <span class="tilted position-absolute">@Model.Title</span>
             }
         </div>
 
         @if (isLightbox)
         {
-            var id = $"lightbox{Model.Title.ConvertToCamelCase()}Modal";
+            
             <a class="text-purple" data-mdb-toggle="modal" data-mdb-target="#@id">@Model.Title.ToUpper() INFO</a>
         }
     </div>

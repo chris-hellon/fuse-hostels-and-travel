@@ -1,6 +1,6 @@
 ﻿namespace FuseHostelsAndTravel.Web.Pages.TermsAndConditions
 {
-    public class IndexModel : BasePageModel
+    public class IndexModel : TravaloudBasePageModel
     {
         public IEnumerable<OvalContainerComponent> OvalContainers { get; private set; } = null;
 

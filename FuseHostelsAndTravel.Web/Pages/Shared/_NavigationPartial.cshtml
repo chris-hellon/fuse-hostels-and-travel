@@ -1,5 +1,4 @@
-﻿@model BasePageModel
-@using FuseHostelsAndTravel.Core
+﻿@model TravaloudBasePageModel
 @inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
 
 <header>
@@ -27,14 +26,14 @@
                         </div>
                         <div class="col-md-12 col-lg-6 d-flex justify-content-lg-center pt-5 pt-lg-0">
                             <ul class="navbar-nav">
-                                <li class="nav-item dropdown mt-3 mt-lg-0 mb-lg-0">
-                                    <a class="nav-link d-none d-lg-block dropdown-toggle @(currentPath.Contains("/hostels") ? "active" : "" )" asp-page="/Hostels/Index" asp-route-hostelName="" id="navbarDropdownSleepAndEat" role="button" aria-expanded="false" aria-haspopup="true">HOSTELS</a>
+                                <li class="nav-item dropdown mt-4 mt-lg-0 mb-lg-0">
+                                    <a class="nav-link d-none d-lg-block dropdown-toggle @(currentPath.Contains("/hostels") ? "active" : "" )" asp-page="/Hostels/Index" asp-route-hostelName="" id="navbarDropdownProperties" role="button" aria-expanded="false" aria-haspopup="true">HOSTELS</a>
                                     <ul class="dropdown-menu">
                                         @{
-                                            foreach (var hostel in Model.Hostels)
+                                            foreach (var property in Model.Properties)
                                             {
                                                 <li>
-                                                    <a class="dropdown-item text-dark" asp-page="/Hostels/Index" asp-route-hostelName="@hostel.FriendlyUrl">@hostel.Name</a>
+                                                    <a class="dropdown-item text-dark" asp-page="/Hostels/Index" asp-route-propertyName="@property.FriendlyUrl">@property.Name</a>
                                                 </li>
                                             }
                                         }
@@ -47,18 +46,18 @@
                                                 </button>
                                             </h2>
                                             <div id="hostelsAccordionCollapse" class="accordion-collapse collapse" aria-labelledby="hostelsAccordionHeading" data-mdb-parent="#hostelsAccordion">
-                                                <div class="accordion-body">
+                                                <div class="accordion-body mt-2 mb-1">
                                                     <ul>
                                                         @{
-                                                            foreach (var hostel in Model.Hostels)
+                                                            foreach (var property in Model.Properties)
                                                             {
-                                                                <li class="nav-item">
-                                                                    <a class="nav-link" asp-page="/Hostels/Index" asp-route-hostelName="@hostel.FriendlyUrl">@hostel.Name</a>
+                                                                <li class="nav-item @(property != Model.Properties.First() ? "mt-4" : "") mb-0">
+                                                                    <a class="nav-link" asp-page="/Hostels/Index" asp-route-propertyName="@property.FriendlyUrl">@property.Name</a>
                                                                 </li>
                                                             }
                                                         }
-                                                        <li class="nav-item">
-                                                            <a class="nav-link" asp-page="/Hostels/Index" asp-route-hostelName="">All Locations</a>
+                                                        <li class="nav-item mt-4">
+                                                            <a class="nav-link" asp-page="/Hostels/Index" asp-route-propertyName="">All Locations</a>
                                                         </li>
                                                     </ul>
                                                 </div>
@@ -66,8 +65,8 @@
                                         </div>
                                     </div>
                                 </li>
-                                <li class="nav-item dropdown mt-3 mb-3 mt-lg-0 mb-lg-0">
-                                    <a class="nav-link d-none d-lg-block  dropdown-toggle @(currentPath.Contains("/tours") ? "active" : "" )" asp-page="/Tours/Index" asp-route-tourName="" id="navbarDropdownSleepAndEat" role="button" aria-expanded="false" aria-haspopup="true">TOURS</a>
+                                <li class="nav-item dropdown mt-4 mt-lg-0 mb-lg-0">
+                                    <a class="nav-link d-none d-lg-block  dropdown-toggle @(currentPath.Contains("/tours") ? "active" : "" )" asp-page="/Tours/Index" asp-route-tourName="" id="navbarDropdownTours" role="button" aria-expanded="false" aria-haspopup="true">TOURS</a>
 
                                     <ul class="dropdown-menu">
                                         @{
@@ -91,17 +90,17 @@
                                                  class="accordion-collapse collapse"
                                                  aria-labelledby="toursAccordionHeading"
                                                  data-mdb-parent="#toursAccordion">
-                                                <div class="accordion-body">
+                                                <div class="accordion-body mt-2 mb-1">
                                                     <ul>
                                                         @{
                                                             foreach (var tour in Model.Tours)
                                                             {
-                                                                <li>
+                                                                <li class="nav-item @(tour != Model.Tours.First() ? "mt-4" : "") mb-0">
                                                                     <a class="nav-link" asp-page="/Tours/Index" asp-route-tourName="@tour.FriendlyUrl">@tour.Name</a>
                                                                 </li>
                                                             }
                                                         }
-                                                        <li class="nav-item">
+                                                        <li class="nav-item mt-4">
                                                             <a class="nav-link" asp-page="/Tours/Index" asp-route-tourName="">All Tours</a>
                                                         </li>
                                                     </ul>
@@ -110,10 +109,10 @@
                                         </div>
                                     </div>
                                 </li>
-                                <li class="nav-item mb-3 mb-lg-0">
+                                <li class="nav-item mt-4 mt-lg-0">
                                     <a class="nav-link" asp-page="/OurStory/Index">OUR STORY</a>
                                 </li>
-                                <li class="nav-item mb-3 mb-lg-0">
+                                <li class="nav-item mt-4 mt-lg-0">
                                     <a class="nav-link" asp-page="/Contact/Index">CONTACT</a>
                                 </li>
                             </ul>

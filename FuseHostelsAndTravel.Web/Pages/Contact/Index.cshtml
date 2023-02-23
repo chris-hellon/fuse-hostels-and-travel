@@ -1,6 +1,9 @@
 ﻿@page "/contact"
 @model FuseHostelsAndTravel.Web.Pages.Contact.IndexModel
 @using AspNetCore.ReCaptcha
+@{
+    ViewData["Title"] = "Get In Touch";
+}
 
 <section id="getInTouch" class="bg-light overflow-hidden position-relative">
     <div class="container-fluid">
@@ -14,41 +17,7 @@
                             <div class="d-flex justify-content-center">
                                 <h4 class="tilted display-6">HOW CAN WE HELP?</h4>
                             </div>
-                            <form method="post" id="contact-form">
-                                <div asp-validation-summary="ModelOnly" class="fuse-validation"></div>
-                                <div class="row">
-                                    <div class="col-lg-12">
-                                        <!-- Name input -->
-                                        <div class="form-outline mb-4 mt-4">
-                                            <input asp-for="Name" class="form-control" autocomplete="username" aria-required="true" />
-                                            <label asp-for="Name" class="form-label"></label>
-                                        </div>
-                                        <span asp-validation-for="Name" class="fuse-validation"></span>
-                                    </div>
-                                    <div class="col-lg-12">
-                                        <!-- Email input -->
-                                        <div class="form-outline mb-4">
-                                            <input asp-for="Email" class="form-control" autocomplete="username" aria-required="true" />
-                                            <label asp-for="Email" class="form-label"></label>
-                                        </div>
-                                        <span asp-validation-for="Email" class="fuse-validation"></span>
-                                    </div>
-                                    <div class="col-lg-12">
-                                        <!-- Message input -->
-                                        <div class="form-outline mb-4">
-                                            <textarea asp-for="Message" class="form-control" rows="4" style="height:129px"></textarea>
-                                            <label asp-for="Message" class="form-label"></label>
-                                        </div>
-                                        <span asp-validation-for="Message" class="fuse-validation"></span>
-                                    </div>
-                                    <div class="col-lg-12 mb-4">
-                                        <recaptcha />
-                                    </div>
-                                    <input asp-for="HoneyPot" class="d-none" />
-                                </div>
-                                <!-- Submit button -->
-                                <button type="submit" class="btn btn-primary d-block w-100">Send Message</button>
-                            </form>
+                            @Html.DisplayFor(x => x.ContactComponent)
                         </div>
                     </div>
                 </div>
@@ -85,25 +54,25 @@
             </div>
         </div>
         <div class="row">
-            @if (Model.Hostels.Any())
+            @if (Model.Properties.Any())
             {
                 var animationDelay = 200;
-                foreach (var hostel in Model.Hostels)
+                foreach (var property in Model.Properties)
                 {
-                    var hostelAddressGoogleFormat = $"{hostel.AddressLine1.Replace(" ", "+").Replace(",", "")}+{hostel.AddressLine2.Replace(" ", "+").Replace(",", "")}";
+                    var hostelAddressGoogleFormat = $"{property.AddressLine1.Replace(" ", "+").Replace(",", "")}+{property.AddressLine2.Replace(" ", "+").Replace(",", "")}";
 
-                    <div class="col-lg-4 @(hostel != Model.Hostels.Last() ? "mb-5" : "") mb-lg-0 has-parallax-scroll">
+                    <div class="col-lg-4 @(property != Model.Properties.Last() ? "mb-5" : "") mb-lg-0 has-parallax-scroll">
                         <div class="card shadow-0 bg-light-gray">
                             <div class="card-body">
-                                <h4 class="tilted display-6 mb-4 mt-n5 ms-n4">@hostel.Name</h4>
+                                <h4 class="tilted display-6 mb-4 mt-n5 ms-n4">@property.Name</h4>
                                 <table cellpadding="8">
                                     <tr>
                                         <td><i class="fa-solid fa-phone text-purple"></i></td>
-                                        <td>@hostel.ContactNumber</td>
+                                        <td>@property.TelephoneNumber</td>
                                     </tr>
                                     <tr>
                                         <td><i class="fa-solid fa-location-dot text-purple"></i></td>
-                                        <td>@($"{hostel.AddressLine1}, {hostel.AddressLine2}")</td>
+                                        <td>@($"{property.AddressLine1}, {property.AddressLine2}")</td>
                                     </tr>
                                     <tr>
                                         <td></td>

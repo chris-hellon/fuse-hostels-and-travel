@@ -3,6 +3,7 @@
     padding-right: 0px !important;
     overflow-y: scroll;
     overflow-y: overlay;
+    overflow-x:hidden;
 }
 
 ::-webkit-scrollbar {
@@ -32,13 +33,6 @@ footer {
         color: var(--mdb-light-purple-shadow-color) !important;
     }
 
-    .pre-loader {
-        z-index: 100000;
-        display: flex;
-        flex-flow: column;
-        align-items: center;
-        justify-content: center;
-    }
 
 .container-fluid {
     padding: 0px !important
@@ -78,13 +72,19 @@ footer h5 {
 }
 
 .navbar-brand-mobile {
-    font-size: 1.7rem;
+    font-size: 1.5rem;
     width:80px; height:80px;
 }
 
+button.nav-link, button.text-purple {
+    background:transparent;
+    outline:none;
+    border:none;
+}
+
 .navbar.no-shadow {
-box-shadow:none !important;
-transition:0s;
+    box-shadow: none !important;
+    transition: 0s;
 }
 
 .navbar .dropdown-menu {
@@ -138,7 +138,7 @@ margin:0px 0px 10px 0px;
     padding-left:0px;
 }
     .accordion-body ul li {
-        margin-bottom:10px;
+        margin-bottom:15px;
     }
         .accordion-body ul li:last-of-type {
             margin-bottom:0px;
@@ -155,7 +155,7 @@ margin:0px 0px 10px 0px;
     background-color: var(--mdb-eggplant);
 }
 
-h4.tilted {
+h4.tilted, span.tilted {
     font-size: 2rem;
     line-height: 1.34;
     letter-spacing: normal;
@@ -163,10 +163,11 @@ h4.tilted {
     color: var(--mdb-white);
     display: table;
     text-transform: uppercase;
-    width:fit-content;
+    width: fit-content;
+    font-family: var( --mdb-header-font-family);
 }
-    h4.tilted.display-6 {
-        font-size:1.5rem;
+    h4.tilted.display-6, span.tilted.display-6 {
+        font-size: 1.5rem;
     }
 
     h2.tilted {
@@ -176,6 +177,9 @@ h1.display-3 {
     text-shadow: -3px 0px var(--mdb-light-purple-shadow-color);
 }
 
+span.card-title.display-6 {
+    font-family: var(--mdb-header-font-family);
+}
 .header-banner-image-background {
     height: 480px;
 /*    min-height:70vh;*/
@@ -203,6 +207,25 @@ h1.display-3 {
         text-shadow: -3px 0px var(--mdb-purple);
     }
 
+.booking-banner .select-arrow {
+    color: var(--mdb-form-outline-select-arrow-color);
+    text-align: center;
+    font-size: var(--mdb-form-outline-select-arrow-font-size);
+    position: absolute;
+    top: var(--mdb-form-outline-select-arrow-top);
+    right: var(--mdb-form-outline-select-arrow-right);
+}
+
+.booking-banner .select-arrow:before {
+    content: "\f3c5";
+    font-weight: 900;
+}
+
+.booking-banner .select-wrapper {
+    --mdb-form-outline-select-arrow-color: var(--mdb-purple);
+    --mdb-form-outline-select-arrow-font-size: 1em;
+    --mdb-form-outline-select-arrow-top: 7px;
+}
 
 .floating-book-banner {
     z-index: 1;
@@ -282,6 +305,10 @@ table td {
     width:500px;
     height:500px;
     opacity:0.3;
+}
+
+.bg-light .ovals-container {
+    opacity:0.6;
 }
 
 .oval {
@@ -448,14 +475,6 @@ table td {
     font-size: 1.125rem;
 }
 
-.fuse-validation {
-    display: block;
-    color: #FF6666;
-    font-size: 0.75rem;
-    position: absolute;
-    bottom: 6px;
-}
-
 #parallaxBanner {
     padding-bottom: 8rem;
 }
@@ -559,7 +578,7 @@ table td {
     }
 }
 
-.card-full-background h6.display-6 {
+.card-full-background span.display-6 {
     font-size: 6rem;
     text-shadow: -5px 0px var(--mdb-purple);
     font-family: 'DIN 2014 Narrow' !important;
@@ -624,13 +643,27 @@ table td {
 }
 
     @media(max-width:991px) {
+        h1.display-3 {
+            font-size:4rem;
+        }
+
+        #tourEnquireNowMobileButton {
+            position: absolute;
+            bottom: -20px;
+            width: calc(100% - 20px);
+        }
+
         #parallaxBanner .container-fluid {
             width: 280%;
             font-size: 3.5rem;
             line-height: 3.5rem;
         }
 
-        .card-full-background h6.display-6 {
+        .owl-stage-outer {
+            padding:0px;
+        }
+
+        .card-full-background span.display-6 {
             font-size: 5rem;
             line-height: 5rem;
         }
@@ -647,7 +680,7 @@ table td {
             font-weight: normal;
         }
 
-        h4.tilted {
+        span.tilted, h4.tilted {
             font-size: 1.5rem;
         }
 
@@ -655,7 +688,7 @@ table td {
             background-image: -webkit-linear-gradient(-40deg, #FFFFFF 60%, #D1AC00 50%) !important;
         }
 
-        #homePageIntroductionOvals1, #homePageIntroductionOvals2 {
+        #homePageIntroductionOvals1, #homePageIntroductionOvals2, #hostels .ovals-container, #hostelAccommodationOvals1 {
             display: none;
         }
 
@@ -770,47 +803,48 @@ table td {
         .owl-item .ovals-container:nth-child(3) {
             right:-115% !important;
         }
+
+        #parallaxBanner {
+            padding-bottom:3rem;
+            overflow:hidden;
+        }
+
+        #parallaxBannerOvals {
+            top: 25% !important;
+            left: -60% !important;
+        }
+
+        .datepicker-toggle-button {
+            top: 7px !important;
+            right: 3px !important;
+            transform:unset !important;
+            position:absolute !important;
+        }
+
+        #toursCarousel .card-body {
+            padding: 32px 24px !important;
+        }
+            .card-body button, .card-body a.btn {
+                width: 100% !important;
+            }
+
+        header .navbar .nav-link, header .navbar .accordion-button {
+            --mdb-nav-link-font-size: 15px;
+        }
+        .navbar-nav {
+            margin-left: 15px;
+        }
     }
 
 
-.holder {
-    position: absolute;
-    width: 200px;
-    height: 50px;
-    top:0px;
-    right:0px;
-}
 
-.clip {
-    /* Clip edges, as some of the lines don't terminate nicely. */
-    overflow: hidden;
-}
 
-.line {
-    position: absolute;
-    width: 200px;
-    /* Height set to clip correctly basically background-size/2 + line width */
-    height: 26px;
-}
-
-.line1 {
-    background: linear-gradient(45deg, transparent, transparent 49%, red 49%, transparent 51%);
-}
-
-.line2 {
-    background: linear-gradient(-45deg, transparent, transparent 49%, red 49%, transparent 51%);
-}
-
-.line {
-    /* Must be after background definition. */
-    background-size: 50px 50px;
-}
 
 .has-parallax-scroll {
-/*    opacity: 0;*/
+    opacity: 0;
     transform: translateY(50px);
     transition: opacity 1.2s, transform 1.2s;
-    z-index:2;
+    z-index: 2;
 }
 
 .has-parallax-scroll.fade-in {

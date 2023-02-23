@@ -7,13 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Travaloud\Travaloud.Base\Travaloud.Core\Travaloud.Core.csproj">
+    <ProjectReference Include="..\..\Travaloud\Travaloud.Base\Travaloud.Web\Travaloud.Web.csproj">
       <GlobalPropertiesToRemove></GlobalPropertiesToRemove>
     </ProjectReference>
     <ProjectReference Include="..\..\Travaloud\Travaloud.Base\Travaloud.Infrastructure\Travaloud.Infrastructure.csproj">
-      <GlobalPropertiesToRemove></GlobalPropertiesToRemove>
-    </ProjectReference>
-    <ProjectReference Include="..\FuseHostelsAndTravel.Core\FuseHostelsAndTravel.Core.csproj">
       <GlobalPropertiesToRemove></GlobalPropertiesToRemove>
     </ProjectReference>
   </ItemGroup>
@@ -23,10 +20,14 @@
     <None Remove="Pages\TermsAndConditions\" />
     <None Remove="Pages\PrivacyPolicy\" />
     <None Remove="Pages\CookiePolicy\" />
+    <None Remove="Rollbar" />
+    <None Remove="Rollbar.NetCore.AspNet" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="6.0.13" />
     <PackageReference Include="AspNetCore.ReCaptcha" Version="1.7.0" />
+    <PackageReference Include="Rollbar" Version="5.2.0" />
+    <PackageReference Include="Rollbar.NetCore.AspNet" Version="5.2.0" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Pages\TermsAndConditions\" />

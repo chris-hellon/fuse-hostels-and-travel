@@ -1,10 +1,7 @@
 ﻿namespace FuseHostelsAndTravel.Web.Pages.Hostels
 {
-	public class IndexModel : BasePageModel
+	public class IndexModel : TravaloudBasePageModel
     {
-        [BindProperty]
-        public Hostel Hostel { get; private set; }
-
         [BindProperty]
         public Travaloud.Core.Entities.Catalog.Property Property { get; private set; }
 
@@ -38,49 +35,48 @@
         [BindProperty]
         public FeaturesTableComponent FacilitiesTable { get; private set; }
 
-        public async Task<IActionResult> OnGet(string hostelName = null)
+        public async Task<IActionResult> OnGet(string propertyName = null)
         {
             await base.OnGetDataAsync();
 
-            EventsCards = WebComponentsBuilder.GetEventsCarouselCards(Events);
+            EventsCards = WebComponentsBuilder.FuseHostelsAndTravel.GetEventsCarouselCards(Events);
 
-            if (hostelName == null)
+            if (propertyName == null)
             {
                 HeaderBanner = new HeaderBannerComponent("HOSTELS", "VIETNAM", "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.", "https://images.unsplash.com/photo-1466378284817-a6b7fd50cc68?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2880&q=80", new List<OvalContainerComponent>()
                        {
                              new OvalContainerComponent("hostelPageHeaderBannerOvals1", -160, null, -45, null)
                        });
-                HostelsContainers = WebComponentsBuilder.GetHostelsContainers(Hostels);
-                BookNowBanner = new BookNowComponent(Hostels);
+                HostelsContainers = WebComponentsBuilder.FuseHostelsAndTravel.GetHostelsContainers(Properties);
+                BookNowBanner = new BookNowComponent(Properties);
             }
             else
             {
-                Hostel = Hostels.FirstOrDefault(x => x.FriendlyUrl == hostelName);
-                if (Hostel != null)
+                Property = Properties.FirstOrDefault(x => x.FriendlyUrl == propertyName);
+                if (Property != null)
                 {
-                    Hostel.Rooms = await MockData.GetHostelRooms(Hostel.Id.Value);
-                    Hostel.Directions = await MockData.GetHostelDirections(Hostel.Id.Value);
+                    await PropertiesRepository.GetPropertyInformation(Property);
 
-                    var pageTitle = Hostel.PageTitle ?? Hostel.Name;
-                    var pageSubTitle = Hostel.PageSubTitle ?? "";
+                    var pageTitle = Property.PageTitle ?? Property.Name;
+                    var pageSubTitle = Property.PageSubTitle ?? "";
 
-                    HeaderBanner = new HeaderBannerComponent(pageTitle, pageSubTitle, null, Hostel.ImageUrl, new List<OvalContainerComponent>()
+                    HeaderBanner = new HeaderBannerComponent(pageTitle, pageSubTitle, null, Property.ImagePath, new List<OvalContainerComponent>()
                        {
                              new OvalContainerComponent("hostelPageHeaderBannerOvals1", 15, null, -30, null)
                        });
 
-                    DirectionsNavPills = WebComponentsBuilder.GetHostelDirectionsNavPills(Hostel);
-                    IntroductionBanner = new ContainerHalfImageRoundedTextComponent(new List<string>() { "ABOUT" }, null, Hostel.Description,
+                    DirectionsNavPills = WebComponentsBuilder.FuseHostelsAndTravel.GetHostelDirectionsNavPills(Property);
+                    IntroductionBanner = new ContainerHalfImageRoundedTextComponent(new List<string>() { "ABOUT" }, null, Property.Description,
                        "https://images.unsplash.com/photo-1555979864-7a8f9b4fddf8?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=3542&q=80", null, new List<OvalContainerComponent>()
                        {
                              new OvalContainerComponent("hostelPageIntroductionOvals1", 15, null, null, -28),
                              new OvalContainerComponent("hostelPageIntroductionOvals2", null, 15, null, 18)
                        })
                     {  AnimationStart = "onLoad"};
-                    ToursCards = WebComponentsBuilder.GetToursCarouselCards(Tours, "onScroll", $"TOURS IN {pageTitle.ToUpper()}", null);
-                    AccommodationCards = WebComponentsBuilder.GetHostelAccommodationCards(Hostel.Rooms, "onScroll");
+                    ToursCards = WebComponentsBuilder.FuseHostelsAndTravel.GetToursCarouselCards(Tours, "onScroll", $"TOURS IN {pageTitle.ToUpper()}", null);
+                    AccommodationCards = WebComponentsBuilder.FuseHostelsAndTravel.GetHostelAccommodationCards(Property.Rooms, "onScroll");
                     
-                    FacilitiesTable = WebComponentsBuilder.GetHostelFacilities(Hostel);
+                    FacilitiesTable = WebComponentsBuilder.FuseHostelsAndTravel.GetHostelFacilities(Property);
 
                     NavPills = new List<NavPill>()
                     {
@@ -91,7 +87,7 @@
                     };
                 }
 
-                BookNowBanner = new BookNowComponent(Hostels, Hostel.Id);
+                BookNowBanner = new BookNowComponent(Properties, Property.Id);
             }
 
             return Page();

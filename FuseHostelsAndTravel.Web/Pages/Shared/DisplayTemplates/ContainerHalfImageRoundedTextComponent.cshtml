@@ -1,19 +1,19 @@
 ﻿@model ContainerHalfImageRoundedTextComponent
 
 <div class="container-fluid position-relative @(!Model.SwapDirecion ? "offset-background" : "")">
-    <div class="container pt-8 pb-8@(Model.OvalContainers != null ? " position-relative" : "")  has-parallax-scroll">
+    <div class="container pt-8 pb-8@(Model.OvalContainers != null ? " position-relative" : "")">
         <div class="row g-lg-10 @(Model.SwapDirecion ? "flex-row-reverse" : "")">
-            <div class="col-md-12 col-lg-6 pb-5 pb-lg-0 d-flex align-items-center position-relative">
+            <div class="col-md-12 col-lg-6 pb-5 pb-lg-0 d-flex align-items-center position-relative has-parallax-scroll">
                 <div class="mx-auto">
                     @if (Model.Title != null)
                     {
-                        <h4 class="mb-4 tilted">@Html.Raw(Model.Title)</h4>
+                        <span class="mb-4 tilted">@Html.Raw(Model.Title)</span>
                     }
                     else if (Model.Titles != null && Model.Titles.Any())
                     {
                         foreach (var title in Model.Titles)
                         {
-                            <h4 class="@(title == Model.Titles.Last() ? "mb-5" : "mb-3") tilted">@Html.Raw(title)</h4>
+                            <span class="@(title == Model.Titles.Last() ? "mb-5" : "mb-3") tilted">@Html.Raw(title)</span>
                         }
                     }
                     <p>@Html.Raw(Model.Body)</p>
@@ -24,7 +24,7 @@
                     }
                 </div>
             </div>
-            <div class="col-md-12 col-lg-6 d-flex justify-content-center @(Model.SwapDirecion ? "justify-content-lg-start" : "justify-content-lg-end") position-relative">
+            <div class="col-md-12 col-lg-6 d-flex justify-content-center @(Model.SwapDirecion ? "justify-content-lg-start" : "justify-content-lg-end") position-relative has-parallax-scroll">
                 <div class="offcut-image-border full-circle">
                     @if (!string.IsNullOrEmpty(Model.ImageSrc))
                     {

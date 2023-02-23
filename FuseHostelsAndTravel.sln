@@ -5,11 +5,11 @@ VisualStudioVersion = 25.0.1704.4
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FuseHostelsAndTravel.Web", "FuseHostelsAndTravel.Web\FuseHostelsAndTravel.Web.csproj", "{A4C1BF12-7329-4BA6-84C1-CECAFC824A6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FuseHostelsAndTravel.Core", "FuseHostelsAndTravel.Core\FuseHostelsAndTravel.Core.csproj", "{43573C1B-181E-4533-8408-8A6C22F5C5A0}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Travaloud.Core", "..\Travaloud\Travaloud.Base\Travaloud.Core\Travaloud.Core.csproj", "{181D16B9-6EAC-4D51-BE5D-7F8AF513152C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Travaloud.Infrastructure", "..\Travaloud\Travaloud.Base\Travaloud.Infrastructure\Travaloud.Infrastructure.csproj", "{D85D0567-027A-4907-A596-EDBD704936B1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Travaloud.Web", "..\Travaloud\Travaloud.Base\Travaloud.Web\Travaloud.Web.csproj", "{98E13E68-5958-4E1D-8B92-653D174E3C2C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,10 +21,6 @@ Global
 		{A4C1BF12-7329-4BA6-84C1-CECAFC824A6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4C1BF12-7329-4BA6-84C1-CECAFC824A6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4C1BF12-7329-4BA6-84C1-CECAFC824A6D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{43573C1B-181E-4533-8408-8A6C22F5C5A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{43573C1B-181E-4533-8408-8A6C22F5C5A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{43573C1B-181E-4533-8408-8A6C22F5C5A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{43573C1B-181E-4533-8408-8A6C22F5C5A0}.Release|Any CPU.Build.0 = Release|Any CPU
 		{181D16B9-6EAC-4D51-BE5D-7F8AF513152C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{181D16B9-6EAC-4D51-BE5D-7F8AF513152C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{181D16B9-6EAC-4D51-BE5D-7F8AF513152C}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -33,6 +29,10 @@ Global
 		{D85D0567-027A-4907-A596-EDBD704936B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D85D0567-027A-4907-A596-EDBD704936B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D85D0567-027A-4907-A596-EDBD704936B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98E13E68-5958-4E1D-8B92-653D174E3C2C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98E13E68-5958-4E1D-8B92-653D174E3C2C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98E13E68-5958-4E1D-8B92-653D174E3C2C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98E13E68-5958-4E1D-8B92-653D174E3C2C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

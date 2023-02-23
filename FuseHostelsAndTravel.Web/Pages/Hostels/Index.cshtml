@@ -1,9 +1,11 @@
-﻿@page "/hostels/{hostelName?}"
+﻿@page "/hostels/{propertyName?}"
 @model FuseHostelsAndTravel.Web.Pages.Hostels.IndexModel
-@using FuseHostelsAndTravel.Core.Utils
+@using Travaloud.Core.Utils
 
-@if (Model.Hostel != null)
+@if (Model.Property != null)
 {
+    ViewData["Title"] = Model.Property.Name;
+
     <section id="headerBanner">
         @Html.DisplayFor(x => x.HeaderBanner)
         <partial name="_NavPillsPartial" model="Model.NavPills" />
@@ -22,11 +24,11 @@
         @Html.DisplayFor(x => x.BookNowBanner)
     </section>
 
-    <section id="@($"tours-in-{Model.Hostel.FriendlyPageTitle}")" class="bg-light">
+    <section id="@($"tours-in-{Model.Property.FriendlyPageTitle}")" class="bg-light">
         @Html.DisplayFor(x => x.ToursCards)
     </section>
 
-    <section id="@($"getting-to-{Model.Hostel.FriendlyPageTitle}")">
+    <section id="@($"getting-to-{Model.Property.FriendlyPageTitle}")">
         @Html.DisplayFor(x => x.DirectionsNavPills)
     </section>
 
@@ -49,7 +51,7 @@
         {
             var id = $"lightbox{accommodation.Title.ConvertToCamelCase()}Modal";
             var label = $"{id}Label";
-            var url = $"/hostel-booking/{Model.Hostel.FriendlyUrl}{(Model.UserId != null ? $"/{Model.UserId}" : "")}";
+            var url = $"/hostel-booking/{Model.Property.FriendlyUrl}{(Model.UserId != null ? $"/{Model.UserId}" : "")}";
 
             <div class="modal fade lighbox-modal" id="@id" tabindex="-1" aria-labelledby="@label" aria-hidden="true">
                 <button type="button" class="text-white btn-close" data-mdb-dismiss="modal" aria-label="Close"><i class="fa fa-xmark"></i></button>
@@ -90,7 +92,7 @@
                                         </div>
                                     </div>
                                     <div class="col-lg-8">
-                                        <img class="img-fluid" src="@accommodation.ImageSrc" />
+                                        <img class="img-fluid" src="@accommodation.ImageSrc" alt="@accommodation carousel image" />
                                     </div>
                                 </div>
                             </div>
@@ -104,6 +106,8 @@
 }
 else
 {
+    ViewData["Title"] = "Hostels";
+
     @section Styles {
         <style type="text/css">
             .header-banner-image-background {

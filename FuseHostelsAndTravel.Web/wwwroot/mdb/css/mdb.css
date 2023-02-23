@@ -140,6 +140,14 @@ h1 {
     text-shadow: -3px 0px var(--mdb-purple);
 }
 
+.travaloud-validation {
+    display: block;
+    color: #FF6666;
+    font-size: 0.75rem;
+    position: absolute;
+    bottom: 6px;
+}
+
 @media(min-width:1200px) {
     .h1,
     h1 {
@@ -46448,11 +46456,6 @@ select.select-initialized {
        
         font-family: "Font Awesome 6 Free";
     }
-
-#bookBanner .select-arrow:before {
-    content: "\f3c5";
-    font-weight: 900;
-}
 
 .was-validated .form-control:valid ~ .select-arrow {
     color: var(--mdb-form-outline-select-valid-color)

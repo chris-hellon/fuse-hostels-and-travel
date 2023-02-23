@@ -1,21 +1,18 @@
 ﻿@page "/"
 @model IndexModel
 
-@{
-    ViewData["Title"] = "Home page";
-}
-
 @Html.DisplayFor(x => x.CarouselComponent)
 
 <section id="introduction" class="overflow-hidden">
     @Html.DisplayFor(x => x.IntroductionBanner)
 </section>
-<section id="hostels" class="bg-light pb-5 overflow-hidden">
+<section id="hostels" class="bg-light pb-lg-5 overflow-hidden">
     @Html.DisplayFor(x => x.HostelsInVietnamBanner)
     @Html.DisplayFor(x => x.HostelsContainers)
 </section>
-<section id="parallaxBanner" class="bg-light pt-5 overflow-hidden">
-    <div class="container-fluid bg-black tilted pt-8 pb-8 text-white">
+<section id="parallaxBanner" class="bg-light pt-5 position-relative">
+    @Html.DisplayFor(x => x.MarqueeOvals)
+    <div class="container-fluid bg-black tilted pt-lg-8 pb-lg-8 text-white">
         <div class="marquee">
             <span class="fw-bold">New beds</span>
             <span class="fw-light">Great locations</span>

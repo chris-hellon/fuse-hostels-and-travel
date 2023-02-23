@@ -1,74 +1,64 @@
-﻿@model BasePageModel
+﻿@model TravaloudBasePageModel
 
 <!DOCTYPE html>
 <html lang="en" class="no-scrollbar">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Fuse Hostels & Travel</title>
+    @{
+        var title = ViewData["Title"] != null && ViewData["Title"]?.ToString()?.Length > 0 ? ViewData["Title"]?.ToString() : "";
+
+        if (ViewData["SubTitle"] != null && ViewData["SubTitle"]?.ToString()?.Length > 0)
+            title += " - " + ViewData["SubTitle"]?.ToString();
+
+        if (title.Length > 0)
+            title += " - Fuse Hostels & Travel - The Ultimate Hostel Experience Begins at Fuse";
+        else
+            title = "Fuse Hostels & Travel - The Ultimate Hostel Experience Begins at Fuse";
+
+        <title>@title</title>
+    }
+
+    @*<meta name="description" content="Started in 2004 by two Aussies who converted a former diplomats house there are now 7 hostels. At Vietnam Backpacker Hostels, we provide the world's best hostels by delivering quality products and unique experiences to our customers." />
+        <meta name="keywords" content="Hanoi, Hue, vietnam, viet nam, halong bay, hostel, hotel, backpackers, travel tips, accommodation, dorm, private rooms, Vietnam Backpackers, Vietnam, Backpacker, Backpackers, Travel, Hostel, Traveling, South East Asia, travel agents, solo travel, traveling solo, afforabable travel, cheap hostels vietnam, tours, trips, Vietnam tours" />*@
+    <link href="https://fusehostelsandtravel.com" rel="home" />
     <link href="/favicon.ico" rel="icon">
-    <style type="text/css">
-        @@font-face {
-            font-family: 'DIN 2014 Demi';
-            src: url('/fonts/din2014-demi-webfont.woff2') format('woff2'), url('/fonts/din2014-demi-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
 
-        @@font-face {
-            font-family: 'DIN 2014 Narrow';
-            src: url('/fonts/din2014-narrow-webfont.woff2') format('woff2'), url('/fonts/din2014-narrow-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-
-        @@font-face {
-            font-family: 'DIN 2014 Narrow Bold';
-            src: url('/fonts/din2014-narrowbold-webfont.woff2') format('woff2'), url('/fonts/din2014-narrowbold-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-
-        @@font-face {
-            font-family: 'DIN 2014 Narrow Demi';
-            src: url('/fonts/din2014-narrowdemi-webfont.woff2') format('woff2'), url('/fonts/din2014-narrowdemi-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-
-        @@font-face {
-            font-family: 'DIN 2014 Narrow Extra Light';
-            src: url('/fonts/din2014-narrowextralight-webfont.woff2') format('woff2'), url('/fonts/din2014-narrowextralight-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-
-        @@font-face {
-            font-family: 'DIN 2014 Regular';
-            src: url('/fonts/din2014-regular-webfont.woff2') format('woff2'), url('/fonts/din2014-regular-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-
-        @@font-face {
-            font-family: 'DIN 2014 Bold';
-            src: url('/fonts/din2014-bold-webfont.woff2') format('woff2'), url('/fonts/din2014-bold-webfont.woff') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-    </style>
+    <partial name="_FontsPartial" />
 
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"></noscript>
 
-    <link rel="stylesheet" href="~/mdb/css/mdb.css" />
-    <link rel="stylesheet" href="~/lib/owlcarousel/owlcarousel.min.css" />
-    <link rel="stylesheet" href="~/lib/owlcarousel/owlcarousel.theme.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <environment include="Development">
+        <link rel="stylesheet" href="~/mdb/css/mdb.min.css" />
+        <link rel="stylesheet" href="~/lib/owlcarousel/owlcarousel.min.css" />
+        <link rel="stylesheet" href="~/lib/owlcarousel/owlcarousel.theme.min.css" />
+        <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    </environment>
+    <environment exclude="Development">
+        <link rel="stylesheet" href="https://fusehostelsandtravel.azureedge.net/assets/mdb.min.css" />
+
+        <link rel="preload" href="https://fusehostelsandtravel.azureedge.net/assets/owlcarousel.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://fusehostelsandtravel.azureedge.net/assets/owlcarousel.min.css"></noscript>
+
+        <link rel="preload" href="https://fusehostelsandtravel.azureedge.net/assets/owlcarousel.theme.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://fusehostelsandtravel.azureedge.net/assets/owlcarousel.theme.min.css"></noscript>
+
+        <link rel="preload" href="https://fusehostelsandtravel.azureedge.net/assets/site.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+        <noscript><link rel="stylesheet" href="https://fusehostelsandtravel.azureedge.net/assets/site.min.css"></noscript>
+    </environment>
 
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-BB9N1FNSPM"></script>
+    <script>window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+
+        gtag('config', 'G-BB9N1FNSPM');</script>
+
     <div class="vh-100 w-100 position-fixed top-0 start-0 bg-black text-center pre-loader">
         <div class="spinner-border text-white d-block mb-3" role="status">
 
@@ -85,24 +75,74 @@
     <partial name="_FooterPartial" />
     @Html.DisplayFor(x => x.LoginModal)
     @Html.DisplayFor(x => x.RegisterModal)
-    <partial name="_BookNowModalPartial" model="new BookNowComponent(Model.Hostels) { IsModal = true }" />
+    <partial name="_BookNowModalPartial" model="new BookNowComponent(Model.Properties) { IsModal = true }" />
 
     <div class="alert fade mt-3" id="feedbackAlert" data-mdb-position="top-center" data-mdb-hidden="true" data-mdb-width="35%" role="alert" data-mdb-color="danger">
         <span class="small" id="feedbackAlertMessage"></span>
         <button type="button" class="btn-close position-absolute" aria-label="Close"></button>
     </div>
 
-    <button type="button" class="btn btn-primary btn-floating btn-lg" id="btn-back-to-top">
+    <button type="button" class="btn btn-primary btn-floating btn-lg" id="btn-back-to-top" aria-label="Back To Top">
         <i class="fas fa-arrow-up"></i>
     </button>
 
+    <div class="modal fade bottom" id="cookiesModal" tabindex="-1" aria-labelledby="cookiesModalLabel" aria-modal="true" role="dialog">
+        <div class="modal-dialog modal-frame modal-bottom">
+            <div class="modal-content rounded-0">
+                <div class="modal-body py-1">
+                    <div class="container-fluid">
+                        <div class="container">
+                            <div class="row my-3">
+                                <div class="col-lg-6 mb-4 mb-lg-0">
+                                    <p class="small">
+                                        We use cookies to improve your website experience.<br />
+                                        By continuing to browse the site, you are agreeing to our use of cookies.
+                                    </p>
+                                </div>
+                                <div class="col-lg-6 d-flex justify-content-center justify-content-lg-end align-items-center">
+                                    <a class="small text-primary me-3" style="font-size: .75rem; letter-spacing: 1px; " asp-page="/CookiePolicy/Index">LEARN MORE</a>
+                                    <button type="button" class="btn btn-primary btn-sm ms-2" onclick="confirmCookie();">
+                                        I Like Cookies
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <partial name="_ValidationScriptsPartial" />
-    <script type="text/javascript" src="~/mdb/js/mdb.min.js"></script>
-    <script type="text/javascript" src="~/lib/owlcarousel/owl.carousel.js" asp-append-version="true"></script>
-    <script type="text/javascript" src="~/lib/html2canvas.min.js"></script>
-    <script type="text/javascript" src="~/js/site.js" asp-append-version="true"></script>
+    @if (Model.StatusMessage != null)
+    {
+        <div class="alert alert-dismissible fade show small" role="alert" data-mdb-color="@Model.StatusSeverity" data-mdb-position="bottom-right">
+            @Html.Raw(Model.StatusMessage)
+            <button type="button" class="btn-close" data-mdb-dismiss="alert" aria-label="Close"><i class="fa-solid fa-xmark d-block"></i></button>
+        </div>
+
+        TempData.Remove("StatusMessage");
+        Model.StatusMessage = null;
+    }
+
+    <environment include="Development">
+        <script src="~/lib/jquery/dist/jquery.min.js"></script>
+        <partial name="_ValidationScriptsPartial" />
+        <script type="text/javascript" src="~/mdb/js/mdb.min.js" async></script>
+        <script type="text/javascript" src="https://fusehostelsandtravel.azureedge.net/assets/cookie.min.js"></script>
+        <script type="text/javascript" src="~/lib/owlcarousel/owl.carousel.js" asp-append-version="true"></script>
+        <script type="text/javascript" src="~/js/site.js" asp-append-version="true" async></script>
+    </environment>
+    <environment exclude="Development">
+        <script type="text/javascript" src="https://fusehostelsandtravel.azureedge.net/assets/jquery.min.js"></script>
+        <partial name="_ValidationScriptsPartial" />
+        <script type="text/javascript" src="https://fusehostelsandtravel.azureedge.net/assets/mdb.min.js" async></script>
+        <script type="text/javascript" src="https://fusehostelsandtravel.azureedge.net/assets/cookie.min.js"></script>
+        <script type="text/javascript" src="https://fusehostelsandtravel.azureedge.net/assets/owl.carousel.min.js"></script>
+        <script type="text/javascript" src="https://fusehostelsandtravel.azureedge.net/assets/site.min.js" async></script>
+        <script type="text/javascript">
+            let ajaxBaseUrl = Request.GetEncodedUrl();
+        </script>
+    </environment>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

@@ -2,7 +2,7 @@
 
 namespace FuseHostelsAndTravel.Web.Pages.Error
 {
-	public class IndexModel : BasePageModel
+	public class IndexModel : TravaloudBasePageModel
     {
         public string RequestId { get; set; }
         public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
