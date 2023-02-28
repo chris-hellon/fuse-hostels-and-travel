@@ -67,7 +67,7 @@
 
                     DirectionsNavPills = WebComponentsBuilder.FuseHostelsAndTravel.GetHostelDirectionsNavPills(Property);
                     IntroductionBanner = new ContainerHalfImageRoundedTextComponent(new List<string>() { "ABOUT" }, null, Property.Description,
-                       "https://images.unsplash.com/photo-1555979864-7a8f9b4fddf8?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=3542&q=80", null, new List<OvalContainerComponent>()
+                       "https://ik.imagekit.io/rqlzhe7ko/birdseye-beach-view-1.webp?tr=w-1000", null, new List<OvalContainerComponent>()
                        {
                              new OvalContainerComponent("hostelPageIntroductionOvals1", 15, null, null, -28),
                              new OvalContainerComponent("hostelPageIntroductionOvals2", null, 15, null, 18)

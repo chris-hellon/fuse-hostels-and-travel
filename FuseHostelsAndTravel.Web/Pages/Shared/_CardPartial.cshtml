@@ -7,9 +7,9 @@
 
     <div class="@Model.CssClass @(isLightbox ? "lightbox-card" : "") @(Model.AnimationDelay.HasValue ? "has-parallax-scroll" : "")">
         <div class="card rounded-0 offcut-image-border @(isLightbox ? "mb-4" : "")" @(isLightbox ? $"data-mdb-toggle=modal data-mdb-target=#{id} role=button" : "")>
-            @if (!string.IsNullOrEmpty(Model.ImageSrc))
+            @if (!string.IsNullOrEmpty(Model.ImageSrc) || !string.IsNullOrEmpty(Model.ThumbnailImageSrc))
             {
-                <img src="@Model.ImageSrc" alt="@($"{Model.Title} image")" class="card-img-top rounded-0 @(isLightbox ? "object-fit-cover" : "")" />
+                <img src="@(Model.ThumbnailImageSrc ?? Model.ImageSrc)" alt="@($"{Model.Title} image")" class="card-img-top rounded-0 @(isLightbox ? "object-fit-cover" : "")" />
             }
             else
             {

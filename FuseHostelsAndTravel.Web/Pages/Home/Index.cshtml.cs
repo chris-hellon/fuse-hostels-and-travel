@@ -40,7 +40,7 @@ public class IndexModel : TravaloudBasePageModel
         MarqueeOvals = new OvalContainerComponent("parallaxBannerOvals", 20, null, -10, null);
 
         IntroductionBanner = new ContainerHalfImageRoundedTextComponent(new List<string>() { "THE LATEST ACCOMMODATION", "& TRAVEL EXPERIENCES", "IN VIETNAM" }, null, "Opening in 2 impressive locations in Hoi An in late 2022 and with over 15 years’ experience in Vietnam the FUSE Crew offer up everything travelers need to explore, kick back and have fun in Vietnam.",
-            "https://fusehostelsandtravel.azureedge.net/images/birdseye-beach-view.webp", new ButtonComponent("/Hostels/Index", "View Locations"), new List<OvalContainerComponent>()
+            "https://ik.imagekit.io/rqlzhe7ko/birdseye-beach-view-1.webp?tr=w-1000", new ButtonComponent("/Hostels/Index", "View Locations"), new List<OvalContainerComponent>()
             {
                  new OvalContainerComponent("homePageIntroductionOvals1", -40, null, null, -14),
                  new OvalContainerComponent("homePageIntroductionOvals2", null, -7, null, 36),
@@ -73,7 +73,7 @@ public class IndexModel : TravaloudBasePageModel
         {
             images = new List<Image>()
                 {
-                    new Image("https://fusehostelsandtravel.azureedge.net/images/home-page-banner-1.webp", new Guid("F28C2D2C-1C90-40A5-B13E-31D323C14E1E"), "Page", "HOSTEL<br/>EXPERIENCE", "THE ULTIMATE", "BEGINS AT FUSE", "")
+                    new Image("https://ik.imagekit.io/rqlzhe7ko/home-page-banner-1.webp?tr=w-2000", new Guid("F28C2D2C-1C90-40A5-B13E-31D323C14E1E"), "Page", "HOSTEL<br/>EXPERIENCE", "THE ULTIMATE", "BEGINS AT FUSE", "")
                 };
         });
 
