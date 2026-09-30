@@ -1,0 +1,37 @@
+@page "/admin/management/event-categories"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Events)]
+
+<AdminPageHeader Title="Event Categories" Description="Types of event (e.g. Pub Crawl, Live Music), each with a calendar colour." />
+
+<EntityTable @ref="_table" T="EventCategoryItem" Fields="Fields" Load="LoadAsync" EntityNamePlural="Event Categories" Resource="@FuseResource.Events"
+             CanDelete="c => c.Events == 0" OnCreate="() => OpenAsync(null)" OnEdit="OpenAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<EventCategoryItem>> Fields =
+    [
+        new(c => c.Name, "Name", nameof(EventCategoryItem.Name)),
+        new(c => c.Colour, "Colour", nameof(EventCategoryItem.Colour), c => @<span><span class="colour-dot" style="@($"background:{c.Colour ?? "transparent"}")"></span>@c.Colour</span>),
+        new(c => c.SortOrder, "Order", nameof(EventCategoryItem.SortOrder)),
+        new(c => c.Events, "Events", nameof(EventCategoryItem.Events)),
+    ];
+
+    private EntityTable<EventCategoryItem>? _table;
+
+    private async Task<PagedResult<EventCategoryItem>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchEventCategories()), cancellationToken);
+
+    private async Task OpenAsync(EventCategoryItem? category)
+    {
+        var dialog = await Dialogs.ShowAsync<EventCategoryDialog>(null, new DialogParameters<EventCategoryDialog> { { d => d.Category, category } }, EventCategoryDialog.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(EventCategoryItem category)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this category?", $"\"{category.Name}\" will be deleted straight away.", "Delete category", "Keep category"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteEventCategory(category.Id)), "Category deleted."))
+            await _table!.ReloadAsync();
+    }
+}

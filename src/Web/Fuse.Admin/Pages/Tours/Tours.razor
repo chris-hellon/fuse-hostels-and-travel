@@ -1,0 +1,43 @@
+@page "/admin/management/tours"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Tours)]
+@using Fuse.Contracts.Tours
+
+<AdminPageHeader Title="Tours" Description="Manage Tours." />
+
+<EntityTable @ref="_table" T="TourSummary" Fields="_fields" Load="LoadAsync" EntityNamePlural="Tours" Resource="@FuseResource.Tours"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private EntityTable<TourSummary>? _table;
+
+    private readonly IReadOnlyList<EntityField<TourSummary>> _fields =
+    [
+        new(t => t.Name, "Name", nameof(TourSummary.Name)),
+        new(t => t.CategoryName, "Category", nameof(TourSummary.CategoryName)),
+        EntityField<TourSummary>.Bool(t => t.PublishToSite, "Published", nameof(TourSummary.PublishToSite)),
+        new(t => t.FutureDates, "Upcoming Dates", nameof(TourSummary.FutureDates)),
+    ];
+
+    private async Task<PagedResult<TourSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchTours()), cancellationToken);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(TourSummary tour) => OpenWizardAsync(tour.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<TourWizard>(null, new DialogParameters<TourWizard> { { w => w.TourId, id } }, TourWizard.Options);
+        await dialog.Result;
+        await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(TourSummary tour)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this tour?", $"\"{tour.Name}\" will be deleted straight away.",
+                "Delete tour", "Keep tour", detail: "Tours with upcoming bookings can't be deleted. Unpublish them instead."))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteTour(tour.Id)), $"Tour deleted."))
+            await _table!.ReloadAsync();
+    }
+}

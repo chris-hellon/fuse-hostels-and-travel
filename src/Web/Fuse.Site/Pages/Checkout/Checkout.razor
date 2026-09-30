@@ -1,0 +1,380 @@
+@page "/checkout"
+@implements IDisposable
+@using Fuse.Contracts.Identity
+@using Fuse.Shared.Globalization
+@inject IApi Api
+@inject NavigationManager Navigation
+
+@* Legacy /checkout: the booker's details (filled in when signed in), everyone else on each tour, and the order
+   summary; Proceed to Payment books it (priced on the server) and goes to Stripe's payment page. No account is
+   needed: a new email gets a guest account, with a password only if they tick "create an account". *@
+
+<SeoHead PageName="Checkout" />
+
+<section class="bg-light">
+    <div class="container py-5">
+        <div class="card basket-card">
+            <div class="row g-0">
+                <div class="col-lg-8">
+                    <div class="p-4 p-lg-5">
+                        <h1 class="fw-bold mb-4 text-black display-3">Check Out</h1>
+                        @if (!Basket.Loaded || (Basket.Count > 0 && _quote is null))
+                        {
+                            <LoadingMessage Text="Loading your basket…" />
+                        }
+                        else if (Basket.Count == 0)
+                        {
+                            <p>Your basket is empty. <a href="/tours">Find a tour</a></p>
+                        }
+                        else
+                        {
+                            <h4 class="checkout__heading">Contact information</h4>
+                            @if (_signedIn)
+                            {
+                                <p class="mb-4">Welcome back, @_contact.FirstName @_contact.LastName</p>
+                            }
+                            else
+                            {
+                                <p class="mb-4">Stayed with us before? <a role="button" class="text-primary" @onclick="Dialogs.OpenSignIn">Sign In</a></p>
+                            }
+                            <div class="row g-4">
+                                <div class="col-md-6 position-relative">
+                                    <OutlineInput Id="Checkout_FirstName" Label="First Name" @bind-Value="_contact.FirstName" autocomplete="given-name" />
+                                    <Validation Message="@Error("Contact.FirstName")" />
+                                </div>
+                                <div class="col-md-6 position-relative">
+                                    <OutlineInput Id="Checkout_Surname" Label="Surname" @bind-Value="_contact.LastName" autocomplete="family-name" />
+                                    <Validation Message="@Error("Contact.LastName")" />
+                                </div>
+                                <div class="col-md-6 position-relative">
+                                    <OutlineInput Id="Checkout_DateOfBirth" Label="Date Of Birth" type="date" InputClass="active" Value="@Date(_contact.DateOfBirth)"
+                                                  ValueChanged="v => _contact.DateOfBirth = ParseDate(v)" autocomplete="bday" />
+                                    <Validation Message="@Error("Contact.DateOfBirth")" />
+                                </div>
+                                <div class="col-md-6 position-relative">
+                                    <OutlineInput Id="Checkout_Phone" Label="Phone Number" type="tel" @bind-Value="_contact.PhoneNumber" autocomplete="tel" />
+                                    <Validation Message="@Error("Contact.PhoneNumber")" />
+                                </div>
+                                <div class="col-md-6 position-relative" style="min-height:47px;">
+                                    <FuseSelect Label="Gender" Options="Genders" Class="bg-white" Value="@Blank(_contact.Gender)" ValueChanged="v => _contact.Gender = v ?? string.Empty" />
+                                    <Validation Message="@Error("Contact.Gender")" />
+                                </div>
+                                <div class="col-md-6 position-relative" style="min-height:47px;">
+                                    <FuseSelect Label="Nationality" Options="Nationalities" Class="bg-white" Value="@Blank(_contact.Nationality)" ValueChanged="v => _contact.Nationality = v ?? string.Empty" />
+                                    <Validation Message="@Error("Contact.Nationality")" />
+                                </div>
+                                <div class="col-12 position-relative">
+                                    <OutlineInput Id="Checkout_Email" Label="Email" type="email" @bind-Value="_contact.Email" autocomplete="email" readonly="@_signedIn" />
+                                    <Validation Message="@Error("Contact.Email")" />
+                                </div>
+                            </div>
+
+                            @if (!_signedIn)
+                            {
+                                <div class="form-check mt-4">
+                                    <input class="form-check-input" type="checkbox" id="Checkout_CreateAccount" @bind="_createAccount" />
+                                    <label class="form-check-label" for="Checkout_CreateAccount">Create an account with us for exclusive deals &amp; faster checkout?</label>
+                                </div>
+                                @if (_createAccount)
+                                {
+                                    <div class="row g-4 mt-1">
+                                        <div class="col-md-6 position-relative">
+                                            <OutlineInput Id="Checkout_Password" Label="Password" type="password" @bind-Value="_password" autocomplete="new-password" />
+                                            <Validation Message="@Error("Password")" />
+                                        </div>
+                                        <div class="col-md-6 position-relative">
+                                            <OutlineInput Id="Checkout_ConfirmPassword" Label="Confirm password" type="password" @bind-Value="_confirmPassword" autocomplete="new-password" />
+                                            <Validation Message="@Error("ConfirmPassword")" />
+                                        </div>
+                                    </div>
+                                }
+                            }
+
+                            @if (_quote!.Lines.Any(l => l.Guests > 1))
+                            {
+                                <h4 class="checkout__heading mt-5">Additional Guests</h4>
+                                <p>Please add all guests details and assign them to a Tour.</p>
+                                @foreach (var line in _quote.Lines.Where(l => l.Guests > 1))
+                                {
+                                    var keys = Assigned(line.DepartureId);
+                                    var needed = line.Guests - 1;
+                                    var others = _guests.Where(g => !keys.Contains(g.Key)).ToList();
+                                    <div class="checkout-tour" @key="line.DepartureId">
+                                        <div class="checkout-tour__head">
+                                            <span class="basket-line__name">@line.TourName</span>
+                                            <span class="@($"checkout-tour__count{(keys.Count == needed ? " is-done" : "")}")">
+                                                <i class="@($"fas {(keys.Count == needed ? "fa-circle-check" : "fa-circle-exclamation")} me-1")"></i>@keys.Count of @needed guest@(needed == 1 ? "" : "s") added
+                                            </span>
+                                        </div>
+                                        <span class="basket-line__meta">@line.Start.ToString("dddd d MMMM yyyy · h:mm tt")</span>
+                                        @foreach (var key in keys)
+                                        {
+                                            var guest = _guests.First(g => g.Key == key);
+                                            <div class="checkout-tour__guest" @key="key">
+                                                <span><i class="fas fa-user me-2"></i>@guest.FirstName @guest.LastName@(string.IsNullOrWhiteSpace(guest.Email) ? "" : $" · {guest.Email}")</span>
+                                                <span>
+                                                    <button type="button" class="btn btn-link btn-sm" @onclick="() => EditGuest(guest)">Edit</button>
+                                                    <button type="button" class="btn btn-link btn-sm text-danger" @onclick="() => keys.Remove(key)">Remove</button>
+                                                </span>
+                                            </div>
+                                        }
+                                        @if (keys.Count < needed)
+                                        {
+                                            <div class="checkout-tour__add">
+                                                @if (others.Count > 0)
+                                                {
+                                                    <div style="min-width:220px; min-height:47px;">
+                                                        <FuseSelect Label="Select Guest" Options="@([.. others.Select(g => new FuseSelect.SelectOption(g.Key, $"{g.FirstName} {g.LastName}"))])"
+                                                                    Class="bg-white" Value="@null" ValueChanged="v => AddExisting(line.DepartureId, v)" />
+                                                    </div>
+                                                }
+                                                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => NewGuest(line.DepartureId)">Add New Guest</button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+
+                            <h4 class="checkout__heading mt-5">Anything we should know?</h4>
+                            <div class="form-outline">
+                                <textarea class="@($"form-control{(string.IsNullOrEmpty(_notes) ? "" : " active")}")" id="Checkout_Notes" rows="3" @bind="_notes" @bind:event="oninput"></textarea>
+                                <label class="form-label" for="Checkout_Notes">Dietary needs, questions… (optional)</label>
+                                <FormNotch />
+                            </div>
+
+                            @if (_error is not null)
+                            {
+                                <p class="text-danger mt-4 mb-0" role="alert">@_error</p>
+                            }
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mt-5">
+                                <a href="/basket" class="text-body"><i class="fas fa-long-arrow-alt-left me-2"></i>Back to Basket</a>
+                                <button type="button" class="btn btn-primary btn-lg" disabled="@(!Complete || _busy)" @onclick="PayAsync">
+                                    @(_busy ? "Just a moment…" : "Proceed to Payment")
+                                </button>
+                            </div>
+                            @if (!Complete)
+                            {
+                                <p class="small text-muted text-end mt-2 mb-0">Add every guest's details to continue.</p>
+                            }
+                        }
+                    </div>
+                </div>
+                <div class="col-lg-4 basket-card__summary">
+                    <div class="p-4 p-lg-5 checkout__summary">
+                        <h3 class="fw-bold mb-1 mt-2 pt-1">Order Summary</h3>
+                        <p class="text-muted mb-4">@($"{Basket.Count} item{(Basket.Count == 1 ? "" : "s")}")</p>
+                        @if (_quote is not null)
+                        {
+                            <BasketLines Lines="_quote.Lines" Compact="true" />
+                        }
+                        <div class="d-flex justify-content-between mt-4">
+                            <h5 class="text-uppercase">Total</h5>
+                            <h5>@Money.Usd(_quote?.Total ?? 0)</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<FuseModal @bind-Open="_guestOpen" Title="@(_editing is null ? "ADD NEW GUEST" : "EDIT GUEST")" BodyClass="p-0 text-start">
+    <div class="row g-4">
+        <div class="col-md-6 position-relative">
+            <OutlineInput Id="Guest_FirstName" Label="First Name *" @bind-Value="_guest.FirstName" />
+            <Validation Message="@_guestErrors.GetValueOrDefault("FirstName")" />
+        </div>
+        <div class="col-md-6 position-relative">
+            <OutlineInput Id="Guest_Surname" Label="Surname *" @bind-Value="_guest.LastName" />
+            <Validation Message="@_guestErrors.GetValueOrDefault("LastName")" />
+        </div>
+        <div class="col-md-6"><OutlineInput Id="Guest_Email" Label="Email" type="email" @bind-Value="_guest.Email" /></div>
+        <div class="col-md-6"><OutlineInput Id="Guest_Phone" Label="Phone Number" type="tel" @bind-Value="_guest.PhoneNumber" /></div>
+        <div class="col-md-6">
+            <OutlineInput Id="Guest_DateOfBirth" Label="Date Of Birth" type="date" InputClass="active" Value="@Date(_guest.DateOfBirth)" ValueChanged="v => _guest.DateOfBirth = ParseDate(v)" />
+        </div>
+        <div class="col-md-6" style="min-height:47px;">
+            <FuseSelect Label="Gender" Options="Genders" Class="bg-white" @bind-Value="_guest.Gender" />
+        </div>
+        <div class="col-12" style="min-height:47px;">
+            <FuseSelect Label="Nationality" Options="Nationalities" Class="bg-white" @bind-Value="_guest.Nationality" />
+        </div>
+    </div>
+    <div class="text-end mt-4">
+        <button type="button" class="btn btn-primary" @onclick="SaveGuest">Confirm</button>
+    </div>
+</FuseModal>
+
+@code {
+    [CascadingParameter] private Basket Basket { get; set; } = null!;
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private static readonly IReadOnlyList<FuseSelect.SelectOption> Genders = [new("Male", "Male"), new("Female", "Female")];
+    private static readonly IReadOnlyList<FuseSelect.SelectOption> Nationalities = [.. Countries.All.Select(c => new FuseSelect.SelectOption(c.Name, c.Name))];
+
+    private BasketQuote? _quote;
+    private CheckoutContact _contact = new();
+    private readonly List<CheckoutGuest> _guests = [];
+    /// <summary>Each tour's other guests (keys into <see cref="_guests"/>).</summary>
+    private readonly Dictionary<DefaultIdType, List<string>> _assigned = [];
+    private bool _signedIn, _createAccount, _busy;
+    private string? _password, _confirmPassword, _notes, _error;
+    private Dictionary<string, string[]> _errors = [];
+
+    // The guest dialog.
+    private bool _guestOpen;
+    private CheckoutGuest _guest = new();
+    private CheckoutGuest? _editing;
+    private DefaultIdType _addingTo;
+    private Dictionary<string, string> _guestErrors = [];
+
+    /// <summary>Every tour has all its guests.</summary>
+    private bool Complete => _quote is { Bookable: true } && _quote.Lines.All(l => Assigned(l.DepartureId).Count == l.Guests - 1);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Basket.Changed += Refresh;
+        if (Basket.Loaded)
+            await QuoteAsync();
+    }
+
+    // Signing in from here: fill in their details.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is null || _signedIn)
+            return;
+        var state = await AuthState;
+        if (state.User.Identity?.IsAuthenticated != true)
+            return;
+        _signedIn = true;
+        try
+        {
+            var me = (await Api.Send(new GetMyProfile())).Profile;
+            _contact = new CheckoutContact
+            {
+                FirstName = me.FirstName,
+                LastName = me.LastName,
+                Email = me.Email ?? "",
+                PhoneNumber = me.PhoneNumber ?? "",
+                DateOfBirth = me.DateOfBirth,
+                Gender = me.Gender ?? "",
+                Nationality = me.Nationality ?? "",
+            };
+        }
+        catch (AppException)
+        {
+            // Not a guest account (e.g. staff): they fill it in.
+        }
+    }
+
+    private void Refresh() => _ = InvokeAsync(async () =>
+    {
+        await QuoteAsync();
+        StateHasChanged();
+    });
+
+    private async Task QuoteAsync()
+    {
+        _quote = Basket.Count == 0 ? new BasketQuote([])
+            : await Api.Send(new QuoteBasket([.. Basket.Items.Select(i => new BasketLineRequest(i.DepartureId, i.Guests, i.Pickup))], Basket.StaffId));
+        // Guests no longer needed (fewer guests, or a tour removed) drop off.
+        foreach (var line in _quote.Lines)
+        {
+            var keys = Assigned(line.DepartureId);
+            if (keys.Count > line.Guests - 1)
+                keys.RemoveRange(line.Guests - 1, keys.Count - (line.Guests - 1));
+        }
+    }
+
+    private List<string> Assigned(DefaultIdType departureId) =>
+        _assigned.TryGetValue(departureId, out var keys) ? keys : _assigned[departureId] = [];
+
+    private void AddExisting(DefaultIdType departureId, string? key)
+    {
+        if (key is not null && !Assigned(departureId).Contains(key))
+            Assigned(departureId).Add(key);
+    }
+
+    private void NewGuest(DefaultIdType departureId)
+    {
+        (_guest, _editing, _addingTo, _guestErrors) = (new CheckoutGuest(), null, departureId, []);
+        _guestOpen = true;
+    }
+
+    private void EditGuest(CheckoutGuest guest)
+    {
+        _guest = new CheckoutGuest
+        {
+            Key = guest.Key, FirstName = guest.FirstName, LastName = guest.LastName, Email = guest.Email, PhoneNumber = guest.PhoneNumber,
+            DateOfBirth = guest.DateOfBirth, Gender = guest.Gender, Nationality = guest.Nationality,
+        };
+        (_editing, _guestErrors) = (guest, []);
+        _guestOpen = true;
+    }
+
+    private void SaveGuest()
+    {
+        _guestErrors = [];
+        if (string.IsNullOrWhiteSpace(_guest.FirstName))
+            _guestErrors["FirstName"] = "The First Name field is required.";
+        if (string.IsNullOrWhiteSpace(_guest.LastName))
+            _guestErrors["LastName"] = "The Surname field is required.";
+        if (_guestErrors.Count > 0)
+            return;
+
+        if (_editing is { } editing)
+            _guests[_guests.IndexOf(editing)] = _guest;
+        else
+        {
+            _guests.Add(_guest);
+            Assigned(_addingTo).Add(_guest.Key);
+        }
+        _guestOpen = false;
+    }
+
+    private async Task PayAsync()
+    {
+        if (!Complete)
+            return;
+        _busy = true;
+        (_error, _errors) = (null, []);
+        try
+        {
+            var placed = await Api.Send(new PlaceBooking(
+                _contact,
+                [.. _guests.Where(g => _assigned.Values.Any(keys => keys.Contains(g.Key)))],
+                [.. _quote!.Lines.Select(l => new CheckoutTour { DepartureId = l.DepartureId, Pickup = l.Pickup, GuestKeys = [.. Assigned(l.DepartureId)] })],
+                _createAccount ? _password : null,
+                _createAccount ? _confirmPassword : null,
+                _notes,
+                Basket.PendingBookingId,
+                Basket.StaffId));
+            await Basket.SetPendingBookingAsync(placed.BookingId);
+            // Stripe's page (outside the site).
+            Navigation.NavigateTo(placed.PaymentUrl, forceLoad: true);
+        }
+        catch (RequestValidationException validation)
+        {
+            _errors = validation.Errors.ToDictionary(e => e.Key, e => e.Value);
+            _error = "Please check the details above.";
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+            await QuoteAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string? Error(string field) => _errors.TryGetValue(field, out var messages) ? messages.FirstOrDefault() : null;
+
+    private static string? Blank(string value) => string.IsNullOrEmpty(value) ? null : value;
+    private static string? Date(DateTime? date) => date?.ToString("yyyy-MM-dd");
+    private static DateTime? ParseDate(string? text) => DateTime.TryParse(text, out var date) ? date.Date : null;
+
+    public void Dispose() => Basket.Changed -= Refresh;
+}

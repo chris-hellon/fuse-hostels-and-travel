@@ -1,0 +1,41 @@
+@* Legacy _CardPartial: an image (if any), name, summary and a button to its page (tours' "Find Out More"; travel
+   guides' "Read More", with the date above the name; vacancies' "Apply Now"). *@
+
+<div class="@($"card {(InCarousel ? "h-100 " : "")}rounded-0 offcut-image-border ")">
+    @if (!string.IsNullOrEmpty(Card.ImagePath))
+    {
+        <img loading="lazy" src="@CdnImages.Sized(Card.ImagePath, 700)" alt="@($"{Card.Name} image")" width="700" height="400" class="card-img-top rounded-0 " />
+    }
+    <div class="@(InCarousel ? "card-body p-5 d-flex flex-column" : "card-body p-5")">
+        @if (Label is not null)
+        {
+            <span class="content-card__label">@Label</span>
+        }
+        <span class="card-title mb-4 display-6">@Card.Name</span>
+        @* Legacy nested the rich text in <p class="card-text">, which browsers split into an empty paragraph, the
+           text, and another empty paragraph for the stray closing tag. Kept, so the cards keep their spacing. *@
+        <p class="card-text"></p>
+        @* Cut off after a few lines with an ellipsis, so long summaries don't stretch the cards (the page has the rest). *@
+        <div class="content-card__text">@((MarkupString)(Card.ShortDescription ?? ""))</div>
+        <p></p>
+        <div class="mt-auto">
+            <a class="@($"btn {ButtonClass} {(InCarousel ? "align-bottom " : "")}mt-4 pe-4 ps-4")" href="@Link" target="@Target">@ButtonText</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SiteCard Card { get; set; } = null!;
+    /// <summary>Its page (a tour's, unless given).</summary>
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string ButtonText { get; set; } = "Find Out More";
+    [Parameter] public string ButtonClass { get; set; } = "btn-outline-primary";
+    /// <summary>Where the button opens (e.g. "_blank" for another site).</summary>
+    [Parameter] public string? Target { get; set; }
+    /// <summary>A small line above the name (a guide's date).</summary>
+    [Parameter] public string? Label { get; set; }
+    /// <summary>In the phone carousel the card fills the slide's height.</summary>
+    [Parameter] public bool InCarousel { get; set; }
+
+    private string Link => Href ?? $"/tours/{Card.Slug}";
+}

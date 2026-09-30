@@ -1,0 +1,111 @@
+// The basket, checkout and order pages (Pages/Basket, Pages/Checkout): legacy's card with a grey summary panel,
+// and the basket lines (Components/Booking/BasketLines.razor).
+
+.basket-card {
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.basket-card__summary { background: #eae8e8; }
+
+.basket-line {
+  display: grid;
+  grid-template-columns: 110px 1fr auto auto;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(9, 5, 17, .1);
+
+  &--compact { grid-template-columns: 1fr auto; gap: .75rem; }
+
+  @media (max-width: 575px) {
+    grid-template-columns: 80px 1fr auto;
+
+    .basket-line__price { grid-column: 2; text-align: left; }
+  }
+}
+
+.basket-line__photo img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: .5rem;
+}
+
+.basket-line__body { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+
+.basket-line__name {
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 1.2rem;
+  color: var(--mdb-primary);
+  text-transform: uppercase;
+}
+
+.basket-line__when { font-family: var(--mdb-font-din-2014-demi); }
+.basket-line__meta { font-size: .9rem; color: rgba(9, 5, 17, .6); }
+.basket-line__problem { font-size: .9rem; color: #dc4c64; }
+
+.basket-line__price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+
+  strong { font-family: var(--mdb-font-din-2014-narrow-bold); font-size: 1.3rem; }
+  span { font-size: .8rem; color: rgba(9, 5, 17, .6); }
+}
+
+.basket-line__remove {
+  border: 0;
+  background: none;
+  color: rgba(9, 5, 17, .45);
+
+  &:hover { color: #dc4c64; }
+}
+
+.checkout__heading {
+  margin-bottom: 1rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  text-transform: uppercase;
+}
+
+@media (min-width: 992px) {
+  .checkout__summary { position: sticky; top: 110px; }
+}
+
+.checkout-tour {
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(9, 5, 17, .12);
+  background: #fff;
+}
+
+.checkout-tour__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .5rem;
+}
+
+.checkout-tour__count {
+  font-size: .9rem;
+  color: #dc4c64;
+
+  &.is-done { color: #14a44d; }
+}
+
+.checkout-tour__guest {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .35rem 0;
+  border-bottom: 1px solid rgba(9, 5, 17, .08);
+}
+
+.checkout-tour__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .75rem;
+  margin-top: .75rem;
+}

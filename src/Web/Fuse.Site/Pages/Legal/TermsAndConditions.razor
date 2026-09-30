@@ -1,0 +1,162 @@
+@page "/terms-and-conditions"
+@inherits SitePage
+
+@* The website's terms (legacy's page was placeholder text). Written for how the site works: tours booked and paid online
+   in US dollars through Stripe, hostel stays booked through Cloudbeds, guest accounts and enquiries. The cancellation
+   and refund terms (sections 5 and 6) are the business's to confirm. *@
+
+<SeoHead Page="Page" PageName="Terms & Conditions" Keywords="terms and conditions, hostel booking, travel terms and conditions, hostel policies"
+         MetaDescription="Check out our terms and conditions before booking your stay at Fuse Hostels and Travels. We've outlined our policies to ensure a smooth and enjoyable experience during your travels." />
+
+<LegalPage Id="termsAndConditions" Title="@(Page is null ? "TERMS & CONDITIONS" : PageHeadings.Of(Page, "TERMS & CONDITIONS").Title)">
+    <p>Last updated: 25 September 2026</p>
+    <p>
+        These terms apply when you use this website (fusehostelsandtravel.com), book a tour or a stay with us, or create an account.
+        "Fuse", "we", "us" and "our" mean Fuse Hostels and Travel; "you" means the person using the site or making the booking.
+        Please read them before booking. By making a booking you confirm that you have read and accept them, on behalf of yourself
+        and everyone in your booking.
+    </p>
+
+    <h5>1. Who we are</h5>
+    <p>
+        Fuse Hostels and Travel runs hostels and tours in Vietnam. You can reach us through our <a href="/contact">contact page</a>,
+        by email at info@fusehostelsandtravel.com, or at 25 Nguyễn Phan Vinh, Cẩm An, Hội An, Quảng Nam, Vietnam.
+    </p>
+
+    <h5>2. Using this website</h5>
+    <p>
+        You may use this site to find out about our hostels, tours and events and to make bookings for yourself and the people
+        travelling with you. Please don't misuse it: that includes trying to access other people's accounts or bookings,
+        interfering with how the site works, sending spam through our forms, or copying our content, photos or branding for
+        commercial use without our permission.
+    </p>
+    <p>
+        We work hard to keep the information on the site (prices, times, availability, descriptions and photos) accurate and up to
+        date, but details can change and mistakes can happen. If we find an error in a booking you've made, we'll contact you and
+        give you the choice of continuing with the corrected details or a full refund.
+    </p>
+
+    <h5>3. Your account</h5>
+    <p>
+        An account is created with the email address you book with, so that you can see your bookings in My Account. Please keep
+        your details accurate and your password to yourself; you're responsible for what's done through your account. If you
+        think someone else has used it, tell us straight away. You can download your data or ask us to delete your account at any
+        time (see our <a href="/privacy-policy">Privacy Policy</a>).
+    </p>
+
+    <h5>4. Booking tours</h5>
+    <p>
+        Tours are booked for a particular departure (date and time) and number of guests. Prices are shown and charged in US
+        dollars (USD) per guest, and include what the tour's description says they include. Places are limited and are only held
+        once your booking is placed, and a booking that isn't paid may be cancelled.
+    </p>
+    <p>
+        Your booking is confirmed when payment is received and we've sent you a confirmation email. Please check it carefully and
+        tell us straight away if anything is wrong. The person making the booking must be at least 18 years old and is responsible
+        for making sure everyone in the booking knows and follows these terms.
+    </p>
+    <p>
+        Some tours are booked on request: send us an enquiry and we'll confirm availability and price before you pay. An enquiry
+        isn't a booking until we've confirmed it and payment has been made.
+    </p>
+
+    <h5>5. Payment</h5>
+    <p>
+        Online payments are taken by card through Stripe, our payment provider; we never see or store your full card details.
+        Your bank may charge a fee for payments in US dollars or for converting currency. Where we've agreed that part of a
+        booking can be paid later, any balance must be paid before the tour starts; you can pay it from My Account.
+    </p>
+
+    <h5>6. Changes and cancellations by you</h5>
+    <p>
+        If you need to change or cancel a tour, contact us as early as possible with your booking reference. We'll always try to
+        move you to another departure if one is available.
+    </p>
+    <p>
+        If you cancel at least 48 hours before the tour's start time, we'll refund what you paid for it. If you cancel less than
+        48 hours before the start time, or don't turn up (including missing the pick-up), the tour is non-refundable. Refunds are
+        made to the card you paid with and can take 5 to 10 business days to appear, depending on your bank.
+    </p>
+
+    <h5>7. Changes and cancellations by us</h5>
+    <p>
+        Occasionally we may have to change or cancel a tour, for example because of weather, safety concerns, road or sea
+        conditions, a minimum number of guests not being reached, or events outside our control. If we cancel, you can choose
+        another departure or a full refund of what you paid for that tour. If we have to make a significant change (such as the
+        date or a major part of the itinerary), you can accept the change or cancel for a full refund.
+    </p>
+    <p>
+        We're not responsible for costs you've arranged separately, such as flights, transport or other accommodation, if a tour
+        is changed or cancelled, so we recommend having travel insurance.
+    </p>
+
+    <h5>8. On the tour</h5>
+    <p>
+        Please be at your pick-up point on time; tours can't wait for late guests. Follow your guide's instructions, especially
+        on safety. Some tours involve physical activity, water, heights or road travel: it's up to you to decide whether a tour is
+        suitable for your health and fitness, and to tell us about anything we should know before you book. Your guide may refuse
+        or end participation for anyone who is intoxicated, puts themselves or others at risk, or behaves unacceptably, without a
+        refund. Some tours ask you to sign a waiver before taking part.
+    </p>
+    <p>
+        Tours may be run by our local partners. Where they are, they're chosen by us and follow our standards, and their own
+        conditions may also apply on the day.
+    </p>
+
+    <h5>9. Staying at our hostels</h5>
+    <p>
+        Hostel stays are booked through our booking system provided by Cloudbeds, and the prices, payment, deposit and
+        cancellation terms for your stay are the ones shown when you book your room. During your stay the house rules at the
+        hostel apply, including check-in and check-out times, quiet hours and the rules for shared spaces. You must show a valid
+        passport or ID at check-in, as required by Vietnamese law. You're responsible for any damage you cause to the hostel.
+    </p>
+
+    <h5>10. Your belongings</h5>
+    <p>
+        Please use the lockers provided and keep valuables with you. We can't accept responsibility for loss of or damage to
+        belongings left unattended at our hostels or on tours, except where it's caused by our negligence.
+    </p>
+
+    <h5>11. Travel documents and insurance</h5>
+    <p>
+        You're responsible for having a valid passport, visa and any other documents you need to travel in Vietnam. We strongly
+        recommend travel insurance that covers the activities you book with us, medical costs and cancellation.
+    </p>
+
+    <h5>12. Our liability</h5>
+    <p>
+        We'll provide our services with reasonable care and skill. Nothing in these terms limits our liability for death or
+        personal injury caused by our negligence, for fraud, or for anything else that can't be limited by law. Otherwise, our
+        liability to you for any booking is limited to the amount you paid for it, and we aren't liable for losses that weren't
+        foreseeable, for business losses, or for events outside our reasonable control.
+    </p>
+
+    <h5>13. Photos and content</h5>
+    <p>
+        We sometimes take photos and videos at our hostels, events and tours and may use them on our website and social media.
+        If you'd rather not appear, just tell a member of our team. Anything you send us (such as reviews or photos you share with
+        us) must be your own and not break anyone else's rights.
+    </p>
+
+    <h5>14. Complaints</h5>
+    <p>
+        If something isn't right, please tell the team or your guide at the time so we can try to fix it. If it can't be sorted
+        out then, contact us within 28 days with your booking reference and we'll respond as quickly as we can.
+    </p>
+
+    <h5>15. Changes to these terms</h5>
+    <p>
+        We may update these terms from time to time; the date at the top shows when they last changed. The terms that apply to a
+        booking are the ones in place when it was made.
+    </p>
+
+    <h5>16. Law</h5>
+    <p>
+        These terms are governed by the laws of Vietnam, and any dispute will be handled by the courts of Vietnam. If any part of
+        these terms is found to be invalid, the rest still applies.
+    </p>
+</LegalPage>
+
+@code {
+    protected override DefaultIdType PageId => SitePages.TermsAndConditions;
+}

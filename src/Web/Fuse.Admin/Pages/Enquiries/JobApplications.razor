@@ -1,0 +1,65 @@
+@page "/admin/enquiries/job-vacancies"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Enquiries)]
+@using Fuse.Contracts.Enquiries
+@inject FileSaver Files
+
+@* Legacy Job Vacancy Enquiries: applications from Join Our Crew, newest first (they stay if the vacancy is deleted).
+   View one to read and reply. *@
+
+<AdminPageHeader Title="Job Applications" Description="Applications sent from the website's Join Our Crew page." />
+
+<EntityTable @ref="_table" T="JobApplicationSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Job Applications" Resource="@FuseResource.Enquiries"
+             OnExport="ExportAsync" OnDelete="DeleteAsync">
+    <RowButtons>
+        <RowIconButton Icon="@Icons.Material.Outlined.Visibility" Label="View" OnClick="() => ViewAsync(context)" />
+    </RowButtons>
+</EntityTable>
+
+@code {
+    private static readonly IReadOnlyList<EntityField<JobApplicationSummary>> Fields =
+    [
+        new(e => e.Submitted.ToString("dd/MM/yyyy HH:mm"), "Sent", nameof(JobApplicationSummary.Submitted)) { Width = "1%" },
+        new(e => e.JobTitle, "Position", nameof(JobApplicationSummary.JobTitle)),
+        new(e => e.Location, "Location", nameof(JobApplicationSummary.Location)),
+        new(e => e.Name, "Name", nameof(JobApplicationSummary.Name)),
+        new(e => e.Email, "Email", nameof(JobApplicationSummary.Email)),
+    ];
+
+    private EntityTable<JobApplicationSummary>? _table;
+    private string? _keyword;
+
+    private async Task<PagedResult<JobApplicationSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        _keyword = request.Keyword;
+        return await Api.Send(request.Apply(new SearchJobApplications()), cancellationToken);
+    }
+
+    private async Task ViewAsync(JobApplicationSummary row)
+    {
+        JobApplicationDetails? a = null;
+        if (!await Snackbar.TryAsync(async () => a = await Api.Send(new GetJobApplication(row.Id))))
+            return;
+        var e = a!.Summary;
+        await Dialogs.ShowAsync<EnquiryDialog>(null, new DialogParameters<EnquiryDialog>
+        {
+            { d => d.Title, $"{e.Name} for {e.JobTitle}" }, { d => d.Submitted, e.Submitted }, { d => d.Email, e.Email },
+            { d => d.Fields,
+                [("Position", $"{e.JobTitle} ({e.Location})"), ("Name", e.Name), ("Email", e.Email), ("How can we collaborate?", a.HowCanWeCollaborate),
+                 ("Estimated dates", a.EstimatedDates), ("Destinations visited", a.DestinationsVisited), ("Instagram", a.Instagram), ("TikTok", a.TikTok),
+                 ("YouTube", a.YouTube), ("Portfolio", a.Portfolio), ("Equipment", a.Equipment)] },
+            { d => d.Kind, EnquiryKind.JobApplication }, { d => d.Id, e.Id },
+            { d => d.ReplySubject, $"Your application for {e.JobTitle}" },
+        }, EnquiryPages.DialogOptions);
+    }
+
+    private async Task ExportAsync() =>
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportEnquiries(EnquiryKind.JobApplication, _keyword, null))));
+
+    private async Task DeleteAsync(JobApplicationSummary e)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this application?", $"{e.Name}'s application for {e.JobTitle} will be deleted.", "Delete application", "Keep application"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteEnquiry(EnquiryKind.JobApplication, e.Id)), "Application deleted."))
+            await _table!.ReloadAsync();
+    }
+}

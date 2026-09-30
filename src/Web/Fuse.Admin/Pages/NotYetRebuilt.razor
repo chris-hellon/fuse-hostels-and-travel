@@ -1,0 +1,12 @@
+@page "/admin/{*path}"
+
+@* Catch-all while the back office is being rebuilt; specific pages always win over this route. *@
+
+<AdminPageHeader Title="Coming soon" />
+<MudAlert Severity="Severity.Info">
+    This screen (<code>/admin/@Path</code>) hasn't been rebuilt in the new Fuse yet.
+</MudAlert>
+
+@code {
+    [Parameter] public string? Path { get; set; }
+}

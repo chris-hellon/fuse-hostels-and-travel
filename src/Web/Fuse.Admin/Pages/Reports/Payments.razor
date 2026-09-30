@@ -1,0 +1,118 @@
+@page "/admin/reports/payments"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Reports)]
+@using Fuse.Admin.Pages.Bookings
+@using Fuse.Admin.Pages.Bookings.Dialogs
+@using Fuse.Contracts.Bookings
+@using Fuse.Contracts.Reports
+@inject FileSaver Files
+
+@* Legacy Reports › Payments: payments taken in the period, newest first. Show Details opens the booking as on
+   Bookings (with who booked it and its payments); Refund refunds that payment (through its own Stripe checkout), all or part of it. *@
+
+<AdminPageHeader Title="Payments" Description="@($"{_range.Start:dd/MM/yyyy} - {_range.End:dd/MM/yyyy}")" />
+
+<EntityTable @ref="_table" T="PaymentRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Payments" Resource="@FuseResource.Reports"
+             OnExport="ExportAsync" ExpandAdvancedSearch="true">
+    <AdvancedSearchContent>
+        <MudGrid Spacing="3" Class="mt-1">
+            <MudItem xs="12" md="6">
+                <MudDateRangePicker Label="Payment Date Range" DateRange="_range" DateRangeChanged="SetRangeAsync" Clearable="false"
+                                    AutoClose="true" PickerVariant="PickerVariant.Dialog" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+        </MudGrid>
+    </AdvancedSearchContent>
+    <RowButtons>
+        @if (CanRefund(context))
+        {
+            <RowIconButton Icon="@Icons.Material.Outlined.CurrencyExchange" Label="Refund" Danger="true" OnClick="() => RefundAsync(context)" />
+        }
+        @if (_canViewBookings)
+        {
+            <DetailsToggle Open="@_expanded.Contains(context.Id)" OnToggle="() => Toggle(context)" />
+        }
+    </RowButtons>
+    <ChildRowContent>
+        @if (_expanded.Contains(context.Id))
+        {
+            <BookingDetailsRow @key="context.Id" BookingId="context.BookingId" Version="_loads" Columns="_table!.ColumnCount" CanRefund="_canRefund" OnChanged="ReloadAsync" />
+        }
+    </ChildRowContent>
+</EntityTable>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    private static string Money(decimal amount) => $"$ {amount:n2}";
+
+    private static readonly IReadOnlyList<EntityField<PaymentRow>> Fields =
+    [
+        EntityField<PaymentRow>.Reference(p => p.Reference, nameof(PaymentRow.Reference), "Booking Id"),
+        new(p => p.PaymentDate?.ToString("dd/MM/yyyy HH:mm"), "Payment Date", nameof(PaymentRow.PaymentDate)),
+        new(p => p.BookingDate.ToString("dd/MM/yyyy HH:mm"), "Booking Date", nameof(PaymentRow.BookingDate)),
+        new(p => p.RefundDate?.ToString("dd/MM/yyyy HH:mm") ?? "-", "Refund Date", nameof(PaymentRow.RefundDate)),
+        new(p => Money(p.Amount), "Amount", nameof(PaymentRow.Amount)),
+        new(p => p.Method, "Method", nameof(PaymentRow.Method)),
+        new(p => p.CustomerName, "Customer Name", nameof(PaymentRow.CustomerName)),
+    ];
+
+    private EntityTable<PaymentRow>? _table;
+    private readonly HashSet<DefaultIdType> _expanded = [];
+    // As legacy: the last month to today.
+    private DateRange _range = new(DateTime.Today.AddMonths(-1), DateTime.Today);
+    private string? _keyword;
+    private int _loads;
+    private bool _canRefund, _canViewBookings;
+
+    private DateOnly From => DateOnly.FromDateTime(_range.Start ?? DateTime.Today);
+    private DateOnly To => DateOnly.FromDateTime(_range.End ?? _range.Start ?? DateTime.Today);
+
+    /// <summary>As legacy: refunds need the Tour Bookings delete permission, on a booking that isn't cancelled.</summary>
+    private bool CanRefund(PaymentRow payment) => _canRefund && !payment.BookingCancelled && !payment.Refunded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        _canRefund = user.HasPermission(FuseAction.Delete, FuseResource.TourBookings);
+        _canViewBookings = user.HasPermission(FuseAction.View, FuseResource.TourBookings);
+    }
+
+    private async Task<PagedResult<PaymentRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        _keyword = request.Keyword;
+        _loads++;
+        return await Api.Send(request.Apply(new SearchPayments { From = From, To = To }), cancellationToken);
+    }
+
+    private Task ReloadAsync() => _table!.ReloadAsync();
+
+    private async Task SetRangeAsync(DateRange? range)
+    {
+        if (range?.Start is null)
+            return;
+        _range = range;
+        _expanded.Clear();
+        await ReloadAsync();
+    }
+
+    private void Toggle(PaymentRow row)
+    {
+        if (!_expanded.Remove(row.Id))
+            _expanded.Add(row.Id);
+    }
+
+
+    private async Task RefundAsync(PaymentRow payment)
+    {
+        var dialog = await Dialogs.ShowAsync<RefundDialog>(null, new DialogParameters<RefundDialog>
+        {
+            { d => d.Title, "Refund Booking Payment" },
+            { d => d.MaxAmount, payment.Amount },
+            { d => d.Submit, async amount => await Api.Send(new RefundBookingPayment(payment.Id, amount)) },
+        }, RefundDialog.Options);
+        if (await dialog.Result is { Canceled: false })
+            await ReloadAsync();
+    }
+
+    private async Task ExportAsync() =>
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportPayments(From, To, _keyword))));
+}

@@ -1,0 +1,111 @@
+@page "/hostels/{Slug}"
+@inject IApi Api
+@inject NavigationManager Navigation
+
+@if (Details is { } hostel)
+{
+    <SeoHead Page="hostel.Seo" PageName="@hostel.Name" Parent="@(("Hostels", "/hostels"))" ImageUrl="@hostel.ImagePath" />
+
+    <section id="headerBanner">
+        <HeaderBanner Headings="PageHeadings.ForRecord(hostel.Seo, hostel.Name)" Images="hostel.Images" ImageUrl="@hostel.ImagePath"
+                      Style="@(hostel.Id == NhaTrang ? "background-position-y:50%; background-position:left !important;" : null)">
+            <NavPills Items="Pills" />
+        </HeaderBanner>
+    </section>
+    <section id="about" class="overflow-hidden inherit-sticky-parent">
+        <RoundedImageSection Titles="@(["ABOUT"])" VideoSrc="@hostel.VideoPath"
+                             ImageUrl="@(hostel.Id == NhaTrang ? "https://travaloudcdn.azureedge.net/fuse/assets/images/99c08e57-cd8a-4fd0-aaad-ffb87a6c581d.jpg" : "https://travaloudcdn.azureedge.net/fuse/assets/images/OT soft opening _ more (40 of 154).jpg")">
+            <Body>
+                <p></p>
+                @((MarkupString)(hostel.Description ?? ""))
+                <p></p>
+            </Body>
+            <Ovals>
+                <OvalContainer Id="hostelPageIntroductionOvals1" Top="15" Right="-28" />
+                <OvalContainer Id="hostelPageIntroductionOvals2" Bottom="15" Right="18" />
+            </Ovals>
+        </RoundedImageSection>
+    </section>
+    <section id="book-now" class="bg-gray px-3 px-lg-0 py-5">
+        <BookNowBanner HostelId="hostel.Id" />
+    </section>
+    <section id="accommodation" class="pb-8">
+        <RoomCards Rooms="hostel.Rooms" Intro="@AccommodationIntro(hostel)" HostelSlug="@hostel.Slug" />
+    </section>
+    <section id="facilities" class="bg-light pb-8 pt-8">
+        <FeaturesTable Title="Facilities & Amenities" Items="hostel.Facilities" />
+    </section>
+    <ToursCarousel Id="@ExperiencesId" Title="@($"{Area} EXPERIENCES")" Tours="hostel.Tours" />
+    <section id="@DirectionsId" class="bg-light">
+        <PillTabs Title="@($"GETTING TO {hostel.PageSubTitle?.ToUpperInvariant()} {hostel.PageTitle?.ToUpperInvariant()}")" Items="hostel.Directions" TabTitle="d => d.Title">
+            <ItemTemplate Context="direction">
+                <div class="row">
+                    @for (var i = 0; i < direction.Blocks.Count; i++)
+                    {
+                        <div class="@($"col-lg-6 {(i < direction.Blocks.Count - 1 ? "mb-5 mb-lg-0" : "")}")" style="@direction.Blocks[i].Style">
+                            @((MarkupString)direction.Blocks[i].Html)
+                        </div>
+                    }
+                </div>
+            </ItemTemplate>
+        </PillTabs>
+    </section>
+    <WhatsOn Events="@(Events ?? [])" HostelId="hostel.Id" HostelName="@hostel.Name" />
+}
+else
+{
+    @* Arriving from another page: the banner (its photos are the hostel's) and content while they load. *@
+    <section id="headerBanner">
+        <HeaderBanner Headings="null" LoadingText="Loading the hostel…" />
+    </section>
+    <PageSkeleton />
+}
+
+@code {
+    /// <summary>Legacy styled some parts of the Nha Trang hostel's page differently.</summary>
+    private static readonly DefaultIdType NhaTrang = DefaultIdType.Parse("8e1f2b64-6ef8-4321-b6ab-b9b578e0e6cb");
+    private static readonly DefaultIdType Beachside = DefaultIdType.Parse("7335037b-853f-4e66-b61b-8e02bdca9251");
+
+    [Parameter] public string Slug { get; set; } = "";
+
+    // Fetched once while prerendering and handed to the browser, so WebAssembly doesn't re-fetch.
+    [PersistentState] public SiteHostel? Details { get; set; }
+    [PersistentState] public IReadOnlyList<SiteEvent>? Events { get; set; }
+
+    /// <summary>"HOI AN", from the page title "Hoi An Hostel".</summary>
+    private string Area => (Details?.PageTitle ?? "").Replace("Hostel", "", StringComparison.OrdinalIgnoreCase).Trim().ToUpperInvariant();
+    private string ExperiencesId => $"{Slugs.From(Area)}-experiences";
+    private string DirectionsId => $"getting-to-{Slugs.From(Details?.PageTitle)}";
+
+    private (string, string)[] Pills =>
+    [
+        ("ABOUT", "about"),
+        ("BOOK NOW", "book-now"),
+        ("ACCOMMODATION", "accommodation"),
+        ($"{Area} EXPERIENCES", ExperiencesId),
+        ($"GETTING TO {PageHeadings.ForRecord(Details!.Seo, Details.Name).Title.ToUpperInvariant()}", DirectionsId),
+    ];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Details?.Slug.Equals(Slug, StringComparison.OrdinalIgnoreCase) == true)
+            return;
+        Details = null; // from another hostel's page: loading, not the last hostel
+        try
+        {
+            var details = Api.Send(new GetSiteHostel(Slug)).AsTask();
+            var events = Api.Send(new ListSiteEvents()).AsTask();
+            (Details, Events) = (await details, await events);
+        }
+        catch (NotFoundException)
+        {
+            Navigation.NotFound();
+        }
+    }
+
+    /// <summary>Legacy's introduction to each hostel's rooms.</summary>
+    private static string AccommodationIntro(SiteHostel hostel) =>
+        hostel.Id == Beachside ? $"All private & shared rooms at FUSE {hostel.Name} Hostel come with pool or ocean views as standard so there is no better place to stay if beach vibes are your thing."
+        : hostel.Id == NhaTrang ? $"FUSE {hostel.Name} Hostel features an outdoor swimming pool, shared lounge, a terrace and restaurant in Nha Trang. Featuring a bar, the hostel is close to several noted attractions."
+        : "The ultimate cure for your backpacker's fatigue, conveniently located at the edge of Hoi An's Old Town and equipped with all the amenities you could possibly need!";
+}

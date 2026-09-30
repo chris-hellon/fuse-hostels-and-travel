@@ -1,0 +1,73 @@
+@using System.Text.Json
+
+@* Create / edit a page modal: details (title, dates, pages, call to action) and its description. *@
+
+<ContentDialog Title="@(IsCreate ? "Create Page Modal" : "Edit Page Modal")" IsCreate="IsCreate" Loading="_input is null" Sections="_sections"
+               Noun="page modal" Save="SaveAsync" HasChanges="HasChanges" />
+
+@code {
+    [Parameter] public DefaultIdType? ModalId { get; set; }
+
+    private bool IsCreate => ModalId is null;
+    private PageModalInput? _input;
+    private IReadOnlyList<PageSummary> _pages = [];
+    private string _original = "";
+    private IReadOnlyList<ContentSection> _sections = [];
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var pages = Api.Send(new ListPages()).AsTask();
+        var input = IsCreate ? Task.FromResult(new PageModalInput()) : Api.Send(new GetPageModal(ModalId!.Value)).AsTask();
+        await Task.WhenAll(pages, input);
+        _pages = pages.Result;
+        var model = input.Result;
+        _sections =
+        [
+            ContentSection.Fields("Details", "Title, dates, pages and call to action", DetailsForm(model),
+                () => !string.IsNullOrWhiteSpace(model.Title) && model.PageIds.Count > 0, required: true),
+            new("Description", "What the modal says", () => model.Description, v => model.Description = v),
+        ];
+        _original = JsonSerializer.Serialize(model);
+        _input = model;
+    });
+
+    private RenderFragment DetailsForm(PageModalInput input) =>
+        @<MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Title" @bind-Value="input.Title" Required="true" RequiredError="Title is required" MaxLength="1024" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudDateRangePicker Label="Show between" DateRange="@(new DateRange(input.StartDate, input.EndDate))"
+                                    DateRangeChanged="r => (input.StartDate, input.EndDate) = (r?.Start, r?.End)"
+                                    DateFormat="dd/MM/yyyy" Clearable="true" AutoClose="true" Variant="Variant.Outlined"
+                                    HelperText="Optional. Leave empty to show it all the time" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudSelect T="DefaultIdType" Label="Pages" MultiSelection="true" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomLeft"
+                           SelectedValues="input.PageIds" SelectedValuesChanged="v => input.PageIds = [.. v]"
+                           MultiSelectionTextFunc="@(_ => PagesText(input))" Required="true" RequiredError="Choose at least one page"
+                           HelperText="The pages the modal shows on">
+                    @foreach (var choice in _pages)
+                    {
+                        <MudSelectItem T="DefaultIdType" Value="choice.Id">@choice.Title</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField Label="Call to action" @bind-Value="input.CallToAction" MaxLength="1024" Variant="Variant.Outlined"
+                              HelperText="Optional. A button link, e.g. a tour page" />
+            </MudItem>
+        </MudGrid>;
+
+    private string PagesText(PageModalInput input) => input.PageIds.Count switch
+    {
+        0 => "",
+        <= 3 => string.Join(", ", _pages.Where(p => input.PageIds.Contains(p.Id)).Select(p => p.Title)),
+        var n => $"{n} pages",
+    };
+
+    private bool HasChanges() => _input is not null && JsonSerializer.Serialize(_input) != _original;
+
+    private async Task<bool> SaveAsync() =>
+        await Snackbar.TryAsync(async () => await Api.Send(new SavePageModal(ModalId, _input!)), IsCreate ? "Page modal created." : "Page modal saved.");
+}

@@ -1,0 +1,47 @@
+@* Legacy ContainerHalfImageTextComponent: a hostel's text beside its image, sides alternating. *@
+
+<div class="container-xxl g-0">
+    <div class="@RowClass">
+        @if (Swap)
+        {
+            <div class="col-lg-1 order-lg-0 order-3">
+            </div>
+        }
+        <div class="col-md-12 offset-lg-1 col-lg-4 d-flex align-items-center position-relative px-4 p-lg-0 pb-5 pt-5 order-lg-1 order-2">
+            <div class="has-parallax-scroll">
+                <span class="fw-bold mb-4 mb-lg-5 tilted">@Title</span>
+                @((MarkupString)(Hostel.ShortDescription ?? ""))
+                <a class="btn btn-primary mt-4 pe-4 ps-4" href="@($"/hostels/{Hostel.Slug}")">View @Title</a>
+            </div>
+        </div>
+        <div class="@($"col-md-12 {(Swap ? "col-lg-6" : "col-lg-6 offset-lg-1")} p-0 offcut-image-border has-parallax-scroll order-lg-2 order-1")">
+            <img loading="lazy" class="img-fluid shadow-4" width="1172" height="667" src="@CdnImages.Sized(Hostel.ImagePath, 1172)" alt="@($"{Title} image")">
+        </div>
+        @if (Swap)
+        {
+            <OvalContainer Id="@($"{OvalId}Ovals")" Bottom="-30" Right="-25" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SiteCard Hostel { get; set; } = null!;
+    /// <summary>Image on the left (legacy swapDirection); rows alternate, starting swapped.</summary>
+    [Parameter] public bool Swap { get; set; }
+    [Parameter] public bool Last { get; set; }
+
+    private string Title => $"{Hostel.Name} Hostel";
+
+    private string RowClass =>
+        $"row {(Last ? "pb-0" : "pb-5")} pb-lg-2 {(Swap ? "flex-row-reverse position-relative" : "")}".TrimEnd();
+
+    /// <summary>Legacy named each row's ovals after the hostel in camel case ("hoiAnOldTownOvals").</summary>
+    private string OvalId
+    {
+        get
+        {
+            var words = Hostel.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return string.Concat(words.Select((w, i) => i == 0 ? w.ToLowerInvariant() : char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant()));
+        }
+    }
+}

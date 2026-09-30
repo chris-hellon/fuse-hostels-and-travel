@@ -1,0 +1,43 @@
+@page "/admin/management/tours/suppliers"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Suppliers)]
+@inject NavigationManager Navigation
+
+<AdminPageHeader Title="Suppliers" Description="Manage Suppliers." />
+
+<EntityTable T="UserSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Suppliers" Resource="@FuseResource.Suppliers" OnCreate="CreateAsync">
+    <ExtraActions>
+        @* Supplier accounts are managed on their own profile page (as legacy, needs the Users permission). *@
+        <MudMenuItem Href="@($"/admin/management/tours/suppliers/{context.Id}/profile")">Manage User</MudMenuItem>
+        <MudMenuItem OnClick="@(() => SendResetLinkAsync(context))">Send Password Reset Link</MudMenuItem>
+    </ExtraActions>
+</EntityTable>
+
+@code {
+    private static readonly IReadOnlyList<EntityField<UserSummary>> Fields =
+    [
+        new(u => u.FullName, "Name", nameof(UserSummary.FullName)),
+        new(u => u.Email, "Email", nameof(UserSummary.Email)),
+        new(u => u.PhoneNumber, "Phone Number", nameof(UserSummary.PhoneNumber)),
+        new(u => u.Address, "Address"),
+        new(u => u.City, "City"),
+        EntityField<UserSummary>.Bool(u => u.IsActive, "Active"),
+    ];
+
+    private async Task<PagedResult<UserSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchSuppliers()), cancellationToken);
+
+    private Task SendResetLinkAsync(UserSummary user) =>
+        Snackbar.TryAsync(async () => await Api.Send(new SendSupplierPasswordReset(user.Id)), "Password reset link sent.");
+
+    private async Task CreateAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<CreateAccountDialog>("Create Supplier", new DialogParameters<CreateAccountDialog>
+        {
+            { d => d.Create, (profile, password, confirm) => Api.Send(new CreateSupplier(profile, password, confirm)).AsTask() },
+            { d => d.SuccessText, "Supplier created." },
+            { d => d.Note, "Suppliers can sign in to see bookings for the tours they supply (set on each tour's Booking step)." },
+        });
+        if (await dialog.Result is { Canceled: false, Data: string id })
+            Navigation.NavigateTo($"/admin/management/tours/suppliers/{id}/profile");
+    }
+}

@@ -1,0 +1,27 @@
+@* Legacy AlternatingCardHeightComponent ("TAILORED TOURS", on the home and tours pages): the heading and text top
+   right, tour cards in two columns, every second one pulled up beside the one before (fuse.js staggerCards). *@
+
+<section id="tours" class="@Class">
+    <div class="container pt-8 pb-8">
+        <div class="row d-flex flex-row-reverse gx-lg-8 alternating-card-height">
+            <div class="col-lg-6 col-md-12 col-xs-12 mb-5 mb-lg-0">
+                <div class="row has-parallax-scroll">
+                    <h2>@Title</h2>
+                    <p>Whether you're hitting up the Hoi An Old Town Hostel, chilling at the Hoi An Beachside Hostel, or soaking in the vibes at our Nha Trang Hostel, we've got your adventure covered.<br /><br />Our crew knows the ins and outs of this beautiful country like nobody else. They're like your personal tour guides, making sure you have the time of your life. From exploring ancient streets in Hoi An to lounging by the beach in Nha Trang, we've got tailored experiences that'll blow your mind.</p>
+                </div>
+            </div>
+            @for (var i = 0; i < Tours.Count; i++)
+            {
+                <div @key="Tours[i].Id" class="@($"col-xs-12 col-md-12 col-lg-6{(i < Tours.Count - 1 ? " mb-5 mb-lg-8" : "")} has-parallax-scroll")">
+                    <ContentCard Card="Tours[i]" />
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SiteCard> Tours { get; set; } = [];
+    [Parameter] public string Title { get; set; } = "TAILORED TOURS";
+    [Parameter] public string Class { get; set; } = "bg-light";
+}

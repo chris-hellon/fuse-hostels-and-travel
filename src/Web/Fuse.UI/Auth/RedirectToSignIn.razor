@@ -1,0 +1,13 @@
+@inject NavigationManager Navigation
+
+@code {
+    // Back-office pages go to the admin sign-in; public pages open the sign-in modal on the home page.
+    protected override void OnInitialized()
+    {
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var returnUrl = Uri.EscapeDataString("/" + relative);
+        Navigation.NavigateTo(relative.StartsWith("admin", StringComparison.OrdinalIgnoreCase)
+            ? $"admin/login?returnUrl={returnUrl}"
+            : $"?signIn=1&returnUrl={returnUrl}");
+    }
+}

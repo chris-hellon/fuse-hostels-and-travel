@@ -1,0 +1,56 @@
+@using Fuse.Contracts.Properties
+
+@* Add or edit a set of directions in the draft (saved with the property). *@
+
+<MudDialog ContentClass="direction-dialog__content">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(Direction is null ? Icons.Material.Filled.Add : Icons.Material.Outlined.Edit)" Class="mr-3 mb-n1" />
+            @(Direction is null ? "Add directions" : "Edit directions")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudTextField Label="Title" @bind-Value="_model.Title" Required="true" RequiredError="Title is required" HelperText="e.g. From the airport" Variant="Variant.Outlined" Class="mb-3" />
+        </MudForm>
+        <div class="direction-dialog__editor">
+            <RichText @ref="_editor" @bind-Value="_model.Body" Fill="true" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="DoneAsync">@(Direction is null ? "Add directions" : "Done")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public PropertyDirectionEdit? Direction { get; set; }
+    [Parameter] public IReadOnlyCollection<string> TakenTitles { get; set; } = [];
+
+    private MudForm? _form;
+    private RichText? _editor;
+    private PropertyDirectionEdit _model = new();
+
+    protected override void OnInitialized() => _model = Direction is null ? new PropertyDirectionEdit() : Direction with { };
+
+    private async Task DoneAsync()
+    {
+        if (_editor is not null)
+            await _editor.FlushAsync();
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        if (TakenTitles.Contains(_model.Title.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            Snackbar.Add($"There are already directions called {_model.Title.Trim()}.", Severity.Warning);
+            return;
+        }
+        if (!ContentSection.HasVisibleText(_model.Body))
+        {
+            Snackbar.Add("Add the directions text.", Severity.Warning);
+            return;
+        }
+        Dialog.Close(DialogResult.Ok(_model with { Title = _model.Title.Trim() }));
+    }
+}

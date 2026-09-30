@@ -1,0 +1,122 @@
+@* Edit Guest (legacy CreateUpdateGuestDialog): opened from a guest's name in any table. A guest linked to
+   Cloudbeds shows the Cloudbeds value under each field that differs, to apply before saving. Bookings lists their
+   tour bookings and hostel stays. *@
+
+<MudDialog>
+    <DialogContent>
+        @if (_guest is null)
+        {
+            <div class="d-flex justify-center pa-8"><MudProgressCircular Indeterminate="true" Color="Color.Secondary" /></div>
+        }
+        else
+        {
+            <MudTabs Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-4" @bind-ActivePanelIndex="_tab">
+                <MudTabPanel Text="Details">
+                    @if (string.IsNullOrEmpty(_guest.CloudbedsGuestId))
+                    {
+                        <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.CloudOff">This guest isn't linked to Cloudbeds.</MudAlert>
+                    }
+                    else if (_cloudbeds is null)
+                    {
+                        <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Cloud">
+                            <div class="d-flex align-center gap-2">
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" />
+                                Fetching the latest Cloudbeds data… (Cloudbeds ID: @_guest.CloudbedsGuestId)
+                            </div>
+                        </MudAlert>
+                    }
+                    else if (_cloudbeds.Profile is null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">
+                            This guest is linked to Cloudbeds (ID: @_guest.CloudbedsGuestId), but the data couldn't be fetched right now.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-4" Icon="@Icons.Material.Filled.Cloud">
+                            Linked to Cloudbeds (ID: <strong>@_guest.CloudbedsGuestId</strong>). Fields that differ show the Cloudbeds value. Click 'Use' to apply it, then Save.
+                        </MudAlert>
+                    }
+                    <MudForm @ref="_form" ReadOnly="!CanEdit" Disabled="_saving">
+                        <ProfileForm Profile="_guest.Profile" Suggested="@(CanEdit ? _cloudbeds?.Profile : null)" />
+                    </MudForm>
+                </MudTabPanel>
+                @* Only asked for (Cloudbeds included) when opened. *@
+                <MudTabPanel Text="Bookings">
+                    <GuestBookings GuestId="@GuestId" BeforeOpen="() => Dialog.Cancel()" />
+                </MudTabPanel>
+            </MudTabs>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Cancel" OnClick="() => Dialog.Cancel()">@(CanEdit && _tab == 0 ? "Cancel" : "Close")</MudButton>
+        @* Bookings are read-only: Save belongs to Details. *@
+        @if (CanEdit && _tab == 0)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="@(_guest is null || _saving)" OnClick="SaveAsync"
+                       StartIcon="@(_saving ? null : Icons.Material.Filled.Save)">
+                @if (_saving)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Save
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new()
+    {
+        MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true, BackdropClick = false, CloseOnEscapeKey = true,
+    };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public string GuestId { get; set; } = "";
+    [Parameter] public bool CanEdit { get; set; }
+
+    private UserDetails? _guest;
+    private CloudbedsGuestLookup? _cloudbeds;
+    private MudForm? _form;
+    private bool _saving;
+    private int _tab;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Snackbar.TryAsync(async () => _guest = await Api.Send(new GetGuest(GuestId))))
+        {
+            Dialog.Cancel();
+            return;
+        }
+
+        // Cloudbeds can be slow: show the form straight away, then add the comparison when it arrives.
+        if (!string.IsNullOrEmpty(_guest!.CloudbedsGuestId))
+            _ = LoadCloudbedsAsync();
+    }
+
+    private async Task LoadCloudbedsAsync()
+    {
+        try
+        {
+            _cloudbeds = await Api.Send(new GetGuestCloudbedsProfile(GuestId));
+        }
+        catch
+        {
+            _cloudbeds = new CloudbedsGuestLookup(_guest!.CloudbedsGuestId, null);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+
+        _saving = true;
+        var ok = await Snackbar.TryAsync(async () => await Api.Send(new UpdateGuest(GuestId, _guest!.Profile)), "Guest updated.");
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok($"{_guest!.Profile.FirstName} {_guest.Profile.LastName}".Trim()));
+    }
+}

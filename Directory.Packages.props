@@ -1,0 +1,70 @@
+<Project>
+
+  <PropertyGroup>
+    <AspNetVersion>10.0.12</AspNetVersion>
+  </PropertyGroup>
+
+  <ItemGroup Label="ASP.NET Core / EF Core">
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Components.Authorization" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Abstractions" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Stores" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="$(AspNetVersion)" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.6" />
+  </ItemGroup>
+
+  <ItemGroup Label="Application">
+    <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
+    <PackageVersion Include="Mediator.SourceGenerator" Version="3.0.2" />
+    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageVersion Include="Dapper" Version="2.1.35" />
+    <PackageVersion Include="NewId" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Infrastructure">
+    <PackageVersion Include="Finbuckle.MultiTenant" Version="10.1.4" />
+    <PackageVersion Include="Finbuckle.MultiTenant.AspNetCore" Version="10.1.4" />
+    <PackageVersion Include="Finbuckle.MultiTenant.EntityFrameworkCore" Version="10.1.4" />
+    <PackageVersion Include="Finbuckle.MultiTenant.Identity.EntityFrameworkCore" Version="10.1.4" />
+    <PackageVersion Include="Stripe.net" Version="52.4.2" />
+    <PackageVersion Include="Hangfire.Core" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.SqlServer" Version="1.8.25" />
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.25" />
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.2" />
+    <PackageVersion Include="ClosedXML" Version="0.105.1" />
+    <PackageVersion Include="MailKit" Version="4.18.0" />
+    <PackageVersion Include="QRCoder" Version="1.8.0" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Rollbar.NetCore.AspNet" Version="5.2.2" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.8" />
+    <PackageVersion Include="AspNetCore.SassCompiler" Version="1.103.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="UI">
+    <PackageVersion Include="MudBlazor" Version="9.10.0" />
+    <PackageVersion Include="MudBlazor.Extensions" Version="9.10.0" />
+    <PackageVersion Include="Heron.MudCalendar" Version="4.1.0" />
+    <PackageVersion Include="Blazor-ApexCharts" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Tests">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="xunit.v3" Version="4.0.1" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="Shouldly" Version="4.3.0" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,21 @@
+@* The three locations beside the circular video (legacy ContainerHalfImageRoundedTextComponent). *@
+
+<section id="introduction" class="overflow-hidden">
+    <RoundedImageSection Titles="Titles" VideoSrc="https://travaloud.azureedge.net/fuse/assets/images/0b47297a-3910-4e83-8f83-a94e35996c09.mp4">
+        <Body>
+            <p>Experience Vietnam as a backpacker with Fuse Hostels and Travel. Immerse yourself in the Hoi An Old Town, where timeless beauty meets vibrant culture. Wander through ancient streets and indulge in local delicacies while drinking ice cold beer. Prefer the beach? At our Hoi An beachside accommodation you can chill and enjoy cocktails &amp; beer at sunset on the beach or at the pool. Ready for more excitement? Venture to Nha Trang, a coastal gem with stunning beaches and energetic nightlife. Unleash your wanderlust with Fuse Hostels and Travel - your gateway to Vietnam's captivating destinations.</p>
+        </Body>
+        <Button>
+            <a class="btn btn-primary mt-4 pe-4 ps-4" href="/hostels">View Locations</a>
+        </Button>
+        <Ovals>
+            <OvalContainer Id="homePageIntroductionOvals1" Top="-40" Right="-14" />
+            <OvalContainer Id="homePageIntroductionOvals2" Bottom="-7" Right="36" />
+            <OvalContainer Id="homePageIntroductionOvals3" Bottom="-30" Right="-19" />
+        </Ovals>
+    </RoundedImageSection>
+</section>
+
+@code {
+    private static readonly string[] Titles = ["3 Hostel Locations:", "Hoi An Beachside", "Hoi An Old Town", "Nha Trang"];
+}

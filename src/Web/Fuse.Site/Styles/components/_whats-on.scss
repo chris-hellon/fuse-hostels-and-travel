@@ -1,0 +1,329 @@
+// The events section on the home and hostels pages (Components/Events/WhatsOn.razor): a gig poster and its line-up, in the
+// site's own look (DIN type with the purple offset shadow, tilted labels). The poster is built as the old event
+// cards (card-full-background: offcut border, oval dots, the photo greyed under the event's colour).
+// --accent is the event's colour (its category's, else its own); the site's purple otherwise.
+
+.whats-on__filters .nav-link { margin: 0 .25rem; }
+
+// Room for the offcut border's left edge, which sits just outside the poster (as on the old cards).
+.whats-on__poster-frame { padding-left: 6px; }
+
+// The poster: the photo greyed under the event's colour, as the old cards.
+.card.whats-on__poster {
+  --accent: var(--mdb-primary);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 640px;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: none;
+  animation: whats-on-in .35s ease-out;
+
+  @media (max-width: 991px) { min-height: 560px; }
+}
+
+.whats-on__poster-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(100%);
+}
+
+.whats-on__poster-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+span.tilted.whats-on__when {
+  position: absolute;
+  top: 2rem;
+  left: 1.5rem;
+  z-index: 4;
+  font-size: 1.5rem;
+}
+
+.whats-on__poster-body {
+  position: relative;
+  z-index: 4;
+  padding: 2.5rem 2.5rem 2.75rem;
+  color: #fff;
+
+  @media (max-width: 575px) { padding: 2rem 1.5rem; }
+}
+
+.whats-on__category {
+  display: inline-block;
+  margin-bottom: .75rem;
+  padding: .15rem .6rem;
+  border: 1px solid rgba(255, 255, 255, .8);
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: .9rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.whats-on__title {
+  margin: 0 0 .75rem;
+  color: #fff;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 5.5rem;
+  line-height: .9;
+  text-transform: uppercase;
+  text-shadow: -5px 0 var(--mdb-primary);
+
+  @media (max-width: 991px) { font-size: 4rem; }
+}
+
+.whats-on__meta {
+  margin: 0 0 1rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 1.2rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  white-space: pre-wrap;
+}
+
+.whats-on__times {
+  margin: -.5rem 0 1rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 1.05rem;
+  letter-spacing: .05em;
+  opacity: .9;
+}
+
+.whats-on__text {
+  max-width: 34rem;
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+
+  // Rich text from the admin, often centred for the old cards.
+  * { margin: 0; color: inherit !important; text-align: left !important; }
+}
+
+.whats-on__later {
+  margin: 0;
+  font-family: var(--mdb-font-din-2014-demi);
+  font-size: .9rem;
+  letter-spacing: .06em;
+  opacity: .85;
+  white-space: pre-wrap;
+}
+
+.whats-on__actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+
+.whats-on__button {
+  display: inline-block;
+  padding: .4rem .9rem;
+  border: 1px solid #fff;
+  color: #fff;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: .85rem;
+  letter-spacing: .08em;
+  transition: background-color .2s ease, color .2s ease;
+
+  &:hover, &:focus { background: #fff; color: #090511; }
+}
+
+// The line-up: a row per event, the one on the poster marked.
+h4.tilted.whats-on__lineup-title { margin-bottom: 1.75rem; }
+
+.whats-on__lineup {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border-top: 2px solid var(--mdb-black);
+}
+
+.whats-on__act {
+  --accent: var(--mdb-primary);
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  padding: 1.1rem 0;
+  border: 0;
+  border-bottom: 1px solid rgba(9, 5, 17, .15);
+  background: none;
+  color: var(--mdb-black);
+  text-align: left;
+  cursor: pointer;
+}
+
+.whats-on__date {
+  flex: 0 0 5.25rem;
+  padding: .5rem 0 .35rem;
+  background: var(--accent);
+  color: #fff;
+  text-align: center;
+  line-height: 1;
+  transform: rotate(-4deg);
+  transition: transform .2s ease;
+}
+
+.whats-on__weekday {
+  display: block;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: .8rem;
+  letter-spacing: .06em;
+}
+
+.whats-on__day {
+  display: block;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 2.6rem;
+  text-shadow: -3px 0 var(--mdb-black);
+}
+
+.whats-on__act-body { flex: 1; min-width: 0; }
+
+.whats-on__act-name {
+  display: block;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 2rem;
+  line-height: 1.05;
+  text-transform: uppercase;
+  transition: text-shadow .2s ease;
+}
+
+.whats-on__act-meta {
+  display: block;
+  margin-top: .25rem;
+  font-family: var(--mdb-font-din-2014-demi);
+  font-size: .95rem;
+  color: rgba(9, 5, 17, .6);
+  white-space: pre-wrap;
+}
+
+.whats-on__act-arrow {
+  font-size: 1.4rem;
+  color: var(--mdb-primary);
+  opacity: 0;
+  transform: translateX(-.5rem);
+  transition: opacity .2s ease, transform .2s ease;
+}
+
+.whats-on__act:hover, .whats-on__act.is-active {
+  .whats-on__date { transform: rotate(0deg); }
+  .whats-on__act-name { text-shadow: -3px 0 var(--mdb-primary); }
+  .whats-on__act-arrow { opacity: 1; transform: none; }
+}
+
+@keyframes whats-on-in {
+  from { opacity: .4; }
+  to { opacity: 1; }
+}
+
+.whats-on__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 2rem;
+}
+
+.whats-on__all {
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 1.1rem;
+  letter-spacing: .06em;
+  color: var(--mdb-primary);
+
+  &:hover i { transform: translateX(.25rem); }
+  i { transition: transform .2s ease; }
+}
+
+// An event's own page (Pages/Events/Event.razor): What's On's type and date blocks, in the event's colour.
+.event-page {
+  --accent: var(--mdb-primary);
+}
+
+span.tilted.event-page__when {
+  margin-bottom: 1.75rem;
+  font-size: 1.5rem;
+}
+
+.event-page__meta {
+  margin: 0 0 .5rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 1.5rem;
+  letter-spacing: .05em;
+  color: var(--accent);
+  white-space: pre-wrap;
+}
+
+.event-page__times {
+  margin: 0 0 1.5rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: 1.1rem;
+  letter-spacing: .05em;
+  color: rgba(9, 5, 17, .6);
+}
+
+.event-page__text {
+  margin: 1.5rem 0 2rem;
+  font-size: 1.25rem;
+  line-height: 1.6;
+
+  // Rich text from the admin: centred, with blank lines between, for the old cards.
+  * { text-align: left !important; }
+  p { margin: 0 0 .75rem; }
+  p:empty, p:has(> br:only-child) { display: none; }
+}
+
+.event-page__actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+
+// The line-up's rows default to the site's purple; here they take the event's colour.
+.event-page__day { --accent: inherit; cursor: default; }
+.event-page__day .whats-on__act-name { font-size: 1.6rem; }
+
+.event-page__none {
+  font-family: var(--mdb-font-din-2014-demi);
+  color: rgba(9, 5, 17, .6);
+}
+
+// An event booked as a tour: Book on the poster (filled, so it leads), its price in the line-up, and Book per day.
+.whats-on__button--book {
+  background: #fff;
+  color: #090511;
+
+  &:hover, &:focus { background: #090511; color: #fff; border-color: #090511; }
+}
+
+.whats-on__act-price {
+  display: inline-block;
+  margin-left: .5rem;
+  padding: .05rem .45rem;
+  background: var(--accent, var(--mdb-primary));
+  color: #fff;
+  font-size: .8rem;
+  letter-spacing: .05em;
+  vertical-align: middle;
+}
+
+.event-page__book {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+  padding: .45rem .9rem;
+  background: var(--accent, var(--mdb-primary));
+  color: #fff;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: .85rem;
+  letter-spacing: .08em;
+  white-space: nowrap;
+
+  &:hover, &:focus { background: #090511; color: #fff; }
+
+  &.is-full { background: #e9e9ee; color: rgba(9, 5, 17, .6); }
+}
+
+// Book as a button (it opens an enquiry): looks the same as the links.
+button.whats-on__button, button.event-page__book { cursor: pointer; line-height: inherit; }
+button.event-page__book { border: 0; }

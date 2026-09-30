@@ -1,0 +1,56 @@
+@page "/error"
+@attribute [ExcludeFromInteractiveRouting]
+@layout Layout.BareLayout
+@using System.Diagnostics
+@using Microsoft.AspNetCore.Diagnostics
+@using MudBlazor
+
+@* An unhandled error (UseExceptionHandler). Rendered on the server only (it's no page of the browser app), in the
+   back office's look for /admin addresses and the site's otherwise, with a reference to quote. *@
+
+<PageTitle>Something went wrong</PageTitle>
+
+@if (IsAdmin)
+{
+    <LayoutView Layout="typeof(Fuse.Admin.Layout.AdminBlankLayout)">
+        <Fuse.Admin.Components.Layout.AuthCard Title="Something went wrong" Intro="Sorry, that didn't work. Please try again in a moment.">
+            <MudAlert Severity="Severity.Error" Class="mb-4">
+                If it keeps happening, send this reference to support: <code>@RequestId</code>
+            </MudAlert>
+            <div class="d-flex gap-3 justify-center flex-wrap">
+                <MudButton Href="@RetryPath" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh">Try Again</MudButton>
+                <MudButton Href="/admin" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Dashboard">Dashboard</MudButton>
+            </div>
+        </Fuse.Admin.Components.Layout.AuthCard>
+    </LayoutView>
+}
+else
+{
+    <LayoutView Layout="typeof(Fuse.Site.Layout.FuseLayout)">
+        <Fuse.Site.Components.Sections.LegalPage Id="error" Title="SOMETHING WENT WRONG">
+            <div class="account-empty">
+                <i class="fas fa-triangle-exclamation account-empty__icon" aria-hidden="true"></i>
+                <p>Sorry, that didn't work. Please try again in a moment.</p>
+                <p class="account-empty__small">If it keeps happening, <a href="/contact">contact us</a> and quote <code>@RequestId</code>.</p>
+                <div class="d-flex gap-3 justify-content-center flex-wrap">
+                    <a class="btn btn-primary" href="@RetryPath">Try Again</a>
+                    <a class="btn btn-outline-primary" href="/">Home</a>
+                </div>
+            </div>
+        </Fuse.Site.Components.Sections.LegalPage>
+    </LayoutView>
+}
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId => Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+
+    /// <summary>Where it went wrong (the request path is /error while this renders).</summary>
+    private string OriginalPath => HttpContext?.Features.Get<IExceptionHandlerPathFeature>()?.Path ?? "/";
+
+    private bool IsAdmin => OriginalPath.StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The page again (a GET, never re-posting a form).</summary>
+    private string RetryPath => OriginalPath.StartsWith('/') ? OriginalPath : "/";
+}

@@ -1,0 +1,38 @@
+@page "/admin/management/job-vacancies"
+@attribute [RequirePermission(FuseAction.View, FuseResource.JobVacancies)]
+@using Fuse.Contracts.JobVacancies
+
+<AdminPageHeader Title="Job Vacancies" Description="Manage Job Vacancies." />
+
+<EntityTable @ref="_table" T="JobVacancySummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Job Vacancies" Resource="@FuseResource.JobVacancies"
+             OnCreate="() => OpenAsync(null)" OnEdit="v => OpenAsync(v.Id)" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<JobVacancySummary>> Fields =
+    [
+        new(v => v.JobTitle, "Job Title", nameof(JobVacancySummary.JobTitle)),
+        new(v => v.Location, "Location", nameof(JobVacancySummary.Location)),
+        new(v => v.Responses, "Applications", nameof(JobVacancySummary.Responses)),
+    ];
+
+    private EntityTable<JobVacancySummary>? _table;
+
+    private async Task<PagedResult<JobVacancySummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchJobVacancies()), cancellationToken);
+
+    private async Task OpenAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<JobVacancyDialog>(null, new DialogParameters<JobVacancyDialog> { { d => d.VacancyId, id } }, ContentDialog.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(JobVacancySummary vacancy)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this job vacancy?", $"\"{vacancy.JobTitle}\" will be deleted straight away and taken off the website.",
+                "Delete vacancy", "Keep vacancy", detail: vacancy.Responses > 0 ? "Applications already received stay under Enquiries." : null))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteJobVacancy(vacancy.Id)), "Job vacancy deleted."))
+            await _table!.ReloadAsync();
+    }
+}

@@ -1,0 +1,262 @@
+@* A booking's details: what a Tour Bookings row shows when expanded, and the Booking Details dialog. Legacy
+   TourBookingItemsTable. Loaded when first shown, and again whenever Version changes. *@
+
+<div class="booking-details__view">
+    @if (_overview is null)
+    {
+        <div class="booking-details__loading">
+            <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Loading booking details…</MudText>
+        </div>
+    }
+    else
+    {
+        <div class="booking-details__body">
+            @* Two panels like Tours and Payments: the booking (who sold it, where, notes, anything owed) and its
+               primary guest (with their hostel stay). *@
+            <div class="booking-details__top">
+                <MudPaper Outlined="true" Square="true" Class="booking-details__section">
+                    <MudText Typo="Typo.body1" Class="booking-details__heading">Booking</MudText>
+                    <div class="booking-details__fields">
+                        <div>
+                            <div class="booking-details__label">Booked by</div>
+                            <div>@(_overview.BookedBy ?? "Direct from Website")</div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(_overview.BookingSource))
+                        {
+                            <div>
+                                <div class="booking-details__label">Source</div>
+                                <div>@_overview.BookingSource</div>
+                            </div>
+                        }
+                        @if (_overview.AmountOutstanding is > 0)
+                        {
+                            <div>
+                                <div class="booking-details__label">Outstanding</div>
+                                <div class="booking-details__owed">@Money(_overview.AmountOutstanding.Value)</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(_overview.AdditionalNotes))
+                        {
+                            <div>
+                                <div class="booking-details__label">Notes</div>
+                                <div class="booking-details__notes">@_overview.AdditionalNotes</div>
+                            </div>
+                        }
+                    </div>
+                </MudPaper>
+                <MudPaper Outlined="true" Square="true" Class="booking-details__section">
+                    <MudText Typo="Typo.body1" Class="booking-details__heading">Primary guest</MudText>
+                    <div class="booking-details__guest-name">
+                        @if (_overview.GuestId is not null)
+                        {
+                            <GuestLink GuestId="@_overview.GuestId" Name="@_overview.GuestName" OnSaved="ChangedAsync" />
+                        }
+                        else
+                        {
+                            <span>@(_overview.GuestName ?? "-")</span>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(_overview.GuestDetail))
+                    {
+                        <div class="booking-details__guest-detail">@_overview.GuestDetail.Replace(" - ", " · ")</div>
+                    }
+                    <GuestStayNote GuestId="@_overview.GuestId" Strip="true" Class="mt-3" />
+                </MudPaper>
+            </div>
+
+            <MudPaper Outlined="true" Square="true" Class="booking-details__section">
+            <MudText Typo="Typo.body1" Class="booking-details__heading">Tours</MudText>
+            <MudSimpleTable Elevation="0" Class="booking-details__table">
+                <thead>
+                    <tr>
+                        <th>Tour</th>
+                        <th>Guests</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Pick Up Location</th>
+                        <th>Price</th>
+                        <th>Total Price</th>
+                        <th>Status</th>
+                        <th>Waiver Signed</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _overview.Items)
+                    {
+                        var open = _guestsShown.Contains(item.Id);
+                        <tr>
+                            <td>
+                                <div>@item.TourName</div>
+                                @if (item.PackageName is not null)
+                                {
+                                    <div class="booking-details__package">
+                                        <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" />
+                                        <span>@item.PackageName</span>
+                                    </div>
+                                }
+                            </td>
+                            <td>@item.GuestCount</td>
+                            <td>@item.StartDate.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@item.EndDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@item.PickupLocation</td>
+                            <td class="booking-details__money">@Money(item.Price)</td>
+                            <td class="booking-details__money">@Money(item.Total)</td>
+                            <td><BookingStatusText State="item.Status" /></td>
+                            <td>@(item.WaiverSigned ? "Yes" : "No")</td>
+                            <td class="booking-details__actions">
+                                <RowIconButton Icon="@Icons.Material.Outlined.Group" Label="@(open ? "Hide guests" : "Show guests")" Active="open"
+                                               OnClick="() => ToggleGuests(item)" />
+                                @if (CanChange(item))
+                                {
+                                    <RowMenu>
+                                        @if (!item.Refunded)
+                                        {
+                                            <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => RefundAsync(item))">Refund</MudMenuItem>
+                                        }
+                                        <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => CancelAsync(item))">Cancel</MudMenuItem>
+                                    </RowMenu>
+                                }
+                            </td>
+                        </tr>
+                        @if (open)
+                        {
+                            <tr class="booking-details__guests">
+                                <td colspan="10">
+                                    <MudSimpleTable Elevation="0" Class="booking-details__table">
+                                        <thead>
+                                            <tr>
+                                                <th>Guest Name</th>
+                                                <th>Date of Birth</th>
+                                                <th>Nationality</th>
+                                                <th>Gender</th>
+                                                <th>Email</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var guest in item.Guests)
+                                            {
+                                                <tr>
+                                                    <td><GuestLink GuestId="@guest.GuestId" Name="@guest.Name" /></td>
+                                                    <td>@(guest.DateOfBirth?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                                    <td>@Countries.DisplayName(guest.Nationality)</td>
+                                                    <td>@Genders.DisplayName(guest.Gender)</td>
+                                                    <td>@guest.Email</td>
+                                                    <td><BookingStatusText State="guest.Status" /></td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </MudSimpleTable>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </MudSimpleTable>
+            </MudPaper>
+
+            @if (_overview.Payments.Count > 0)
+            {
+                <MudPaper Outlined="true" Square="true" Class="booking-details__section">
+                <MudText Typo="Typo.body1" Class="booking-details__heading">Payments</MudText>
+                <MudSimpleTable Elevation="0" Class="booking-details__table">
+                    <thead>
+                        <tr>
+                            <th>Amount</th>
+                            <th>Payment Date</th>
+                            <th>Customer Name</th>
+                            <th>Customer Email</th>
+                            <th>Payment Method</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var payment in _overview.Payments)
+                        {
+                            <tr>
+                                <td>
+                                    @Money(payment.Amount)
+                                    @if (payment.Refunded)
+                                    {
+                                        <span class="status-pill status-pill--warn ml-1">Refunded</span>
+                                    }
+                                </td>
+                                <td>@payment.PaymentDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@payment.CustomerName</td>
+                                <td>@payment.CustomerEmail</td>
+                                <td>@payment.Method</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                </MudPaper>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DefaultIdType BookingId { get; set; }
+    [Parameter] public bool CanRefund { get; set; }
+    /// <summary>A tour was refunded or cancelled, or the guest renamed: the row above may need reloading.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private BookingOverview? _overview;
+    private readonly HashSet<DefaultIdType> _guestsShown = [];
+
+    /// <summary>Legacy: the name with date of birth, gender, nationality and email.</summary>
+
+    private static string Money(decimal amount) => $"$ {amount:N2}";
+
+    /// <summary>Changes whenever the table reloads: the details load again with it.</summary>
+    [Parameter] public int Version { get; set; }
+
+    private int? _loadedVersion;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedVersion == Version)
+            return;
+        _loadedVersion = Version;
+        await LoadAsync();
+    }
+
+    private Task LoadAsync() => Snackbar.TryAsync(async () => _overview = await Api.Send(new GetBookingOverview(BookingId)));
+
+    /// <summary>As legacy: paid tours that aren't cancelled can be refunded or cancelled one at a time.</summary>
+    private bool CanChange(BookingItemView item) => CanRefund && !item.Cancelled && item.Status != BookingState.Unpaid;
+
+    private void ToggleGuests(BookingItemView item)
+    {
+        if (!_guestsShown.Remove(item.Id))
+            _guestsShown.Add(item.Id);
+    }
+
+    private Task AfterMenuCloses(Func<Task> action) => MenuActions.AfterMenuCloses(action, DispatchExceptionAsync);
+
+    private Task RefundAsync(BookingItemView item) => ShowRefundAsync(item, cancelling: false);
+
+    private Task CancelAsync(BookingItemView item) => ShowRefundAsync(item, cancelling: true);
+
+    private async Task ShowRefundAsync(BookingItemView item, bool cancelling)
+    {
+        var dialog = await Dialogs.ShowAsync<RefundDialog>(null, new DialogParameters<RefundDialog>
+        {
+            { d => d.Title, cancelling ? "Cancel Tour" : "Refund Tour" },
+            { d => d.Subject, "tour" },
+            { d => d.Cancelling, cancelling },
+            { d => d.MaxAmount, item.Total },
+            {
+                d => d.Submit, async amount => cancelling
+                    ? await Api.Send(new CancelBookingItem(item.Id, amount))
+                    : await Api.Send(new RefundBookingItem(item.Id, amount))
+            },
+        }, RefundDialog.Options);
+        if (await dialog.Result is { Canceled: false })
+            await ChangedAsync();
+    }
+
+    /// <summary>The page reloads the table, which reloads these details.</summary>
+    private Task ChangedAsync() => OnChanged.InvokeAsync();
+}

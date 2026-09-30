@@ -1,0 +1,54 @@
+@* Legacy's profile photo card: picking a file uploads it straight away (replacing the old one); removing asks first.
+   Read-only viewers just see the photo (as legacy's staff profile, with its View link). *@
+
+@if (!ReadOnly)
+{
+    <ImagePicker Label="Profile photo" Hint="@Hint" Src="@(string.IsNullOrEmpty(Url) ? null : Url)" Busy="_busy" OnPick="PickAsync" OnRemove="RemoveAsync" />
+}
+else if (!string.IsNullOrEmpty(Url))
+{
+    <div class="image-picker">
+        <div class="image-picker__label"><MudText Typo="Typo.subtitle2">Profile photo</MudText></div>
+        <div class="image-picker__preview">
+            <img src="@Url" alt="Profile photo" />
+            <div class="image-picker__actions">
+                <MudTooltip Text="Open full size">
+                    <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Href="@Url" Target="_blank" aria-label="Open full size" />
+                </MudTooltip>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Url { get; set; }
+    [Parameter] public EventCallback<string?> UrlChanged { get; set; }
+    /// <summary>Saves the photo, or removes it when given null; returns the new URL (empty once removed).</summary>
+    [Parameter, EditorRequired] public Func<FileUpload?, Task<string>> Save { get; set; } = null!;
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public string? Hint { get; set; } = "Optional. Shown next to the name in the menu (from the next sign-in).";
+
+    private bool _busy;
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        await Snackbar.TryAsync(async () => await SetAsync(await Save(await e.File.ToUploadAsync())), "Profile photo saved.");
+        _busy = false;
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (!await Dialogs.ConfirmAsync("Remove the profile photo?", "The photo is removed from this profile straight away.", "Remove"))
+            return;
+        _busy = true;
+        await Snackbar.TryAsync(async () => await SetAsync(await Save(null)), "Profile photo removed.");
+        _busy = false;
+    }
+
+    private async Task SetAsync(string url)
+    {
+        Url = url;
+        await UrlChanged.InvokeAsync(url);
+    }
+}

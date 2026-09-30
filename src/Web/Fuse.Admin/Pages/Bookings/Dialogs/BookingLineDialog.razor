@@ -1,0 +1,185 @@
+@* Legacy BookingItemDialog: change one tour on the booking (tour, price, departure, pick up, waiver) and
+   its additional guests. Changes go back into the booking's draft; nothing is saved until the booking is.
+   As legacy, once paid or refunded only administrators change the tour and guests, and a refunded booking's
+   departure and pick up are fixed. *@
+
+<ModalWizard TModel="BookingDraft" Model="Draft" OnSave="SaveAsync" FinishText="Done" Loading="_loading">
+    <TitleContent>
+        <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-3 mb-n1" />Edit Tour
+    </TitleContent>
+    <ChildContent>
+        <WizardStep TModel="BookingDraft" Title="Tour Details" OnLeaveAsync="_ => Task.FromResult(LeaveDetails())">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudSelect T="DefaultIdType?" Label="Category" Value="_categoryId" ValueChanged="SetCategory" Clearable="true" Variant="Variant.Outlined"
+                               HelperText="Select a Category" Disabled="@(!Draft.CanChangeTourAndGuests)">
+                        @foreach (var category in Draft.Catalog.Categories)
+                        {
+                            <MudSelectItem T="DefaultIdType?" Value="@DefaultIdType.Parse(category.Id)">@category.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="DefaultIdType" Label="Tour" Value="_tourId" ValueChanged="SetTourAsync" Variant="Variant.Outlined" HelperText="Select a Tour"
+                               Required="true" RequiredError="Please select a Tour." Disabled="@(!Draft.CanChangeTourAndGuests)">
+                        @foreach (var tour in Draft.Catalog.Tours.Where(t => _categoryId is null || t.CategoryId == _categoryId || t.Id == _tourId))
+                        {
+                            <MudSelectItem T="DefaultIdType" Value="@tour.Id">@tour.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12">
+                    <DeparturePicker @key="_tourId" TourName="@(Tour?.Name ?? "")" Departures="_departures" Loading="_departuresLoading" @bind-DepartureId="_departureId"
+                                     PriceLocked="@(PackPrice is not null)" PriceNote="@(PackPrice is { } price ? $"Pack price — {price:$#,##0.00}" : null)"
+                                     Disabled="@(!Draft.CanChangeDeparture)" />
+                </MudItem>
+                @if (Tour is { } chosen)
+                {
+                    <MudItem xs="12" md="6">
+                        <PickupPicker Pickups="chosen.Pickups" @bind-Value="_pickup" Hint="Select a Pickup Location" Required="@(chosen.Pickups.Count > 0)"
+                                      Disabled="@(!Draft.CanChangeDeparture)" />
+                    </MudItem>
+                    @if (chosen.WaiverRequired)
+                    {
+                        <MudItem xs="12" md="6" Class="d-flex align-center">
+                            <MudCheckBox T="bool" @bind-Value="_waiverSigned" Color="Color.Secondary" Label="Has a Waiver been signed?" />
+                        </MudItem>
+                    }
+                }
+            </MudGrid>
+        </WizardStep>
+
+        <WizardStep TModel="BookingDraft" Title="Additional Guests">
+            <GuestListPicker GuestIds="_guests" NameOf="Draft.NameOf" Remember="Draft.Remember" LeadGuestId="@Draft.Editor.GuestId" OnChanged="StateHasChanged"
+                             Disabled="@(!Draft.CanChangeTourAndGuests)">
+                <Toolbar>
+                    @if (Tour?.WaiverRequired == true)
+                    {
+                        <MudButton Color="Color.Info" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.FileOpen" IconColor="Color.Surface"
+                                   Class="guest-search__create" OnClick="ShowWaiverAsync">Show Waiver</MudButton>
+                    }
+                </Toolbar>
+            </GuestListPicker>
+        </WizardStep>
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter, EditorRequired] public BookingDraft Draft { get; set; } = null!;
+    [Parameter, EditorRequired] public BookingLine Line { get; set; } = null!;
+
+    private bool _loading = true, _departuresLoading;
+    private DefaultIdType? _categoryId;
+    private DefaultIdType _tourId;
+    private DefaultIdType? _departureId;
+    private IReadOnlyList<DepartureOption> _departures = [];
+    private string? _pickup;
+    private bool _waiverSigned;
+    private List<string> _guests = [];
+
+    private BookableTour? Tour => Draft.Tour(_tourId);
+
+    /// <summary>What the booking's pack charges for this tour (as <see cref="BookingPricing"/> will), or null when it doesn't set the price.</summary>
+    private decimal? PackPrice
+    {
+        get
+        {
+            if (Line.PackageKey is not null || Draft.Pack is not { } pack || pack.Tiers.FirstOrDefault(t => t.Id == Draft.Editor.PackIncentiveTierId) is not { } tier
+                || !pack.TourIds.Contains(_tourId))
+                return null;
+            var lines = Draft.Editor.Lines.Select(l => l.Key == Line.Key ? l with { TourId = _tourId } : l).ToList();
+            if (!BookingPricing.Qualifies(pack, lines))
+                return null;
+            return BookingPricing.PackPrice(tier.Price, lines.Count(l => pack.TourIds.Contains(l.TourId)));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tourId = Line.TourId;
+        _categoryId = Tour?.CategoryId;
+        _departureId = Line.TourDateId;
+        _pickup = Line.PickupLocation;
+        _waiverSigned = Line.WaiverSigned;
+        _guests = [.. Line.GuestIds];
+        await LoadDeparturesAsync();
+        _loading = false;
+    }
+
+    private async Task LoadDeparturesAsync()
+    {
+        _departuresLoading = true;
+        IReadOnlyList<DepartureOption> departures = [];
+        await Snackbar.TryAsync(async () => departures = await Api.Send(new ListTourDepartures(_tourId)));
+        // The booked departure stays choosable even when it's now full or past.
+        if (_tourId == Line.TourId && departures.All(d => d.Id != Line.TourDateId))
+            departures = [.. departures.Prepend(new DepartureOption
+            {
+                Id = Line.TourDateId,
+                PriceTitle = Line.PriceTitle,
+                Price = Line.DeparturePrice,
+                StartDate = Line.StartDate,
+                EndDate = Line.EndDate ?? Line.StartDate,
+                AvailableSpaces = 0,
+            })];
+        _departures = departures;
+        _departuresLoading = false;
+    }
+
+    private void SetCategory(DefaultIdType? categoryId) => _categoryId = categoryId;
+
+    private async Task SetTourAsync(DefaultIdType tourId)
+    {
+        if (tourId == _tourId)
+            return;
+        _tourId = tourId;
+        _departureId = null;
+        _pickup = null;
+        _waiverSigned = false;
+        await LoadDeparturesAsync();
+    }
+
+    private bool LeaveDetails()
+    {
+        if (_departureId is null)
+            Snackbar.Add("Please select a Tour Date.", Severity.Warning);
+        else if (Tour?.Pickups.Count > 0 && string.IsNullOrWhiteSpace(_pickup))
+            Snackbar.Add("Please select a Pick Up Location.", Severity.Warning);
+        else
+            return true;
+        return false;
+    }
+
+    private async Task ShowWaiverAsync()
+    {
+        string? terms = null;
+        await Snackbar.TryAsync(async () => terms = await Api.Send(new GetTourWaiver(_tourId)));
+        await Dialogs.ShowMessageBoxAsync(new MessageBoxOptions
+        {
+            Title = "Waiver",
+            MarkupMessage = new MarkupString(string.IsNullOrWhiteSpace(terms) ? "<p>This tour has no waiver terms yet.</p>" : terms),
+            YesText = "Close",
+        }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+    }
+
+    private Task<bool> SaveAsync(BookingDraft draft)
+    {
+        if (!LeaveDetails() || Tour is not { } tour || _departures.FirstOrDefault(d => d.Id == _departureId) is not { } departure)
+            return Task.FromResult(false);
+
+        Line.TourId = tour.Id;
+        Line.TourName = tour.Name;
+        Line.TourDateId = departure.Id;
+        Line.PriceTitle = departure.PriceTitle;
+        Line.StartDate = departure.StartDate;
+        Line.EndDate = departure.EndDate;
+        Line.DeparturePrice = departure.Price;
+        Line.PickupLocation = _pickup;
+        Line.WaiverSigned = tour.WaiverRequired && _waiverSigned;
+        Line.GuestIds = _guests;
+        draft.Reprice();
+        return Task.FromResult(true);
+    }
+}

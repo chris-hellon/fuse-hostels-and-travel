@@ -1,0 +1,45 @@
+@page "/admin/management/tours/pack-incentives"
+@page "/admin/management/pack-incentives"
+@attribute [RequirePermission(FuseAction.View, FuseResource.PackIncentives)]
+@using Fuse.Contracts.PackIncentives
+
+<AdminPageHeader Title="Pack Incentives" Description="Staff-sales pack incentives, e.g. Pack 3 / Pack 4." />
+
+<EntityTable @ref="_table" T="PackIncentiveSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Pack Incentives" Resource="@FuseResource.PackIncentives"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<PackIncentiveSummary>> Fields =
+    [
+        new(p => p.Name, "Name", nameof(PackIncentiveSummary.Name)),
+        new(p => p.MinimumProductCount, "Min products", nameof(PackIncentiveSummary.MinimumProductCount)),
+        new(p => $"${p.CommissionAmount:N2}", "Commission", nameof(PackIncentiveSummary.CommissionAmount)),
+        new(p => p.Tours, "Eligible tours", nameof(PackIncentiveSummary.Tours)),
+        EntityField<PackIncentiveSummary>.Bool(p => p.IsActive, "Active", nameof(PackIncentiveSummary.IsActive)),
+    ];
+
+    private EntityTable<PackIncentiveSummary>? _table;
+
+    private async Task<PagedResult<PackIncentiveSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchPackIncentives()), cancellationToken);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(PackIncentiveSummary incentive) => OpenWizardAsync(incentive.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<PackIncentiveWizard>(null, new DialogParameters<PackIncentiveWizard> { { w => w.IncentiveId, id } }, PackIncentiveWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(PackIncentiveSummary incentive)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this pack incentive?", $"\"{incentive.Name}\" will be deleted straight away.", "Delete pack", "Keep pack",
+                detail: "To stop paying it but keep it for later, edit it and turn off Active instead."))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeletePackIncentive(incentive.Id)), "Pack incentive deleted."))
+            await _table!.ReloadAsync();
+    }
+}

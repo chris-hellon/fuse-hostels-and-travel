@@ -1,0 +1,55 @@
+@* Replaces legacy's Owl Carousel: a swipeable row of cards with dots, 1 per page on phones, 2 from 768px
+   and 3 from 1415px (legacy's Owl settings). Keeps Owl's class names so the theme's dot styles apply. *@
+@typeparam TItem
+@inherits JsComponent
+
+<div class="@($"owl-carousel owl-theme owl-loaded fuse-carousel {Class}".TrimEnd())">
+    <div class="fuse-carousel__track" @ref="_track">
+        @foreach (var item in Items)
+        {
+            <div class="owl-item fuse-carousel__item" @key="item">@ItemTemplate(item)</div>
+        }
+    </div>
+    <div class="@($"owl-dots{(_pages <= 1 ? " disabled" : "")}")">
+        @for (var page = 0; page < _pages; page++)
+        {
+            var target = page;
+            <button type="button" class="@($"owl-dot{(page == _page ? " active" : "")}")" title="Owl carousel navigation button"
+                    aria-label="Owl carousel navigation button" @onclick="() => ShowAsync(target)"><span></span></button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<TItem> ItemTemplate { get; set; } = null!;
+    [Parameter] public string? Class { get; set; }
+
+    private ElementReference _track;
+    private DotNetObjectReference<CardCarousel<TItem>>? _self;
+    private int _page, _pages = 1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        _self = DotNetObjectReference.Create(this);
+        await Js.InvokeVoidAsync("watchCarousel", _track, _self);
+    }
+
+    [JSInvokable]
+    public void OnPage(int page, int pages)
+    {
+        (_page, _pages) = (page, pages);
+        StateHasChanged();
+    }
+
+    private Task ShowAsync(int page) => Js.InvokeVoidAsync("showCarouselPage", _track, page).AsTask();
+
+    protected override async Task OnDisposeAsync()
+    {
+        _self?.Dispose();
+        if (_self is not null)
+            await Js.InvokeVoidAsync("unwatchCarousel", _track);
+    }
+}

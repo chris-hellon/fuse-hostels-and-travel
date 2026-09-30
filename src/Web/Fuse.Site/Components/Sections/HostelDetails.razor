@@ -1,0 +1,70 @@
+@* Each hostel's card (legacy "HOSTEL DETAILS", on the events, event and contact pages): its photo and page, phone,
+   address, email and directions. One hostel sits wide (photo beside); several sit side by side (photo on top). *@
+
+<section id="hostels">
+    <div class="container pt-8 pb-8">
+        <div class="row mb-7">
+            <div class="col-12 text-center has-parallax-scroll">
+                <h2>@Title</h2>
+            </div>
+        </div>
+        <div class="row g-7 justify-content-center">
+            @foreach (var hostel in Hostels)
+            {
+                var link = $"/hostels/{hostel.Slug}";
+                <div class="@($"{Column} has-parallax-scroll")" @key="hostel.Id">
+                    <article class="@($"hostel-card{(Hostels.Count == 1 ? " hostel-card--wide" : "")}")">
+                        <a class="hostel-card__photo offcut-image-border" href="@link" aria-label="@($"{hostel.Name} hostel")">
+                            @if (!string.IsNullOrEmpty(hostel.ImagePath))
+                            {
+                                <img loading="lazy" src="@CdnImages.Sized(hostel.ImagePath, 900)" alt="@($"{hostel.Name} hostel")" />
+                            }
+                        </a>
+                        <div class="hostel-card__body">
+                            <h4 class="tilted display-6 hostel-card__name">@hostel.Name Hostel</h4>
+                            <ul class="hostel-card__contact">
+                                @if (!string.IsNullOrEmpty(hostel.TelephoneNumber))
+                                {
+                                    <li><i class="fa-solid fa-phone" aria-hidden="true"></i><a href="@($"tel:{hostel.TelephoneNumber.Replace(" ", "")}")">@hostel.TelephoneNumber</a></li>
+                                }
+                                <li><i class="fa-solid fa-location-dot" aria-hidden="true"></i><span>@Address(hostel)</span></li>
+                                @if (!string.IsNullOrEmpty(hostel.EmailAddress))
+                                {
+                                    <li><i class="fa-solid fa-at" aria-hidden="true"></i><a href="@($"mailto:{hostel.EmailAddress}")">@hostel.EmailAddress</a></li>
+                                }
+                            </ul>
+                            <div class="hostel-card__actions">
+                                <a class="btn btn-primary" href="@link">View hostel</a>
+                                <a class="btn btn-outline-primary" href="@Directions(hostel)" target="_blank" rel="noopener">
+                                    <i class="fa-solid fa-diamond-turn-right me-2" aria-hidden="true"></i>Directions
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SiteHostelContact> Hostels { get; set; } = [];
+    [Parameter] public string Title { get; set; } = "HOSTEL DETAILS";
+
+    /// <summary>One hostel: the full width; two or four: halves; otherwise thirds.</summary>
+    private string Column => Hostels.Count switch
+    {
+        1 => "col-12",
+        2 or 4 => "col-12 col-lg-6",
+        _ => "col-12 col-md-6 col-lg-4",
+    };
+
+    private static string Address(SiteHostelContact hostel) =>
+        string.Join(", ", new[] { hostel.AddressLine1, hostel.AddressLine2 }.Where(line => !string.IsNullOrWhiteSpace(line)));
+
+    /// <summary>Legacy's Google Maps directions from where the visitor is.</summary>
+    private static string Directions(SiteHostelContact hostel) =>
+        $"https://maps.google.com?saddr=My+Location&daddr={Plus(hostel.AddressLine1)}+{Plus(hostel.AddressLine2)}";
+
+    private static string Plus(string? text) => (text ?? "").Replace(" ", "+").Replace(",", "");
+}

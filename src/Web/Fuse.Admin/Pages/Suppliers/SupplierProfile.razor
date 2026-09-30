@@ -1,0 +1,162 @@
+@page "/admin/management/tours/suppliers/{Id}/profile"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Users)]
+
+@* A supplier's account (as legacy): administrator settings, a profile card and the supplier's details. *@
+
+<AdminPageHeader Title="@(_user?.FullName ?? "Supplier")" Description="@(_user?.Profile.Email ?? "Supplier profile")">
+    <MudButton Href="/admin/management/tours/suppliers" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Back to suppliers</MudButton>
+</AdminPageHeader>
+
+@if (_user is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <AuthorizeView Context="auth">
+        @{ var canEdit = auth.User.HasPermission(FuseAction.Update, FuseResource.Users); }
+        <MudGrid Spacing="3">
+            @if (canEdit)
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="admin-card" Elevation="25">
+                        <div class="admin-card__head">
+                            <MudText Typo="Typo.subtitle1">Administrator settings</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Only administrators see this.</MudText>
+                        </div>
+                        <MudForm @ref="_accountForm">
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12">
+                                    <MudSwitch T="bool" @bind-Value="_active" Color="Color.Primary" Label="@(_active ? "Active: can sign in" : "Inactive: can't sign in")" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField T="string" @bind-Value="_password" Label="New password" Variant="Variant.Outlined" AutoComplete="new-password"
+                                                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                                  Adornment="Adornment.End" AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                                  OnAdornmentClick="() => _showPassword = !_showPassword" AdornmentAriaLabel="Show password" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField T="string" @bind-Value="_confirm" Label="Confirm new password" Variant="Variant.Outlined" AutoComplete="new-password"
+                                                  InputType="InputType.Password" Validation="@(new Func<string?, string?>(ConfirmMatches))" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudForm>
+                        <div class="admin-card__actions">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Leave the password empty to keep the current one.</MudText>
+                            <MudSpacer />
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_savingAccount" OnClick="SaveAccountAsync">Save settings</MudButton>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            }
+            <MudItem xs="12" md="4">
+                <MudPaper Class="supplier-card" Elevation="25">
+                    @if (!string.IsNullOrEmpty(_user.ImageUrl))
+                    {
+                        <img class="supplier-card__image" src="@_user.ImageUrl" alt="" />
+                    }
+                    else
+                    {
+                        <div class="supplier-card__initial" aria-hidden="true">@Initial</div>
+                    }
+                    <div class="supplier-card__body">
+                        <MudText Typo="Typo.h6">@_user.FullName</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@_user.Profile.Email</MudText>
+                        <span class="@($"supplier-card__status{(_user.IsActive ? " is-active" : "")}")">@(_user.IsActive ? "Active" : "Inactive")</span>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="8">
+                <MudPaper Class="admin-card" Elevation="25">
+                    <div class="admin-card__head">
+                        <MudText Typo="Typo.subtitle1">Supplier details</MudText>
+                    </div>
+                    <MudForm @ref="_detailsForm" ReadOnly="!canEdit">
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_user.Profile.FirstName" Label="First name" Variant="Variant.Outlined" Required="true" RequiredError="First name is required" MaxLength="75" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_user.Profile.LastName" Label="Last name" Variant="Variant.Outlined" Required="true" RequiredError="Last name is required" MaxLength="75" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_user.Profile.PhoneNumber" Label="Phone number" Variant="Variant.Outlined" InputType="InputType.Telephone" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_user.Profile.Email" Label="Email" Variant="Variant.Outlined" InputType="InputType.Email" Required="true" RequiredError="Email is required" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_user.Profile.Address" Label="Address" Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_user.Profile.City" Label="City" Variant="Variant.Outlined" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                    @if (canEdit)
+                    {
+                        <div class="admin-card__actions">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">They sign in with their email.</MudText>
+                            <MudSpacer />
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_savingDetails" OnClick="SaveDetailsAsync">Save details</MudButton>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private UserDetails? _user;
+    private MudForm? _accountForm, _detailsForm;
+    private bool _active, _showPassword, _savingAccount, _savingDetails;
+    private string? _password, _confirm;
+
+    private string Initial => (_user?.Profile.FirstName is { Length: > 0 } first ? first[..1] : "?").ToUpperInvariant();
+
+    protected override async Task OnParametersSetAsync() => await Snackbar.TryAsync(async () =>
+    {
+        _user = await Api.Send(new GetStaff(Id));
+        _active = _user.IsActive;
+    });
+
+    private string? ConfirmMatches(string? confirm) =>
+        string.IsNullOrEmpty(_password) || confirm == _password ? null : "Passwords do not match.";
+
+    /// <summary>Active and (when given) a new password, as legacy's Save Changes.</summary>
+    private async Task SaveAccountAsync()
+    {
+        await _accountForm!.ValidateAsync();
+        if (!_accountForm.IsValid)
+            return;
+        _savingAccount = true;
+        var ok = await Snackbar.TryAsync(async () =>
+        {
+            if (_active != _user!.IsActive)
+            {
+                await Api.Send(new SetStaffActive(Id, _active));
+                _user = _user with { IsActive = _active };
+            }
+            if (!string.IsNullOrEmpty(_password))
+                await Api.Send(new SetStaffPassword(Id, _password, _confirm ?? ""));
+        }, "Settings saved.");
+        if (ok)
+            (_password, _confirm) = (null, null);
+        _savingAccount = false;
+    }
+
+    private async Task SaveDetailsAsync()
+    {
+        await _detailsForm!.ValidateAsync();
+        if (!_detailsForm.IsValid)
+            return;
+        _savingDetails = true;
+        // The whole profile goes back, so fields this page doesn't show are kept.
+        if (await Snackbar.TryAsync(async () => await Api.Send(new UpdateStaff(Id, _user!.Profile)), "Supplier saved."))
+            _user = _user! with { FullName = $"{_user.Profile.FirstName} {_user.Profile.LastName}" };
+        _savingDetails = false;
+    }
+}

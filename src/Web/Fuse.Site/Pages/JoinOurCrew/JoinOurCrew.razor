@@ -1,0 +1,97 @@
+@page "/join-our-crew"
+@inherits SitePage
+@inject NavigationManager Navigation
+
+@* Legacy JoinOurCrew/Index: the banner and its pills, why work with us, the open positions (each to its application,
+   or to where its call to action says to apply), stay up to date, and the hostels. Legacy's apply links were
+   /join-our-crew?tourName={id}; those go to the position's page. *@
+
+<SeoHead Page="Page" PageName="Join Our Crew" Keywords="Fuse Hostels & Travel, job opportunities, hospitality industry, travel industry, Vietnam jobs, backpacker jobs"
+         MetaDescription="Join the Fuse Hostels & Travel crew and become a part of our team. We offer exciting job opportunities in the hospitality and travel industry in Vietnam." />
+
+<section id="headerBanner">
+    <HeaderBanner Headings="@BannerHeadings("JOIN OUR CREW")" ImageUrl="https://travaloudcdn.azureedge.net/fuse/assets/images/72067649-43d3-4961-93c7-58e37399860f.jpg"
+                  Style="background-position-y: 30%;">
+        <NavPills Items="Pills" />
+    </HeaderBanner>
+</section>
+@if (Page is not null)
+{
+    <section id="why-work-with-us" class="overflow-hidden inherit-sticky-parent">
+        <RoundedImageSection Titles="@(["WHY WORK WITH US"])" ImageUrl="https://travaloudcdn.azureedge.net/fuse/assets/images/fuse-purple-logo.webp">
+            <Body>
+                @* Legacy wrapped this rich text in a <p>, which browsers turn into an empty paragraph either side. *@
+                <p></p>
+                <p>Ready to make waves and join a crew that's all about fun, adventure, and unforgettable experiences? Look no further! At Fuse Hostels and Travel, we're on the lookout for passionate individuals to join our dynamic team.</p>
+                <p>From hosting epic pool parties to leading exciting tours, there's never a dull moment with us. Whether you're seeking short-term gigs or a more permanent position, we offer competitive benefits and perks to sweeten the deal.</p>
+                <p>So, if you're outgoing, sociable, and ready to deliver top-notch customer service, come aboard and be part of something extraordinary! Explore our current job postings below and take the first step towards an incredible journey with Fuse Hostels and Travel.</p>
+                <p></p>
+            </Body>
+            <Ovals>
+                <OvalContainer Id="aboutPageIntroductionOvals1" Top="15" Right="-28" />
+                <OvalContainer Id="aboutPageIntroductionOvals2" Bottom="15" Right="18" />
+            </Ovals>
+        </RoundedImageSection>
+    </section>
+    <section id="available-positions" class="overflow-hidden inherit-sticky-parent">
+        <div class="container-fluid p-0 m-0 position-relative bg-light">
+            <SectionIntro Title="Join Our Adventure Team">
+                <div class="col-12 col-lg-6">
+                    <p>Discover Your Next Great Adventure – Explore Exciting Job Opportunities with Fuse Hostels and Travel!</p>
+                </div>
+            </SectionIntro>
+            <div class="container pb-8 text-center">
+                @if (Vacancies is { Count: > 0 } vacancies)
+                {
+                    <div class="row g-6 justify-content-center">
+                        @foreach (var vacancy in vacancies)
+                        {
+                            <div class="col-lg-4 col-md-6 text-start has-parallax-scroll" @key="vacancy.Id">
+                                <ContentCard Card="@(new SiteCard { Id = vacancy.Id, Name = vacancy.JobTitle, ShortDescription = $"<p>{System.Net.WebUtility.HtmlEncode(vacancy.Location)}</p>" })"
+                                             Href="@(vacancy.ApplyUrl ?? $"/join-our-crew/{vacancy.Id}")" Target="@(vacancy.ApplyUrl is null || vacancy.ApplyUrl.StartsWith("mailto:") ? null : "_blank")"
+                                             ButtonText="Apply Now" ButtonClass="btn-primary" InCarousel="true" />
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p>We currently have no Job Vacancies available.</p>
+                }
+            </div>
+        </div>
+    </section>
+    <StayUpToDate />
+    <HostelDetails Hostels="@(Hostels ?? [])" />
+}
+else
+{
+    @* Arriving from another page: its content is loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [PersistentState] public IReadOnlyList<SiteJobVacancy>? Vacancies { get; set; }
+    [PersistentState] public IReadOnlyList<SiteHostelContact>? Hostels { get; set; }
+
+    /// <summary>Legacy's apply link.</summary>
+    [SupplyParameterFromQuery(Name = "tourName")] private string? LegacyApply { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.JoinOurCrew;
+
+    private static readonly (string, string)[] Pills =
+        [("WHY WORK WITH US", "why-work-with-us"), ("AVAILABLE POSITIONS", "available-positions"), ("STAY UP TO DATE", "stay-up-to-date"), ("HOSTELS", "hostels")];
+
+    protected override void OnInitialized()
+    {
+        if (DefaultIdType.TryParse(LegacyApply, out var id))
+            Navigation.NavigateTo($"/join-our-crew/{id}", replace: true);
+    }
+
+    protected override async Task LoadAsync()
+    {
+        var vacancies = Api.Send(new ListSiteJobVacancies()).AsTask();
+        var hostels = Api.Send(new ListSiteHostelContacts()).AsTask();
+        (Vacancies, Hostels) = (await vacancies, await hostels);
+    }
+}

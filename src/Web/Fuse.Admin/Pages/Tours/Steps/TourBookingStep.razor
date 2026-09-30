@@ -1,0 +1,58 @@
+@using Fuse.Contracts.Tours
+
+@* Laid out like the Content step: booking settings in a "Details" section, with the booking
+   confirmation email and waiver terms as text sections beside it. *@
+<ContentSections Sections="_list" />
+
+@code {
+    [Parameter, EditorRequired] public TourInput Tour { get; set; } = null!;
+    [Parameter, EditorRequired] public TourLookups Lookups { get; set; } = null!;
+
+    private IReadOnlyList<ContentSection> _list = [];
+
+    protected override void OnInitialized() // once: the selected section is tracked by instance
+    {
+        _list =
+        [
+            ContentSection.Fields("Details", "Supplier, waiver, QR code and commission", DetailsForm, () => true),
+            new("Booking confirmation email", "Added to the guest's booking confirmation", () => Tour.BookingConfirmationEmailDetails, v => Tour.BookingConfirmationEmailDetails = v),
+            new("Waiver terms & conditions", "Guests sign these when a waiver is required", () => Tour.TermsAndConditions, v => Tour.TermsAndConditions = v),
+        ];
+    }
+
+    private RenderFragment DetailsForm => @<MudGrid Spacing="3">
+        <MudItem xs="12">
+            <MudSelect T="string" HelperText="Select a Supplier" Label="Supplier" @bind-Value="Tour.SupplierId" AnchorOrigin="Origin.BottomLeft" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var supplier in Lookups.Suppliers)
+                {
+                    <MudSelectItem T="string" Value="supplier.Id">@supplier.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Outlined="true" Class="pa-3" Style="height: 100%;">
+                <MudSwitch @bind-Value="Tour.WaiverRequired" Color="Color.Primary" Label="Waiver required" LabelPlacement="Placement.End" Class="ml-n2" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    Guests must sign a waiver before the tour. Its terms are under Waiver terms &amp; conditions.
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Outlined="true" Class="pa-3" Style="height: 100%;">
+                <MudSwitch @bind-Value="Tour.ShowBookingQRCode" Color="Color.Primary" Label="Show booking QR code" LabelPlacement="Placement.End" Class="ml-n2" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    Staff can generate a booking QR code for this tour, even when it isn't published to the website.
+                </MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" lg="4">
+            <MudPaper Outlined="true" Class="pa-3" Style="height: 100%;">
+                <MudSwitch @bind-Value="Tour.ExcludeFromStaffSales" Color="Color.Primary" Label="Exclude from staff sales & commission" LabelPlacement="Placement.End" Class="ml-n2" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+                    For shared products like Bar Hop: never counted in staff sales or commission, however it's booked.
+                    Commission amounts are set per price on the Pricing step.
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>;
+}

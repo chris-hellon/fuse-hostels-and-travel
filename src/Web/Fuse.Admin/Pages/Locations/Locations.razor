@@ -1,0 +1,37 @@
+@page "/admin/management/locations"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Locations)]
+@using Fuse.Contracts.Locations
+
+<AdminPageHeader Title="Locations" Description="Manage Locations." />
+
+<EntityTable @ref="_table" T="LocationSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Locations" Resource="@FuseResource.Locations"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<LocationSummary>> Fields = [new(d => d.Name, "Name", nameof(LocationSummary.Name))];
+
+    private EntityTable<LocationSummary>? _table;
+
+    private async Task<PagedResult<LocationSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchLocations()), cancellationToken);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(LocationSummary location) => OpenWizardAsync(location.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<LocationWizard>(null, new DialogParameters<LocationWizard> { { w => w.LocationId, id } }, LocationWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(LocationSummary location)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this location?", $"\"{location.Name}\" will be deleted straight away.",
+                "Delete location", "Keep location", detail: "Locations that still have tours or properties can't be deleted."))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteLocation(location.Id)), "Location deleted."))
+            await _table!.ReloadAsync();
+    }
+}

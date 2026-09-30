@@ -1,0 +1,25 @@
+@* Book on an event booked as a tour: to the date's departure when the tour can be booked online, else Enquire Now for
+   the tour (the same dialog as the tour's page). *@
+
+@if (Booking is { } booking)
+{
+    @if (booking.Online)
+    {
+        <a class="@Class" href="@EventDates.BookLink(booking, Date)">@ChildContent</a>
+    }
+    else
+    {
+        <button type="button" class="@Class" @onclick="() => Dialogs.OpenTourEnquiry(booking.TourId, booking.TourName)">@ChildContent</button>
+    }
+}
+
+@code {
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+
+    /// <summary>The tour the event is booked as (nothing's shown without one).</summary>
+    [Parameter, EditorRequired] public SiteEventBooking? Booking { get; set; }
+    /// <summary>The date being booked (its departure); none for the tour's page.</summary>
+    [Parameter] public SiteEventDate? Date { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

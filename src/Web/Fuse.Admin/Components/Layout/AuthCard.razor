@@ -1,0 +1,24 @@
+@* The legacy back-office sign-in card (centred, logo, name, heading): sign in, forgot and reset password. *@
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 100vh;">
+    <MudPaper Elevation="25" Class="pa-8" Style="width: 100%;">
+        <div class="d-flex justify-center">
+            <MudImage Src="@Branding.LogoUrl" Height="120" />
+        </div>
+        <div class="d-flex justify-center">
+            <MudText Typo="Typo.h4" GutterBottom="true" Class="mt-3" Align="Align.Center" Style="text-transform: uppercase">@Branding.Name</MudText>
+        </div>
+        <div class="fsh-center-text">
+            <MudText Typo="Typo.h5" GutterBottom="true">@Title</MudText>
+            <MudText>@Intro</MudText>
+        </div>
+        <br />
+        @ChildContent
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Intro { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

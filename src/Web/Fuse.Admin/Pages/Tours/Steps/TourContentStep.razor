@@ -1,0 +1,24 @@
+@using Fuse.Contracts.Tours
+
+<ContentSections @ref="_sections" Sections="_list" />
+
+@code {
+    [Parameter, EditorRequired] public TourInput Tour { get; set; } = null!;
+
+    private ContentSections? _sections;
+    private IReadOnlyList<ContentSection> _list = [];
+
+    protected override void OnInitialized() // once: the selected section is tracked by instance
+    {
+        _list =
+        [
+            new("Short description", "A sentence or two summing up the tour", () => Tour.ShortDescription, v => Tour.ShortDescription = v),
+            new("Full description", "The main text on the tour page", () => Tour.Description, v => Tour.Description = v ?? ""),
+            new("What's included", "What the price covers", () => Tour.WhatsIncluded, v => Tour.WhatsIncluded = v),
+            new("What's not included", "Extras and add-on services", () => Tour.WhatsNotIncluded, v => Tour.WhatsNotIncluded = v),
+        ];
+    }
+
+    /// <summary>Nothing here is required (a ticket-style tour may have no full description).</summary>
+    public bool Validate() => _sections?.EnsureRequired() ?? true;
+}

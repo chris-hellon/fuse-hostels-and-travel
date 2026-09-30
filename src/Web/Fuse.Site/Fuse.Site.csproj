@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <RootNamespace>Fuse.Site</RootNamespace>
+    <!-- Compile the SCSS at build time only. The runtime watcher would stamp an attribute from the
+         SassCompiler assembly onto this library, which the browser can't load (WebAssembly fails to start). -->
+    <SassCompilerEnableWatcher>false</SassCompilerEnableWatcher>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Compiles Styles/fuse.scss (the legacy MDB5 Pro theme) into wwwroot/css/fuse.css at build time. -->
+    <PackageReference Include="AspNetCore.SassCompiler" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fuse.UI\Fuse.UI.csproj" />
+  </ItemGroup>
+
+</Project>

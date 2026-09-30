@@ -1,0 +1,78 @@
+@* Removes every departure in a date range (optionally one start time / one price) from the draft.
+   Dates with bookings are kept. Nothing is removed until the tour is saved. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.DeleteSweep" Class="mr-3 mb-n1" />Delete date range</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudDateRangePicker Label="Dates" AutoClose="true" @bind-DateRange="_range" Margin="Margin.Dense" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy"
+                                MinDate="DateTime.Today" PlaceholderStart="First day" PlaceholderEnd="Last day" />
+            <MudSelect T="TimeOnly?" Label="Start time" @bind-Value="_time" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                       HelperText="Leave empty for every start time.">
+                @foreach (var time in _times)
+                {
+                    <MudSelectItem T="TimeOnly?" Value="time">@time.ToString("HH:mm")</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="DefaultIdType?" Label="Price" @bind-Value="_priceKey" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                       HelperText="Leave empty for every price.">
+                @foreach (var price in Draft.Prices)
+                {
+                    <MudSelectItem T="DefaultIdType?" Value="price.Key">@price.Label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudAlert Severity="@(Matches.Count > 0 ? Severity.Warning : Severity.Normal)" Dense="true" Variant="Variant.Text">@Preview</MudAlert>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" Disabled="@(Deletable == 0)" OnClick="Delete">
+            @(Deletable == 0 ? "Delete dates" : $"Delete {Deletable:N0} date{(Deletable == 1 ? "" : "s")}")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public TourDraft Draft { get; set; } = null!;
+
+    private DateRange? _range;
+    private TimeOnly? _time;
+    private DefaultIdType? _priceKey;
+    private List<TimeOnly> _times = [];
+
+    protected override void OnInitialized() =>
+        _times = [.. Draft.Dates.Select(d => TimeOnly.FromDateTime(d.StartDate)).Distinct().Order()];
+
+    private IReadOnlyList<DateDraft> Matches => _range?.Start is { } first && _range.End is { } last
+        ? Draft.DatesMatching(DateOnly.FromDateTime(first), DateOnly.FromDateTime(last), _time, _priceKey)
+        : [];
+
+    private int Deletable => Matches.Count(d => !d.Booked);
+
+    private string Preview
+    {
+        get
+        {
+            if (_range?.Start is null || _range.End is null)
+                return "Choose the first and last day to see which dates will be removed.";
+            var matches = Matches;
+            if (matches.Count == 0)
+                return "No dates match.";
+            var booked = matches.Count(d => d.Booked);
+            var removed = matches.Count - booked;
+            return $"{removed:N0} date{(removed == 1 ? "" : "s")} will be removed when you save the tour."
+                   + (booked > 0 ? $" {booked:N0} with bookings will be kept." : "");
+        }
+    }
+
+    private void Delete()
+    {
+        var count = Deletable;
+        Draft.DeleteDates(Matches);
+        Snackbar.Add($"{count:N0} date{(count == 1 ? "" : "s")} will be removed when you save the tour.", Severity.Info);
+        Dialog.Close(DialogResult.Ok(count));
+    }
+}

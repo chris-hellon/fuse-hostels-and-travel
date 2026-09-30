@@ -1,0 +1,50 @@
+@* Legacy's Account › QR Codes: a booking QR code per tour for the signed-in staff member (tours on the website, and
+   ones set to show their QR code). Guests who scan one and book are credited to them (staff sales). Download each as
+   a PNG to print. *@
+
+@if (_codes is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_codes.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">There are no tours with booking QR codes. Turn on "Show booking QR code" on a tour (Booking step), or publish it to the website.</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+        Guests who scan one of your codes and book online are credited to you. Codes can also show tours that aren't on the website, at their in-house prices.
+    </MudText>
+    <MudTextField @bind-Value="_search" @bind-Value:after="StateHasChanged" Immediate="true" Placeholder="Search tours" Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4" Style="max-width: 360px;" Clearable="true" />
+    <MudGrid Spacing="3">
+        @foreach (var qr in Shown)
+        {
+            <MudItem xs="12" sm="6" md="4" lg="3" @key="qr.Url">
+                <MudPaper Outlined="true" Class="pa-4 d-flex flex-column align-center" Style="height: 100%;">
+                    <MudText Typo="Typo.subtitle2" Align="Align.Center" Class="mb-2">@qr.TourName</MudText>
+                    <img src="@qr.PngDataUrl" alt="@($"Booking QR code for {qr.TourName}")" style="width: 180px; height: 180px;" />
+                    <div class="d-flex gap-2 mt-3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                                   Href="@qr.PngDataUrl" UserAttributes="@Download(qr)">Download</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew" Href="@qr.Url" Target="_blank">Open</MudButton>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private IReadOnlyList<TourQrCode>? _codes;
+    private string? _search;
+
+    private IEnumerable<TourQrCode> Shown =>
+        string.IsNullOrWhiteSpace(_search) ? _codes! : _codes!.Where(c => c.TourName.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () => _codes = await Api.Send(new ListMyTourQrCodes()));
+
+    /// <summary>Saves as "{tour}.png" (legacy's file name).</summary>
+    private static Dictionary<string, object> Download(TourQrCode code) =>
+        new() { ["download"] = $"{string.Concat(code.TourName.Split(Path.GetInvalidFileNameChars()))}.png" };
+}

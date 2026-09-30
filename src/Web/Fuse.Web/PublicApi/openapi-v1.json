@@ -1,0 +1,3423 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Travaloud Booking API",
+    "description": "Machine-to-machine API for booking **tours**. (Property/hostel bookings are not handled here.)\n\n## Authentication\n\nThis API uses **client credentials**. Your application is issued a `ClientId` and `ClientSecret`.\n\n1. `POST /api/token` with `{ \"clientId\": \"…\", \"clientSecret\": \"…\" }`.\n2. You receive a short-lived **JWT**: `accessToken`, `tokenType` (`Bearer`) and `expiresIn` (seconds).\n3. Send it on every other call as a header — `Authorization: Bearer {accessToken}`.\n\nThe token represents a configured service user; bookings you create are attributed to it. When the\ntoken expires (see `expiresIn`), request a new one. Use the **Authorize** button to paste a token\nand try requests directly from this page.\n\n## Rate limits\n\n- `POST /api/token` — **10 requests per minute, per IP**.\n- All authenticated endpoints — **120 requests per minute, per client**.\n\nExceeding a limit returns **429 Too Many Requests** with a `Retry-After` header (in seconds). Back\noff and retry after that period.\n\n## Date range limits\n\nEndpoints that filter by a date range return at most **one month (31 days)** of data per call:\n\n- `POST /api/bookings/search` — each of `bookingStartDate`/`bookingEndDate` and\n  `tourStartDate`/`tourEndDate` may span at most 31 days.\n- `GET /api/tours/{id}` — the `from`/`to` departures window may span at most 31 days (and\n  defaults to the next month when omitted).\n\nA wider range (or an end date before its start) returns **400** with a message stating how wide\nthe requested range was. To cover a longer period, make several calls a month at a time.\n\n## Errors\n\nResponses use standard HTTP status codes:\n\n- **400** — validation failed. Body is an RFC-7807 problem with an `errors` map keyed by field.\n- **401** — missing, invalid or expired token (or bad credentials on `/api/token`).\n- **403** — the token's user isn't permitted to use the API.\n- **404** — the resource was not found.\n- **409** — a conflict, e.g. a chosen tour departure no longer has enough free spaces.\n- **429** — rate limited (see above).\n\n## Booking a tour — end to end\n\n1. **Find or create the guest.** `POST /api/users/search` to find them, or `POST /api/users`\n   (`isGuest: true`) to create one. Keep the returned `id`.\n2. **Find a tour.** `POST /api/tours/search` — optionally filter by `name`, by `tourCategoryId`\n   (from `GET /api/tours/categories`), or by `locationId` (from `GET /api/tours/locations`).\n3. **Pick a departure.** `GET /api/tours/{id}` returns the tour's departures (defaults to the next\n   month — use `from` / `to` / `minSpaces`, with `from`/`to` spanning at most 31 days), its pickup\n   locations, and the locations it visits.\n4. **Create the booking.** `POST /api/bookings` with the booker's `guestId`, a `paymentMethod`\n   (`Stripe` or `Cash`), and one or more `items` — each with a `tourId`, a `tourDateId`, and the\n   `guestIds` of everyone travelling. The server derives the dates, prices, totals, currency\n   (always **USD**) and the booking's guest details, so you don't send them.\n5. **Take payment.**\n   - **Stripe** — the create response includes a hosted `checkoutUrl`. Send the guest there; once\n     Stripe confirms payment the booking is marked paid automatically. Need a fresh link?\n     `POST /api/bookings/{id}/stripe-checkout`.\n   - **Cash** — collect payment in person, then settle with `POST /api/bookings/{id}/flag-as-paid`.\n\nBookings cannot be edited through this API — updates are an admin-only operation.\n\n## Building a basket — packages & pack incentives\n\nBeyond single tours, two things can make a multi-tour basket cheaper or earn the seller a reward:\na **package** (a fixed bundle sold at one price) and a **pack incentive** (a reward for booking any\nN of a set of eligible tours). You don't need to know these up front — as the guest adds tours, let\nthe API spot them:\n\n1. **Build the basket** by finding tours (`POST /api/tours/search`, `GET /api/tours/{id}`) as usual.\n2. **After each change, ask the API what the basket is worth.** Send the basket's tour ids to:\n   - `POST /api/packages/match` — does the basket *exactly* make up a package?\n   - `POST /api/pack-incentives/match` — does it qualify for a pack incentive?\n\n   Each returns the matching package / pack (or `204 No Content`). You never re-implement the\n   matching rules — the server owns them.\n3. **Offer the best option and book it — always `POST /api/bookings`.** One booking can carry loose\n   tours (`items`), packages (`packages`) and a pack mark together, just like the admin:\n   - **Package matched** → offer the package price, then include it in `packages` on the booking.\n   - **Pack matched** → offer to mark the booking, then send the tours as `items` and set\n     `packIncentiveId`.\n   - **Neither** → send the tours as `items`.\n\nThere is a single create endpoint — `POST /api/bookings` — for every case (loose tours, one or more\npackages, a pack mark, or any mix). A guest can also pick a package outright without assembling it\ntour-by-tour — start at `POST /api/packages/search`. The sections below cover each path in full.\n\n## Packages — booking a fixed bundle of tours\n\nA **package** bundles several tours together at a set price (for example a \"combo\" of a cooking\nclass plus a bike tour). The guest books all of the package's tours in one go, pays the package\nprice, and the tours are grouped together on the booking.\n\n1. **Find a package.** `POST /api/packages/search` — optionally filter by `name` or by\n   `tourCategoryId` (from `GET /api/tours/categories`). Each result carries the package's `id`,\n   name, image, price `tiers` and a `priceFrom`/`priceTo` range, so you can list packages with\n   prices already shown.\n2. **Get the package's tours.** `GET /api/packages/{id}` returns:\n   - `tours` — the tours the package includes, each with its `tourId` and `quantity`.\n   - `tiers` — the package's price tiers (e.g. *Standard*, or *Adult* / *Child*). Each tier has\n     an `id` and a `total` (the package price per guest for that tier).\n\n   The guest pays the **tier price**, not the tours' individual prices.\n3. **Pick a departure for each tour.** For every tour the package lists, call\n   `GET /api/tours/{tourId}` and choose a departure (`tourDateId`) — exactly one per package tour.\n4. **Book it.** `POST /api/bookings` with the booking's `guestId` and `paymentMethod`, and the package\n   as one entry in the `packages` array:\n   - `packageId` — the package's `id`.\n   - `tierId` — which price tier to charge, from the package's `tiers`.\n   - `tours` — one entry per package tour: `{ \"tourId\": …, \"tourDateId\": … }` (optionally a\n     `pickupLocation`). You must include **every** tour the package lists.\n   - `guestIds` — any additional travellers on the package (the lead booker is always a seat).\n\n   The server prices each package tour at the tier price, groups them, and works out the totals and\n   currency (always **USD**). A booking may contain several `packages` and loose `items` at once.\n5. **Take payment** exactly as for a normal tour booking — the Stripe `checkoutUrl` in the\n   response, or `Cash` followed by `POST /api/bookings/{id}/flag-as-paid`.\n\n**Spotting a package in the basket.** If a guest adds tours one by one that happen to make up a\npackage, call `POST /api/packages/match` with the basket's tour ids. If they exactly match a package,\nit's returned (same shape as `GET /api/packages/{id}`) so you can offer the package price and book it\nas a `packages` entry on `POST /api/bookings`; if not, you get `204 No Content`. Call it as the basket\nchanges.\n\n## Pack incentives — a \"book any N of these\" reward\n\nA **pack incentive** (e.g. *Pack 3*, *Pack 4*) is **not** a fixed bundle. It's a reward for\nbooking **any N of a set of eligible tours** — you attach it to a booking as a **mark**. When the\nbooking qualifies, the sale earns the pack's commission, and (if you choose a tier) the booking is\ncharged the pack's own price.\n\n1. **List the packs.** `GET /api/pack-incentives` returns each active pack with:\n   - `id`, `name`.\n   - `minimumProductCount` — how many **distinct eligible tours** the booking must contain.\n   - `commissionAmount` — the reward paid per guest when it qualifies.\n   - `tours` — the eligible tours (their `tourId`s) that count toward the pack.\n   - `tiers` — the pack's sale-price tiers (each with an `id`, `title`, `price`).\n2. **Mark a booking for a pack.** When you create a booking with `POST /api/bookings`, send the pack's\n   `id` as `packIncentiveId`. Optionally also send `packIncentiveTierId` (a tier `id` from the pack) to\n   charge the booking at that tier's pack price; that price is split evenly across the pack's eligible\n   tours.\n3. **What qualifies.** The pack only pays when the booking actually contains at least\n   `minimumProductCount` distinct eligible tours that operate. If it doesn't, the mark simply\n   earns nothing — it is never an error to mark a booking that ends up not qualifying.\n\n**Spotting a pack in the basket.** Rather than checking the thresholds yourself, call\n`POST /api/pack-incentives/match` with the basket's tour ids; it returns the best pack the basket\nqualifies for (or `204 No Content`), so you can offer to mark the booking for it.\n\n### Package vs pack incentive — which is which\n\n- A **package** is a fixed set of tours sold together at one price — send it in the `packages` array\n  on `POST /api/bookings`.\n- A **pack incentive** is a flexible \"any N eligible tours\" reward you attach to a booking with\n  `packIncentiveId`.\n\nThey're independent, and both live on the same `POST /api/bookings`. A pack incentive is evaluated\nagainst the **loose** tours on a booking (its `items`), so it doesn't reward a package's own grouped\ntours — to earn a pack, the eligible tours must be present as loose `items`.\n\n## Test / development mode\n\nSet `isDevelopment: true` on `POST /api/bookings` to use the tenant's **test-mode** Stripe\ncredentials and clearly tag the booking as a test: its description gets a `[TEST]` suffix, its\nnotes get a \"DO NOT ACTION\" banner, and it's attributed to the configured development user.\nThe booking is still created as a real record.\n\n## Webhook — booking paid\n\nInstead of polling for paid bookings, this API can **push** to you: build an endpoint that\nreceives a POST, tell us its URL, and we'll call it every time one of your tour bookings is\npaid. **This section describes what *you* must build to receive it.**\n\n### What you build\nAn HTTPS endpoint (any path you like) that accepts `POST` with `Content-Type: application/json`,\nthen send us its full URL so we can register it against your client.\n\n### What we send you\nWhen a booking becomes paid, we make this request to your endpoint:\n\n```http\nPOST https://your-endpoint.example.com/whatever-you-chose\nContent-Type: application/json\nAuthorization: Basic <base64(clientId + \":\" + clientSecret)>\n\n{ \"cloudbedsGuestIds\": [\"1234567\", \"8901234\"] }\n```\n\n- **When** — once per booking, at the moment it becomes paid (a guest completing Stripe\n  payment, or staff settling it). We send it once on that transition, not on every change.\n- **`Authorization`** — HTTP Basic, built from the **same `clientId` and `clientSecret`** you\n  already use to get a token from `POST /api/token`. There is no separate webhook secret.\n- **Body** — a JSON object with `cloudbedsGuestIds`: the Cloudbeds guest ids for everyone on\n  the booking (the lead booker plus any additional travellers). Guests with no Cloudbeds id are\n  left out; the array always has at least one id.\n\n### What your endpoint must do\n1. **Authenticate the call.** Decode the `Authorization: Basic` header, and confirm the\n   `clientId:clientSecret` it contains matches your own credentials. If it doesn't, return\n   **401** and ignore the request — that's how you know the call genuinely came from us.\n2. **Do your work** with the `cloudbedsGuestIds` (store them, forward them, etc.).\n3. **Respond `2xx`** (e.g. `200`) once you've safely received them. Return as soon as possible.\n\n### Retries & idempotency\nIf your endpoint returns a non-2xx status, times out, or is unreachable, we **retry** the\ndelivery several times with increasing delays. Because of that, **the same booking's ids may\narrive more than once** — make your handler idempotent (processing a duplicate should be a\nno-op), e.g. de-duplicate on the set of guest ids or track what you've already handled.",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/token": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Sign in and obtain a bearer token",
+        "description": "Provide your application's ClientId/ClientSecret. On success you receive a short-lived JWT that represents the client's configured service user; pass it as 'Authorization: Bearer {token}' on all other endpoints.",
+        "operationId": "GetToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/bookings/search": {
+      "post": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Find tour bookings",
+        "description": "Searches existing tour bookings and returns them a page at a time, newest first.\n\n**Search** — `keyword` matches the booking description, the guest's name, the invoice number, the booking date, or the total amount (e.g. \"Smith\", \"1042\", \"2026-06-18\").\n\n**Filters** (all optional, combined with AND):\n- `tourId` — only bookings for one specific tour (id from `POST /api/tours/search`).\n- `cloudbedsGuestId` — only bookings for the guest with this Cloudbeds guest id.\n- `bookingStartDate` + `bookingEndDate` — only bookings *placed* between those dates (supply both, or the filter is ignored).\n- `tourStartDate` + `tourEndDate` — only bookings whose tour *departs* between those dates (supply both, or the filter is ignored).\n\n**Date range limit** — each date range may span at most **31 days**. A wider range (or an end date before its start) returns **400** with a message telling you how wide the range was; page through a long period one month at a time.\n\n**Paging** — `pageNumber` starts at 1 (default 1), `pageSize` defaults to 10. The response tells you `totalCount`, `totalPages`, `currentPage`, `hasNextPage` and `hasPreviousPage`.\n\n**Sorting** — `orderBy` is an array like `[\"BookingDate Descending\"]`; you can sort by `BookingDate`, `TotalAmount` or `InvoiceId`. Defaults to newest booking first.",
+        "operationId": "SearchBookings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchBookingsApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingListDtoPaginationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bookings/{id}": {
+      "get": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Get one booking by id",
+        "description": "Returns the full details of a single booking, including its items, guests, payments and current paid/outstanding amounts.",
+        "operationId": "GetBooking",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/bookings": {
+      "post": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Create a booking — loose tours, packages, or both",
+        "description": "Creates one booking. It can hold any mix of **loose tours** (`items`) and **packages** (`packages`), and be marked for a **pack incentive** — exactly like the admin, where a single booking may contain several packages plus individual tours. You send only what you choose; dates, prices, the booking total, the guest count, the currency (always USD) and the booker's name/email are worked out for you. The booking is created **unpaid** and recorded as the Booking App source. It must contain at least one tour overall (a loose item or inside a package).\n\n**Who's on the booking** — `guestId` is the lead booker (always one seat). On a loose `item`, its `guestIds` are the *additional* travellers on that tour; on a `package`, its `guestIds` are the additional travellers who ride every tour in that package. Every id must be an existing guest (`POST /api/users/search` or `POST /api/users`); an unknown id returns **400**.\n\n**Loose tours (`items`)** — each gives a `tourId`, the `tourDateId` of the departure, and its `guestIds`. The price comes from that departure.\n\n**Packages (`packages`)** — each gives a `packageId`, a `tierId`, its `guestIds`, and one departure per tour the package contains (`tours`: `tourId` + `tourDateId`). Each package's tours are charged at the *package* price for the tier and grouped together; you must cover every tour the package lists, exactly once. Discover packages with `POST /api/packages/search`, or detect one from a basket with `POST /api/packages/match`.\n\n**Pack incentive** — set `packIncentiveId` (and optionally `packIncentiveTierId`) to mark the booking for a pack; see the Pack Incentives section.\n\n**Errors** — **400** for an unknown guest/tour/package/tier or a bad/duplicate/missing tour date; **409** if a departure no longer has enough free spaces.\n\n**Payment** — `paymentMethod` is `\"Stripe\"` or `\"Cash\"` (text, not a number).\n- `\"Stripe\"` — the response includes a hosted `checkoutUrl` charging the booking total (the package/pack-adjusted amount); the booking is marked paid once Stripe confirms. If the URL can't be generated the booking still exists and `checkoutError` says why — fetch one later via `POST /api/bookings/{id}/stripe-checkout`.\n- `\"Cash\"` — no checkout URL; settle later with `POST /api/bookings/{id}/flag-as-paid`.",
+        "operationId": "CreateBooking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookingApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateBookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bookings/{id}/flag-as-paid": {
+      "post": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Mark a booking as paid",
+        "description": "Flags the booking as paid and settles its outstanding balance. Call this after collecting payment — pass the Stripe Checkout `stripeSessionId` when paid via Stripe, or send an empty body for cash/other settlement.\n\nNote: Stripe bookings paid via the hosted `checkoutUrl` are flagged paid automatically when Stripe confirms payment, so you only need this for cash/manual settlement or to reconcile a known Stripe session.",
+        "operationId": "FlagBookingAsPaid",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlagBookingAsPaidApiRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingIdResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/bookings/{id}/stripe-checkout": {
+      "post": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Generate a Stripe Checkout URL for a booking",
+        "description": "Creates a hosted Stripe Checkout session for an existing, unpaid Stripe booking and returns its `url` — the same session the Admin app generates. Send the guest to that URL to pay; on completion Stripe notifies the backend, which marks the booking paid. The success/cancel redirect URLs come from the tenant's Stripe configuration.\n\n`POST /api/bookings` already returns this URL for Stripe bookings — use this endpoint to obtain a fresh one (e.g. if the original expired). Returns **409** if the booking is not a Stripe booking or has no guest email.",
+        "operationId": "CreateBookingStripeCheckout",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StripeCheckoutResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pack-incentives": {
+      "get": {
+        "tags": [
+          "Pack Incentives"
+        ],
+        "summary": "List active pack incentives",
+        "description": "Returns the active pack incentives a booking can be marked for, each with its eligible tours, the `minimumProductCount` of distinct eligible tours required, and the per-guest `commissionAmount`.\n\nTo mark a booking for a pack, send its `id` as `packIncentiveId` when creating the booking (`POST /api/bookings`). The pack pays only when the booking actually contains at least `minimumProductCount` distinct eligible tours that operate — otherwise the mark simply earns nothing.",
+        "operationId": "GetPackIncentives",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PackIncentiveApiDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pack-incentives/match": {
+      "post": {
+        "tags": [
+          "Pack Incentives"
+        ],
+        "summary": "Detect which pack incentive a basket qualifies for",
+        "description": "Send the tour ids currently in the basket. If they qualify for a pack incentive — the basket holds at least the pack's `minimumProductCount` distinct eligible tours — the best-matching pack is returned (the highest threshold met, so a bigger pack wins over a smaller one), the same shape as `GET /api/pack-incentives`. Mark the booking for it by sending its `id` as `packIncentiveId` (and optionally a tier as `packIncentiveTierId`) when you create the booking. If nothing qualifies, the call returns **204 No Content**.",
+        "operationId": "MatchPackIncentive",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchPackIncentiveApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackIncentiveApiDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/packages/search": {
+      "post": {
+        "tags": [
+          "Packages"
+        ],
+        "summary": "Find packages",
+        "description": "Returns a page of packages, each with its price tiers (`tiers`) and a `priceFrom`/`priceTo` range, so a list can show prices without a second call. For the tours a package contains and their per-tour prices, call `GET /api/packages/{id}`.\n\n**Search** — `name` matches part of the package name; `tourCategoryId` restricts to one category. Both are optional.\n\n**Paging** — `pageNumber` starts at 1 (default 1), `pageSize` defaults to 10.",
+        "operationId": "SearchPackages",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchPackagesApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageSearchResultDtoPaginationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/packages/{id}": {
+      "get": {
+        "tags": [
+          "Packages"
+        ],
+        "summary": "Get a package's tours and prices",
+        "description": "Returns the package with the tours it includes, each with the per-tier package prices and quantity, plus the package `tiers`. To book it, call `POST /api/bookings` — add it to the `packages` array with the package id, a `tierId`, and a departure (`tourDateId`) for each tour; the tours are charged at the package price and grouped.",
+        "operationId": "GetPackage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageDetailsApiDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/packages/match": {
+      "post": {
+        "tags": [
+          "Packages"
+        ],
+        "summary": "Detect whether a basket of tours is a package",
+        "description": "Send the tour ids currently in the basket. If they **exactly** make up a package (same set of tours, ignoring order and duplicates), the matching package is returned — the same shape as `GET /api/packages/{id}`, so you can offer the package price and then book it as a `packages` entry on `POST /api/bookings`. If the basket is not a package, the call returns **204 No Content**.\n\nUse it to spot a package a guest has assembled tour-by-tour without picking the package itself. The match is exact: a basket that merely *contains* a package's tours plus extras does not match.",
+        "operationId": "MatchPackage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchPackageApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackageDetailsApiDto"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/tours/categories": {
+      "get": {
+        "tags": [
+          "Tours"
+        ],
+        "summary": "List all tour categories",
+        "description": "Returns every tour category. Use a category's `id` as the `tourCategoryId` filter on `POST /api/tours/search` to narrow tours to a category.",
+        "operationId": "GetTourCategories",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TourCategoryApiDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tours/locations": {
+      "get": {
+        "tags": [
+          "Tours"
+        ],
+        "summary": "List all locations",
+        "description": "Returns every location (destination) that tours visit, as an id and name. Locations also appear on each tour in search results and in `GET /api/tours/{id}`.",
+        "operationId": "GetTourLocations",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TourLocationApiDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tours/search": {
+      "post": {
+        "tags": [
+          "Tours"
+        ],
+        "summary": "Find tours you can book",
+        "description": "Returns a page of tours. Use it to find the tour you want, then call `GET /api/tours/{id}` for its bookable departures and pickup locations.\n\n**Search** — `name` matches part of the tour name; `tourCategoryId` limits results to one category (see `GET /api/tours/categories`); `locationId` limits results to tours that visit one location (see `GET /api/tours/locations`). All are optional and combine.\n\n**Paging** — `pageNumber` starts at 1 (default 1), `pageSize` defaults to 10. Each result is a summary including the tour's `id`, which you pass to `GET /api/tours/{id}`.",
+        "operationId": "SearchTours",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchToursApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TourSearchResultDtoPaginationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tours/{id}": {
+      "get": {
+        "tags": [
+          "Tours"
+        ],
+        "summary": "Get a tour's departures, pickup locations and locations",
+        "description": "Returns everything you need to book this tour: its bookable departures (each with live `availableSpaces` and a per-guest `price` for display), its pickup locations, and the locations (destinations) it visits.\n\n**Departures window** — `from` and `to` (dates) bound the departures returned. Omit them and it defaults to the next month from today (a tour can have hundreds of dates). The window may span at most **31 days**; a wider `from`/`to` returns **400**. `minSpaces` returns only departures with at least that many seats free.\n\nTo build a booking item, send: `tourId` = this tour's `id`, `tourDateId` = the chosen departure's `id`, `guestIds` = the people travelling, and (optionally) `pickupLocation` = a pickup location's `propertyName`.",
+        "operationId": "GetTourBookingOptions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "minSpaces",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TourBookingOptionsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/search": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Find guests and staff",
+        "description": "Searches the people in the system (guests and staff) and returns them a page at a time. Use this to look up the guest a booking is for before calling `POST /api/bookings`; if the guest isn't found, create them with `POST /api/users`.\n\n**Search** — `keyword` is matched against first name, last name, email and phone number. Set `role` to `Guest` to return only customers (other roles are `Admin`, `Basic`, `TourManager`, `PropertyManager`, `Supplier`). Both are optional; omit them to list everyone.\n\n**Paging** — `pageNumber` starts at 1 (default 1), `pageSize` defaults to 10. The response tells you `totalCount`, `totalPages`, `currentPage`, `hasNextPage` and `hasPreviousPage`.\n\n**Sorting** — `orderBy` is an array like `[\"LastName Ascending\"]`; you can sort by `FirstName`, `LastName` or `Email`. Defaults to first name A→Z.\n\nEach result includes the user's `id` — that's the value you pass as `guestId` when creating a booking.",
+        "operationId": "SearchUsers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchUsersApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailsDtoPaginationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get one person by id",
+        "description": "Returns the full details of a single guest or staff member by their id.",
+        "operationId": "GetUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailsDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update a person's details",
+        "description": "Updates an existing guest or staff member. The id comes from the URL.",
+        "operationId": "UpdateUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Register a new guest (or staff member)",
+        "description": "Creates a new person. Set `isGuest` to true to register a customer you can then book tours for. The response contains their `id` — pass that as `guestId` on `POST /api/bookings`. First and last name and a password are required; an email is strongly recommended because booking confirmations are sent there.",
+        "operationId": "CreateUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateUserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BookPackageTourApiRequest": {
+        "type": "object",
+        "properties": {
+          "tourId": {
+            "type": "string",
+            "description": "The tour's id, matching one of the package's tours (`GET /api/packages/{id}`). Required.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourDateId": {
+            "type": "string",
+            "description": "The chosen departure for this tour (a date from `GET /api/tours/{id}`). Required.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "pickupLocation": {
+            "type": "string",
+            "description": "A pickup location name from the tour's listed options. Optional.",
+            "nullable": true
+          },
+          "otherPickupLocation": {
+            "type": "string",
+            "description": "A free-text pickup location, if not one of the listed options. Optional.",
+            "nullable": true
+          },
+          "waiverSigned": {
+            "type": "boolean",
+            "description": "True if the waiver for this tour has been signed. Optional."
+          }
+        },
+        "additionalProperties": false,
+        "description": "One tour of a package, with the chosen departure. The price comes from the package/tier, not here."
+      },
+      "BookingDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalAmount": {
+            "type": "number",
+            "format": "double"
+          },
+          "currencyCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "itemQuantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isPaid": {
+            "type": "boolean"
+          },
+          "bookingDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "guestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestName": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "invoiceId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "concurrencyVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "stripeSessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "additionalNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "waiverSigned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "bookingSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmationEmailSent": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "refunded": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "amountOutstanding": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingItemDetailsDto"
+            },
+            "nullable": true
+          },
+          "bookingPackages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingPackageDto"
+            },
+            "nullable": true
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingPaymentDto"
+            },
+            "nullable": true
+          },
+          "cancelled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "paymentMethod": {
+            "enum": [
+              "Stripe",
+              "Cash"
+            ],
+            "type": "string",
+            "description": "How the booking is paid. `Stripe` returns a hosted checkout URL; `Cash` is settled manually via flag-as-paid."
+          },
+          "packIncentiveId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "packIncentiveTierId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingIdResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response carrying a booking id."
+      },
+      "BookingItemDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "isCreate": {
+            "type": "boolean"
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalAmount": {
+            "type": "number",
+            "format": "double",
+            "readOnly": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "roomQuantity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "propertyId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourName": {
+            "type": "string",
+            "nullable": true
+          },
+          "tourDateId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourPriceId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "cloudbedsReservationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsPropertyId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "showDetails": {
+            "type": "boolean"
+          },
+          "showGuestDetails": {
+            "type": "boolean"
+          },
+          "concurrencyVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pickupLocation": {
+            "type": "string",
+            "nullable": true
+          },
+          "waiverSigned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "bookingPackageId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "noShow": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "cancelled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "checkedIn": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "refunded": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "partialRefund": {
+            "type": "boolean",
+            "nullable": true,
+            "readOnly": true
+          },
+          "tour": {
+            "$ref": "#/components/schemas/TourDto"
+          },
+          "tourDate": {
+            "$ref": "#/components/schemas/TourDateDto"
+          },
+          "tourPrice": {
+            "$ref": "#/components/schemas/TourPriceDto"
+          },
+          "tourCategory": {
+            "$ref": "#/components/schemas/TourCategoryDto"
+          },
+          "property": {
+            "$ref": "#/components/schemas/PropertyDto"
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingItemRoomDto"
+            },
+            "nullable": true
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingItemGuestDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingItemGuestDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingItemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "guestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "nationality": {
+            "type": "string",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true
+          },
+          "noShow": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "cancelled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "checkedIn": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingItemRoomDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingItemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roomName": {
+            "type": "string",
+            "nullable": true
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "nights": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "checkInDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "checkOutDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "guestFirstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestLastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingListDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalAmount": {
+            "type": "number",
+            "format": "double"
+          },
+          "currencyCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "itemQuantity": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "isPaid": {
+            "type": "boolean"
+          },
+          "bookingDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "guestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestName": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestNationality": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestGender": {
+            "type": "string",
+            "nullable": true
+          },
+          "guestDateOfBirth": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "invoiceId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "showDetails": {
+            "type": "boolean"
+          },
+          "isLoadingDetails": {
+            "type": "boolean"
+          },
+          "concurrencyVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "additionalNotes": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "staffName": {
+            "type": "string",
+            "nullable": true
+          },
+          "waiverSigned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "bookingSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmationEmailSent": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "refunded": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "amountOutstanding": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cancelled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "noShow": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "partialRefund": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "checkedIn": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "containsPackage": {
+            "type": "boolean"
+          },
+          "packIncentiveId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingListItemDto"
+            },
+            "nullable": true
+          },
+          "payments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingPaymentDto"
+            },
+            "nullable": true
+          },
+          "primaryGuest": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingListDtoPaginationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingListDto"
+            },
+            "nullable": true
+          },
+          "currentPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalAmount": {
+            "type": "number",
+            "format": "double",
+            "readOnly": true
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "tourId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourName": {
+            "type": "string",
+            "nullable": true
+          },
+          "tourDateId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "bookingPackageId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "packageName": {
+            "type": "string",
+            "nullable": true
+          },
+          "pickupLocation": {
+            "type": "string",
+            "nullable": true
+          },
+          "waiverSigned": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "noShow": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "cancelled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "checkedIn": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "refunded": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "partialRefund": {
+            "type": "boolean",
+            "nullable": true,
+            "readOnly": true
+          },
+          "showDetails": {
+            "type": "boolean"
+          },
+          "showGuestDetails": {
+            "type": "boolean"
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingItemGuestDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingPackageApiRequest": {
+        "type": "object",
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "description": "The package to book, from `POST /api/packages/search`. Required.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tierId": {
+            "type": "string",
+            "description": "The price tier to book at (e.g. Adult, Child), from the package's `tiers` in\r\n`GET /api/packages/{id}`. Required — it sets the package price for every tour.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "guestIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The <em>additional</em> travellers on this package, by guest id — not the lead booker, who is always\r\none seat. The same travellers ride every tour in the package (seats per tour = this list plus one).\r\nMay be empty for a solo booking. Each must be an existing guest; unknown ids return 400.",
+            "nullable": true
+          },
+          "tours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookPackageTourApiRequest"
+            },
+            "description": "A departure for each tour in the package — exactly one entry per tour listed in\r\n`GET /api/packages/{id}`. Missing, duplicated or unknown tours are rejected with a 400.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A package booked within a booking. A package bundles several tours at a set per-tier price; you choose\r\nthe tier and a departure for each of the package's tours, and the server expands it into the booking\r\ngrouped as that package — each tour charged at the <em>package</em> price, not its normal price."
+      },
+      "BookingPackageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "packageName": {
+            "type": "string",
+            "nullable": true
+          },
+          "packagePrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "tierTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "commissionAmount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "commissionIgnoresMinimumPax": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingPaymentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bookingInvoiceId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "refunded": {
+            "type": "boolean"
+          },
+          "stripeSessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "customerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "customerEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "paymentDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "paymentMethod": {
+            "enum": [
+              "Stripe",
+              "Cash"
+            ],
+            "type": "string",
+            "description": "How the booking is paid. `Stripe` returns a hosted checkout URL; `Cash` is settled manually via flag-as-paid.",
+            "nullable": true
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommissionMinimumPaxScope": {
+        "enum": [
+          0,
+          1
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "CreateBookingApiRequest": {
+        "type": "object",
+        "properties": {
+          "guestId": {
+            "type": "string",
+            "description": "The id of the guest making the booking (the lead booker). Required, and must be an existing\r\nguest: look them up with `POST /api/users/search`, or create one with `POST /api/users`\r\n(isGuest = true) and use the id it returns. An unknown id is rejected with a 400. Their name and\r\nemail come from their record, and the booking confirmation is sent to them.",
+            "nullable": true
+          },
+          "paymentMethod": {
+            "enum": [
+              "Stripe",
+              "Cash"
+            ],
+            "type": "string",
+            "description": "How the booking will be paid. Send the text `\"Stripe\"` (the guest pays online and you get\r\na checkout link back) or `\"Cash\"` (collected in person). No other value is accepted."
+          },
+          "additionalNotes": {
+            "type": "string",
+            "description": "Any free-text notes to attach to the booking. Optional.",
+            "nullable": true
+          },
+          "packIncentiveId": {
+            "type": "string",
+            "description": "Optional \"pack\" incentive mark, from `GET /api/pack-incentives`. When set, the seller earns the\r\npack's flat per-guest commission (instead of the eligible tours' individual commissions) provided this\r\nbooking contains at least the pack's `minimumProductCount` distinct eligible tours that operate.\r\nAn unknown id is rejected with a 400.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "packIncentiveTierId": {
+            "type": "string",
+            "description": "The pack's price tier to charge at (a tier id from `GET /api/pack-incentives`). Required when\r\n`packIncentiveId` is set: the booking is then charged that tier price, split evenly across the\r\npack's eligible tours, instead of the tours' own prices.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateBookingItemApiRequest"
+            },
+            "description": "The loose (individually-priced) tours on the booking. Optional when you send `packages`, but the\r\nbooking must contain at least one tour overall — loose or inside a package. Get tours from\r\n`GET /api/tours/{id}`.",
+            "nullable": true
+          },
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingPackageApiRequest"
+            },
+            "description": "Packages booked within this booking (zero or more). Each is expanded into its tours at the package\r\nprice and grouped together — one booking can hold several packages as well as loose `items`.\r\nDiscover packages with `POST /api/packages/search`; a basket of loose tours can be recognised as a\r\npackage with `POST /api/packages/match`.",
+            "nullable": true
+          },
+          "isDevelopment": {
+            "type": "boolean",
+            "description": "Stripe bookings only. When true, the checkout uses the tenant's `Development` (test-mode)\r\nStripe credentials instead of the live ones — for testing against the real API. Default false."
+          },
+          "successUrl": {
+            "type": "string",
+            "description": "Stripe bookings only. Overrides where Stripe sends the guest after a successful payment.\r\nOptional — defaults to the tenant's configured payment-confirmation page.",
+            "nullable": true
+          },
+          "cancelUrl": {
+            "type": "string",
+            "description": "Stripe bookings only. Overrides where Stripe sends the guest if they cancel. Optional —\r\ndefaults to the tenant's configured order-failed page.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "What you send to book a tour. Keep it minimal — anything that can be looked up is worked out for\r\nyou: each departure's dates and price, the booking total, the guest count, the currency (always\r\nUSD) and the booker's name and email. The staff member who placed the booking is taken from your\r\naccess token. This API books tours only."
+      },
+      "CreateBookingItemApiRequest": {
+        "type": "object",
+        "properties": {
+          "tourId": {
+            "type": "string",
+            "description": "The id of the tour being booked (from `POST /api/tours/search`). Required.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourDateId": {
+            "type": "string",
+            "description": "The id of the chosen departure (a date from `GET /api/tours/{id}`). Required.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "guestIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The <em>additional</em> travellers on this tour, by guest id — not the lead booker, who is always\r\ncounted as one seat automatically. May be empty for a solo booking. Each must be an existing guest\r\n(create them with `POST /api/users` if needed); an unknown id is rejected with a 400. The seat\r\ncount the per-guest price is multiplied by is the number listed here plus one for the lead booker.",
+            "nullable": true
+          },
+          "pickupLocation": {
+            "type": "string",
+            "description": "A pickup location name from the tour's listed options (`GET /api/tours/{id}`). Optional.",
+            "nullable": true
+          },
+          "otherPickupLocation": {
+            "type": "string",
+            "description": "A free-text pickup location, if it isn't one of the tour's listed options. Optional.",
+            "nullable": true
+          },
+          "waiverSigned": {
+            "type": "boolean",
+            "description": "True if the waiver for this tour has been signed. Optional."
+          }
+        },
+        "additionalProperties": false,
+        "description": "One tour on the booking. You pick the tour, the departure, and who else is going; the server reads\r\nthe dates and price from that departure. The lead booker always counts as one seat, so the seat count\r\nis the number of <em>additional</em> guests you list plus one."
+      },
+      "CreateBookingResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The id of the newly created booking.",
+            "format": "uuid"
+          },
+          "checkoutUrl": {
+            "type": "string",
+            "description": "For Stripe bookings, the hosted Stripe Checkout URL to send the guest to for payment.\r\nNull for cash bookings, or if the URL could not be generated (see Travaloud.Admin.Api.Models.CreateBookingResponse.CheckoutError).",
+            "nullable": true
+          },
+          "checkoutError": {
+            "type": "string",
+            "description": "Populated only when a Stripe checkout URL was expected but could not be generated; the\r\nbooking still exists and a URL can be requested from POST /api/bookings/{id}/stripe-checkout.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response returned when a booking is created."
+      },
+      "CreateUserApiRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The person's first name. Required.",
+            "nullable": true,
+            "example": "Jane"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "The person's last name. Required.",
+            "nullable": true,
+            "example": "Smith"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email address. Optional, but recommended — it's where the booking confirmation is sent.",
+            "nullable": true,
+            "example": "jane.smith@example.com"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "description": "Contact phone number, including country code. Optional.",
+            "nullable": true,
+            "example": "+447700900123"
+          },
+          "password": {
+            "type": "string",
+            "description": "A password for the account. Required. Must also match Travaloud.Admin.Api.Models.CreateUserApiRequest.ConfirmPassword.",
+            "nullable": true
+          },
+          "confirmPassword": {
+            "type": "string",
+            "description": "Repeat of Travaloud.Admin.Api.Models.CreateUserApiRequest.Password. Must match exactly.",
+            "nullable": true
+          },
+          "isGuest": {
+            "type": "boolean",
+            "description": "Set to true to create a customer (the `Guest` role) — this is what you want when\r\nregistering someone to book a tour. Leave false to create a staff member."
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "description": "Date of birth. Optional.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "description": "Gender. Optional, free text.",
+            "nullable": true
+          },
+          "nationality": {
+            "type": "string",
+            "description": "Nationality. Optional, free text.",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "description": "Street address. Optional.",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "description": "Town or city. Optional.",
+            "nullable": true
+          },
+          "zipPostalCode": {
+            "type": "string",
+            "description": "Postal or ZIP code. Optional.",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "description": "State, province or county. Optional.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Details for creating a new person. To register a customer you can book tours for, set\r\nTravaloud.Admin.Api.Models.CreateUserApiRequest.IsGuest to true."
+      },
+      "CreateUserResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The new person's id. Pass this as `guestId` when creating a booking.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response returned when a person is created."
+      },
+      "FlagBookingAsPaidApiRequest": {
+        "type": "object",
+        "properties": {
+          "stripeSessionId": {
+            "type": "string",
+            "description": "The Stripe Checkout session that settled the booking, if paid via Stripe.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Body for marking a booking as paid. All fields optional."
+      },
+      "HttpValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": {}
+      },
+      "MatchPackIncentiveApiRequest": {
+        "type": "object",
+        "properties": {
+          "tourIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The tour ids in the basket. A pack qualifies when the basket holds at least its\r\n            `minimumProductCount` distinct eligible tours.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A tour that counts toward a pack incentive."
+      },
+      "MatchPackageApiRequest": {
+        "type": "object",
+        "properties": {
+          "tourIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The tour ids in the basket. The match is exact — a package is returned only when its tours are\r\n            exactly this set (order and duplicates ignored).",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "The tours currently in the basket, to check whether they make up a package."
+      },
+      "PackIncentiveApiDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The pack incentive's id. Send this as `packIncentiveId` when creating a booking to mark it for the pack.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "The pack's display name (e.g. \"Pack 3\").",
+            "nullable": true
+          },
+          "minimumProductCount": {
+            "type": "integer",
+            "description": "Distinct eligible tours the booking must contain for the pack to pay.",
+            "format": "int32"
+          },
+          "commissionAmount": {
+            "type": "number",
+            "description": "Flat commission paid per guest when the pack qualifies.",
+            "format": "double"
+          },
+          "ignoresMinimumPax": {
+            "type": "boolean",
+            "description": "When true, the pack pays even if its tours miss their own minimum pax (they must still operate)."
+          },
+          "tours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackIncentiveTourApiDto"
+            },
+            "description": "The tours that count toward this pack (match a booking's tours against these).",
+            "nullable": true
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackIncentiveTierApiDto"
+            },
+            "description": "The pack's sale-price tiers (e.g. Adult / Child), each with the pack total for that tier.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A staff-sales \"pack\" incentive the booking can be marked for. When a booking is marked with a pack and\r\ncontains at least Travaloud.Admin.Api.Models.PackIncentiveApiDto.MinimumProductCount distinct eligible tours that operate, the seller earns\r\nTravaloud.Admin.Api.Models.PackIncentiveApiDto.CommissionAmount per guest instead of those tours' individual commissions."
+      },
+      "PackIncentiveTierApiDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The tier's id. Send this as `packIncentiveTierId` to charge the booking at this tier's pack price.",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "The tier's display name (e.g. Adult, Child).",
+            "nullable": true
+          },
+          "price": {
+            "type": "number",
+            "description": "The pack total charged for this tier, split evenly across the pack's eligible tours.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A sale-price tier for a pack incentive."
+      },
+      "PackIncentiveTourApiDto": {
+        "type": "object",
+        "properties": {
+          "tourId": {
+            "type": "string",
+            "description": "The tour's id. Match a booking's tours against these to see if the pack qualifies.",
+            "format": "uuid"
+          },
+          "tourName": {
+            "type": "string",
+            "description": "The tour's display name.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PackageDetailsApiDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The package's id. Send it in a `packages` entry on POST /api/bookings to book it.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "The package's display name.",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "description": "The full description, if set.",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "description": "A short one-line description, if set.",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "description": "URL of the package's main image, if set.",
+            "nullable": true
+          },
+          "priceLabel": {
+            "type": "string",
+            "description": "Optional label shown next to the price (e.g. \"from\", \"per person\").",
+            "nullable": true
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "description": "The tour category this package belongs to, if any.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourCategoryName": {
+            "type": "string",
+            "description": "The tour category's display name, if any.",
+            "nullable": true
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageTierApiDto"
+            },
+            "description": "The package's price tiers (e.g. Adult, Child), each with its total.",
+            "nullable": true
+          },
+          "tours": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageTourApiDto"
+            },
+            "description": "The tours included in this package, in display order.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A package with its included tours and the total of their package prices."
+      },
+      "PackageSearchResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The package's id. Pass to GET /api/packages/{id} for its tours and prices.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "description": "The package's display name.",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "description": "A short one-line description, if set.",
+            "nullable": true
+          },
+          "thumbnailImagePath": {
+            "type": "string",
+            "description": "URL of the package's thumbnail image, if set.",
+            "nullable": true
+          },
+          "priceLabel": {
+            "type": "string",
+            "description": "Optional label shown next to the price (e.g. \"from\", \"per person\").",
+            "nullable": true
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "description": "The tour category this package belongs to, if any.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourCategoryName": {
+            "type": "string",
+            "description": "The tour category's display name, if any.",
+            "nullable": true
+          },
+          "priceFrom": {
+            "type": "number",
+            "description": "Lowest package tier total (per guest), for a quick \"from\" price. Null if the package has no tiers.",
+            "format": "double",
+            "nullable": true
+          },
+          "priceTo": {
+            "type": "number",
+            "description": "Highest package tier total (per guest). Null if the package has no tiers.",
+            "format": "double",
+            "nullable": true
+          },
+          "tiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageTierApiDto"
+            },
+            "description": "The package's price tiers, each with its total (per guest) — so a list can show prices without a second call.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A package as returned by the search endpoint. A trimmed view — call GET /api/packages/{id} to\r\nretrieve the included tours and their per-tour package prices."
+      },
+      "PackageSearchResultDtoPaginationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageSearchResultDto"
+            },
+            "nullable": true
+          },
+          "currentPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PackageTierApiDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The tier's id. Send this as a package's `tierId` on POST /api/bookings to charge at this tier.",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "description": "The tier's display name (e.g. Adult, Child).",
+            "nullable": true
+          },
+          "total": {
+            "type": "number",
+            "description": "The package total for this tier (per person).",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A named price tier for a package."
+      },
+      "PackageTourApiDto": {
+        "type": "object",
+        "properties": {
+          "tourId": {
+            "type": "string",
+            "description": "The tour's id. Use GET /api/tours/{id} for its bookable departures.",
+            "format": "uuid"
+          },
+          "tourName": {
+            "type": "string",
+            "description": "The tour's display name.",
+            "nullable": true
+          },
+          "quantity": {
+            "type": "integer",
+            "description": "How many of this tour the package includes (usually 1).",
+            "format": "int32"
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackageTourTierPriceApiDto"
+            },
+            "description": "The package price for this tour, per tier.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "One tour included in a package, with the price the package charges for it per tier."
+      },
+      "PackageTourTierPriceApiDto": {
+        "type": "object",
+        "properties": {
+          "tierId": {
+            "type": "string",
+            "description": "The package tier this price applies to (matches a tier from the package's `tiers`).",
+            "format": "uuid"
+          },
+          "price": {
+            "type": "number",
+            "description": "The price charged for this tour under that tier, per person.",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The price of a package tour under one tier."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": {}
+      },
+      "PropertyDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumbnailImagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressLine1": {
+            "type": "string",
+            "nullable": true
+          },
+          "addressLine2": {
+            "type": "string",
+            "nullable": true
+          },
+          "telephoneNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "emailAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "googleMapsPlaceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "pageTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "pageSubTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsApiKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsPropertyId": {
+            "type": "string",
+            "nullable": true
+          },
+          "metaKeywords": {
+            "type": "string",
+            "nullable": true
+          },
+          "metaDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "friendlyUrl": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
+          "videoPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "urlSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "seoPageTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastModifiedOn": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SearchBookingsApiRequest": {
+        "type": "object",
+        "properties": {
+          "pageNumber": {
+            "type": "integer",
+            "description": "Which page of results to return. Starts at 1. Defaults to 1.",
+            "format": "int32",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "How many bookings to return per page. Defaults to 10.",
+            "format": "int32",
+            "example": 10
+          },
+          "keyword": {
+            "type": "string",
+            "description": "Text to search for. Matched against the booking description, the guest's name, the invoice\r\nnumber, the booking date, and the total amount. For example \"Smith\", \"1042\", \"2026-06-18\"\r\nor \"150.00\" all work. Leave empty to return all bookings (subject to the other filters).",
+            "nullable": true,
+            "example": "Smith"
+          },
+          "description": {
+            "type": "string",
+            "description": "Return only the booking whose description is exactly this text. This is an exact match — for\r\npartial matches use Travaloud.Admin.Api.Models.SearchBookingsApiRequest.Keyword instead.",
+            "nullable": true
+          },
+          "bookingStartDate": {
+            "type": "string",
+            "description": "Together with Travaloud.Admin.Api.Models.SearchBookingsApiRequest.BookingEndDate, return only bookings that were <em>made</em>\r\n(placed) within this date range. Both ends must be supplied; if only one is set it is ignored.\r\nThe range may span at most 31 days — a wider range returns a 400.",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-06-01"
+          },
+          "bookingEndDate": {
+            "type": "string",
+            "description": "The end of the \"booking placed\" date range. See Travaloud.Admin.Api.Models.SearchBookingsApiRequest.BookingStartDate.",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-06-30"
+          },
+          "tourStartDate": {
+            "type": "string",
+            "description": "Together with Travaloud.Admin.Api.Models.SearchBookingsApiRequest.TourEndDate, return only bookings whose tour <em>departure</em>\r\ndate falls within this range. Both ends must be supplied; if only one is set it is ignored.\r\nThe range may span at most 31 days — a wider range returns a 400.",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-07-01"
+          },
+          "tourEndDate": {
+            "type": "string",
+            "description": "The end of the tour departure date range. See Travaloud.Admin.Api.Models.SearchBookingsApiRequest.TourStartDate.",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-07-31"
+          },
+          "tourId": {
+            "type": "string",
+            "description": "Restrict results to bookings for one specific tour. Use the tour's id from\r\n`POST /api/tours/search`. Leave empty to include all tours.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "description": "Restrict results to bookings for the guest with this Cloudbeds guest id. If no guest has\r\nthat id, no bookings are returned.",
+            "nullable": true
+          },
+          "orderBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "How to sort the results, as an array of \"{column} {Ascending|Descending}\" strings. You can\r\nsort by `BookingDate`, `TotalAmount` or `InvoiceId`. Defaults to the most\r\nrecently placed bookings first (`BookingDate Descending`).",
+            "nullable": true,
+            "example": [
+              "BookingDate Descending"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "description": "Filters and paging for searching tour bookings. All fields are optional."
+      },
+      "SearchPackagesApiRequest": {
+        "type": "object",
+        "properties": {
+          "pageNumber": {
+            "type": "integer",
+            "description": "1-based page number to return. Defaults to 1.",
+            "format": "int32",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Number of records per page. Defaults to 10.",
+            "format": "int32",
+            "example": 10
+          },
+          "name": {
+            "type": "string",
+            "description": "Free-text match on the package name.",
+            "nullable": true,
+            "example": "island"
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "description": "Restrict results to a single tour category. Get category ids from GET /api/tours/categories.",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Filter and pagination options for a paginated package search."
+      },
+      "SearchToursApiRequest": {
+        "type": "object",
+        "properties": {
+          "pageNumber": {
+            "type": "integer",
+            "description": "1-based page number to return. Defaults to 1.",
+            "format": "int32",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "Number of records per page. Defaults to 10.",
+            "format": "int32",
+            "example": 10
+          },
+          "name": {
+            "type": "string",
+            "description": "Free-text match on the tour name.",
+            "nullable": true,
+            "example": "kayak"
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "description": "Restrict results to a single tour category. Get category ids from GET /api/tours/categories.",
+            "format": "uuid",
+            "nullable": true
+          },
+          "locationId": {
+            "type": "string",
+            "description": "Restrict results to tours that visit this location. Get location ids from GET /api/tours/locations.",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Filter and pagination options for a paginated tour search."
+      },
+      "SearchUsersApiRequest": {
+        "type": "object",
+        "properties": {
+          "pageNumber": {
+            "type": "integer",
+            "description": "Which page of results to return. Starts at 1. Defaults to 1.",
+            "format": "int32",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "How many users to return per page. Defaults to 10.",
+            "format": "int32",
+            "example": 10
+          },
+          "keyword": {
+            "type": "string",
+            "description": "Text to search for. Matched against the user's first name, last name, email address and\r\nphone number. Leave empty to return everyone (subject to the other filters).",
+            "nullable": true,
+            "example": "jane@example.com"
+          },
+          "role": {
+            "type": "string",
+            "description": "Return only users in this role. Valid roles are: `Admin`, `Basic`, `Guest`,\r\n`TourManager`, `PropertyManager`, `Supplier`. People who book tours are\r\nnormally in the `Guest` role, so use `Guest` to find a customer. Leave empty to\r\nsearch every role.",
+            "nullable": true,
+            "example": "Guest"
+          },
+          "orderBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "How to sort the results, as an array of \"{column} {Ascending|Descending}\" strings. You can\r\nsort by `FirstName`, `LastName` or `Email`. Defaults to first name, A→Z.",
+            "nullable": true,
+            "example": [
+              "LastName Ascending"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "description": "Filters and paging for searching guests and staff. All fields are optional."
+      },
+      "StripeCheckoutResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The hosted Stripe Checkout URL to send the guest to for payment.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Response carrying a Stripe Checkout URL."
+      },
+      "TokenRequest": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "clientSecret": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Request body for obtaining an access token. The caller supplies only the calling\r\napplication's credentials (ClientId/ClientSecret); the issued token acts as the client's\r\nconfigured service (\"virtual\") user."
+      },
+      "TokenResult": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "tokenType": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TourBookingOptionsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The tour's id. Send this as the booking item's `tourId`.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "waiverRequired": {
+            "type": "boolean",
+            "description": "When true, each guest on this tour must sign a waiver (set `waiverSigned` per item)."
+          },
+          "dates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourDateOptionDto"
+            },
+            "description": "The bookable departures within the requested date window (defaults to the next 3 months). Pick\r\none and send its `id` as the booking item's `tourDateId`.",
+            "nullable": true
+          },
+          "pickupLocations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourPickupLocationOptionDto"
+            },
+            "description": "Pickup locations the guest can be collected from. Send a `propertyName` as the item's\r\n`pickupLocation`, or use the item's `otherPickupLocation` for somewhere not listed.",
+            "nullable": true
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourLocationApiDto"
+            },
+            "description": "The locations (destinations) this tour visits.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Everything an external app needs to book this tour: its bookable departures (filtered to a date\r\nwindow), the pickup locations to choose from, and the locations (destinations) it visits."
+      },
+      "TourCategoryApiDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A tour category. Use its `id` as the `tourCategoryId` filter on tour search."
+      },
+      "TourCategoryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "iconClass": {
+            "type": "string",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumbnailImagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "metaKeywords": {
+            "type": "string",
+            "nullable": true
+          },
+          "metaDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "topLevelCategory": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "parentTourCategoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "parentTourCategories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourCategoryDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TourDateDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tourId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "availableSpaces": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tourPriceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "concurrencyVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tourPrice": {
+            "$ref": "#/components/schemas/TourPriceDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TourDateOptionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Send this as the booking item's `tourDateId`.",
+            "format": "uuid"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "When the tour departs.",
+            "format": "date-time"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "When the tour ends.",
+            "format": "date-time"
+          },
+          "availableSpaces": {
+            "type": "integer",
+            "description": "How many seats are still free. Don't book more guests than this on this departure.",
+            "format": "int32"
+          },
+          "price": {
+            "type": "number",
+            "description": "The per-guest price, shown for display only — you don't send it back; the server reads the\r\nprice from the chosen departure when the booking is created.",
+            "format": "double",
+            "nullable": true
+          },
+          "priceTitle": {
+            "type": "string",
+            "description": "A label for the price (e.g. \"Adult\", \"Peak season\"), for display.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "One bookable departure of a tour."
+      },
+      "TourDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "price": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "priceLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "imagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumbnailImagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "maxCapacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "minCapacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dayDuration": {
+            "type": "string",
+            "nullable": true
+          },
+          "nightDuration": {
+            "type": "string",
+            "nullable": true
+          },
+          "hourDuration": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "telephoneNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "whatsIncluded": {
+            "type": "string",
+            "nullable": true
+          },
+          "whatsNotIncluded": {
+            "type": "string",
+            "nullable": true
+          },
+          "additionalInformation": {
+            "type": "string",
+            "nullable": true
+          },
+          "metaKeywords": {
+            "type": "string",
+            "nullable": true
+          },
+          "metaDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "bookingConfirmationEmailDetails": {
+            "type": "string",
+            "nullable": true
+          },
+          "termsAndConditions": {
+            "type": "string",
+            "nullable": true
+          },
+          "cancellationPolicy": {
+            "type": "string",
+            "nullable": true
+          },
+          "waiverRequired": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "publishToSite": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "friendlyUrl": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
+          "supplierEmailText": {
+            "type": "string",
+            "nullable": true
+          },
+          "showBookingQRCode": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "excludeFromStaffSales": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "urlSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "customSeoScripts": {
+            "type": "string",
+            "nullable": true
+          },
+          "seoPageTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastModifiedOn": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "supplierId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "tourCategory": {
+            "$ref": "#/components/schemas/TourCategoryDto"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TourLocationApiDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A location (destination) a tour visits."
+      },
+      "TourPickupLocationOptionDto": {
+        "type": "object",
+        "properties": {
+          "propertyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "propertyName": {
+            "type": "string",
+            "description": "The pickup location's name — send this as the booking item's `pickupLocation`.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TourPriceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "tourId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "monthFrom": {
+            "type": "string",
+            "nullable": true
+          },
+          "monthTo": {
+            "type": "string",
+            "nullable": true
+          },
+          "dayDuration": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "nightDuration": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "hourDuration": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "comissionAmount": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "commissionMinimumPax": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "commissionMinimumPaxScope": {
+            "$ref": "#/components/schemas/CommissionMinimumPaxScope"
+          },
+          "publishToWebsite": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "inHouseOnly": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TourSearchResultDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "shortDescription": {
+            "type": "string",
+            "nullable": true
+          },
+          "thumbnailImagePath": {
+            "type": "string",
+            "nullable": true
+          },
+          "minCapacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "maxCapacity": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "tourCategoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "waiverRequired": {
+            "type": "boolean",
+            "description": "True if each guest on this tour must sign a waiver."
+          },
+          "publiclyBookable": {
+            "type": "boolean",
+            "description": "True if the tour is published and bookable by the public."
+          },
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourLocationApiDto"
+            },
+            "description": "The locations (destinations) this tour visits.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "A tour as returned by the search endpoint. A trimmed, booking-oriented view — call\r\nGET /api/tours/{id} to retrieve the bookable dates, prices and pickup locations."
+      },
+      "TourSearchResultDtoPaginationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TourSearchResultDto"
+            },
+            "nullable": true
+          },
+          "currentPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateUserApiRequest": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "First name.",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "description": "Last name.",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "description": "Email address.",
+            "nullable": true
+          },
+          "phoneNumber": {
+            "type": "string",
+            "description": "Contact phone number, including country code.",
+            "nullable": true
+          },
+          "isGuest": {
+            "type": "boolean",
+            "description": "True if this person is a customer (the `Guest` role)."
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "description": "Date of birth.",
+            "format": "date-time",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "description": "Gender.",
+            "nullable": true
+          },
+          "nationality": {
+            "type": "string",
+            "description": "Nationality.",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "description": "Street address.",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "description": "Town or city.",
+            "nullable": true
+          },
+          "zipPostalCode": {
+            "type": "string",
+            "description": "Postal or ZIP code.",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "description": "State, province or county.",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Updated details for an existing person. The id comes from the URL. Send the full set of\r\nvalues you want the person to have."
+      },
+      "UserDetailsDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "userName": {
+            "type": "string",
+            "nullable": true
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "emailConfirmed": {
+            "type": "boolean"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true
+          },
+          "nationality": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "zipPostalCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "passportNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "passportIssueDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "passportExpiryDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "passportIssuingCountry": {
+            "type": "string",
+            "nullable": true
+          },
+          "visaIssueDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "visaExpiryDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalUsers": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UserDetailsDtoPaginationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserDetailsDto"
+            },
+            "nullable": true
+          },
+          "currentPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalPages": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasPreviousPage": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "hasNextPage": {
+            "type": "boolean",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "gender": {
+            "type": "string",
+            "nullable": true
+          },
+          "nationality": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudbedsGuestId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "Paste the access token returned by /api/token (no 'Bearer ' prefix).",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": []
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+@* Pick up location: one of the tour's pick up points, or "Other" with the place typed in. *@
+
+<MudSelect T="string" Label="Pick Up Location" Value="_choice" ValueChanged="ChooseAsync" Variant="Variant.Outlined" Disabled="Disabled" Class="@Class"
+           Placeholder="Select a pick up location" HelperText="@Hint" Required="Required" RequiredError="Pick up location is required">
+    @foreach (var pickup in Pickups)
+    {
+        <MudSelectItem T="string" Value="pickup">@pickup</MudSelectItem>
+    }
+    <MudSelectItem T="string" Value="@Other">Other</MudSelectItem>
+</MudSelect>
+@if (_choice == Other)
+{
+    <MudTextField T="string" Label="Other Pick Up Location" Value="_other" ValueChanged="SetOtherAsync" Immediate="true" MaxLength="500"
+                  Variant="Variant.Outlined" Class="mt-3" Disabled="Disabled" Required="Required" RequiredError="Please enter the pick up location" />
+}
+
+@code {
+    private const string Other = "Other";
+
+    [Parameter, EditorRequired] public IReadOnlyList<string> Pickups { get; set; } = [];
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Required { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+
+    private string? _choice;
+    private string? _other;
+
+    protected override void OnParametersSet()
+    {
+        if (Value is null || _choice == Other && Value == _other)
+            return;
+        if (Pickups.Contains(Value, StringComparer.OrdinalIgnoreCase))
+            _choice = Pickups.First(p => p.Equals(Value, StringComparison.OrdinalIgnoreCase));
+        else
+            (_choice, _other) = (Other, Value); // a place typed in before (legacy "Other")
+    }
+
+    private async Task ChooseAsync(string? choice)
+    {
+        _choice = choice;
+        await ValueChanged.InvokeAsync(choice == Other ? _other : choice);
+    }
+
+    private async Task SetOtherAsync(string? text)
+    {
+        _other = text;
+        await ValueChanged.InvokeAsync(text);
+    }
+}

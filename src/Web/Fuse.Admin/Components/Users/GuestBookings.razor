@@ -1,0 +1,215 @@
+@using System.Globalization
+@using Fuse.Contracts.Dashboard
+@using Fuse.Admin.Pages.Bookings.Dialogs
+@* A guest's trips (guest profile and the Edit Guest dialog), grouped by hostel stay: figures along the top (stays and
+   nights, tours booked, spent on tours, stays with no tours), then each stay from Cloudbeds (newest first, opening in
+   Cloudbeds) with the tours they booked during it underneath, then any tours outside a stay. A tour opens in the
+   Booking Details dialog over the page. Stays are asked live from each hostel's Cloudbeds, so they arrive a moment
+   after the tours. *@
+
+<div class="guest-trips">
+    <div class="guest-trips__stats">
+        <div class="guest-trips__stat">
+            @if (_stays is null)
+            {
+                <b><MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" /></b><span>Checking Cloudbeds…</span>
+            }
+            else if (!_stays.Linked)
+            {
+                <b>–</b><span>Not linked to Cloudbeds</span>
+            }
+            else
+            {
+                <b>@LiveStays.Count</b><span>@(LiveStays.Count == 1 ? "Stay" : "Stays") · @Plural(LiveStays.Sum(s => s.Nights), "night")</span>
+            }
+        </div>
+        @if (_canViewBookings)
+        {
+            <div class="guest-trips__stat"><b>@(_tours is null ? "…" : LiveTours.Count())</b><span>Tours booked</span></div>
+            <div class="guest-trips__stat"><b>@(_tours is null ? "…" : Money(Spent))</b><span>Spent on tours</span></div>
+            @if (_stays is { Linked: true })
+            {
+                <div class="guest-trips__stat"><b>@(_tours is null ? "…" : StaysWithoutTours)</b><span>@(StaysWithoutTours == 1 ? "Stay" : "Stays") with no tours</span></div>
+            }
+        }
+    </div>
+
+    @if (_stays is { Unreachable.Count: > 0 })
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true">Cloudbeds couldn't be reached for @string.Join(", ", _stays.Unreachable) just now, so stays there may be missing.</MudAlert>
+    }
+
+    @if (_stays is null || (_canViewBookings && _tours is null))
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Secondary" />
+    }
+    else if (_stays.Stays.Count == 0 && AllTours.Count == 0)
+    {
+        <div class="guest-trips__empty">
+            <MudIcon Icon="@Icons.Material.Outlined.Luggage" />
+            <span>No bookings yet.</span>
+        </div>
+    }
+    else
+    {
+        var grouped = Grouped;
+        @foreach (var (stay, tours) in grouped.Stays)
+        {
+            <div class="@($"guest-trips__stay{(Faded(stay) ? " guest-trips__stay--faded" : "")}")" @key="@($"{stay.Hostel}/{stay.ReservationId}")">
+                <a class="guest-trips__stay-head" href="@stay.Url" target="_blank" rel="noopener" title="Open in Cloudbeds">
+                    <MudIcon Icon="@Icons.Material.Filled.Hotel" Size="Size.Small" />
+                    <span class="guest-trips__hostel">@stay.Hostel</span>
+                    <span class="guest-trips__muted">@StayDates(stay) · @Plural(stay.Nights, "night")@(stay.Rooms is { } rooms ? $" · {rooms}" : "")</span>
+                    <span class="@($"status-pill status-pill--{StayTone(stay.Status)} guest-trips__push")">@stay.Status</span>
+                    <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Class="guest-trips__go" />
+                </a>
+                @if (_canViewBookings && tours.Count == 0)
+                {
+                    <div class="guest-trips__row guest-trips__muted">No tours booked during this stay</div>
+                }
+                @foreach (var tour in tours)
+                {
+                    @TourRow(tour, false)
+                }
+            </div>
+        }
+        @if (grouped.Outside.Count > 0)
+        {
+            <div class="guest-trips__group">@(grouped.Stays.Count == 0 ? "Tours" : "Tours outside a stay")</div>
+            <div class="guest-trips__stay">
+                @foreach (var tour in grouped.Outside)
+                {
+                    @TourRow(tour, true)
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [Parameter, EditorRequired] public string GuestId { get; set; } = "";
+    /// <summary>A tour booking's dialog went to Tour Bookings (the Edit Guest dialog closes itself).</summary>
+    [Parameter] public EventCallback BeforeOpen { get; set; }
+
+    private IReadOnlyList<GuestTourBooking>? _tours;
+    private GuestHostelStays? _stays;
+    private bool _canViewBookings;
+
+    /// <summary>One tour on one of their bookings.</summary>
+    private sealed record TourLine(GuestTourBooking Booking, GuestTourBookingItem Tour)
+    {
+        public bool Cancelled => Tour.Cancelled || Booking.Status == BookingState.Cancelled;
+    }
+
+    private sealed record Groups(IReadOnlyList<(GuestHostelStay Stay, IReadOnlyList<TourLine> Tours)> Stays, IReadOnlyList<TourLine> Outside);
+
+    private IReadOnlyList<TourLine> AllTours =>
+        [.. (_tours ?? []).SelectMany(b => (b.Tours.Count > 0 ? b.Tours : [new GuestTourBookingItem("Tour", b.BookingDate, false)]).Select(t => new TourLine(b, t)))];
+
+    private IEnumerable<TourLine> LiveTours => AllTours.Where(t => !t.Cancelled);
+
+    private IReadOnlyList<GuestHostelStay> LiveStays => [.. (_stays?.Stays ?? []).Where(s => s.Status is not ("Cancelled" or "No show"))];
+
+    private decimal Spent => (_tours ?? []).Where(b => b.Status is not (BookingState.Cancelled or BookingState.Refunded)).Sum(b => b.TotalAmount);
+
+    private int StaysWithoutTours => LiveStays.Count(s => !LiveTours.Any(t => During(t, s)));
+
+    private static bool During(TourLine tour, GuestHostelStay stay)
+    {
+        var day = DateOnly.FromDateTime(tour.Tour.StartDate);
+        return day >= stay.CheckIn && day <= stay.CheckOut;
+    }
+
+    /// <summary>Stays newest first, each with the tours starting during it (earliest first); the rest newest first.</summary>
+    private Groups Grouped
+    {
+        get
+        {
+            var stays = (_stays?.Stays ?? []).OrderByDescending(s => s.CheckIn).ToList();
+            var placed = new HashSet<TourLine>();
+            var withTours = stays.Select(stay =>
+            {
+                IReadOnlyList<TourLine> during = [.. AllTours.Where(t => !placed.Contains(t) && During(t, stay)).OrderBy(t => t.Tour.StartDate)];
+                placed.UnionWith(during);
+                return (stay, during);
+            }).ToList();
+            return new(withTours, [.. AllTours.Where(t => !placed.Contains(t)).OrderByDescending(t => t.Tour.StartDate)]);
+        }
+    }
+
+    private RenderFragment TourRow(TourLine line, bool fullDate) => __builder =>
+    {
+        <button type="button" class="@($"guest-trips__row guest-trips__tour{(line.Cancelled ? " guest-trips__tour--cancelled" : "")}")"
+                title="Open booking" @onclick="() => OpenAsync(line.Booking)">
+            <span class="guest-trips__when">@line.Tour.StartDate.ToString(fullDate ? "ddd d MMM yyyy · HH:mm" : "ddd d · HH:mm", CultureInfo.InvariantCulture)</span>
+            <span class="guest-trips__name">@Name(line.Tour.TourName)@(line.Tour.Cancelled ? " (cancelled)" : "")@(line.Booking.LeadBooker ? "" : " · a guest on someone else's booking")</span>
+            <span class="guest-trips__muted guest-trips__push">#@line.Booking.Reference</span>
+            <span class="@($"status-pill status-pill--{Tone(line.Booking.Status)}")">@BookingStates.Label(line.Booking.Status)</span>
+            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="guest-trips__go" />
+        </button>
+    };
+
+    private async Task OpenAsync(GuestTourBooking booking)
+    {
+        var outcome = await BookingDetailsDialog.ShowAsync(Dialogs, booking.BookingId, booking.Reference);
+        if (outcome.Left)
+            await BeforeOpen.InvokeAsync();
+        else if (outcome.Changed && !await Snackbar.TryAsync(async () => _tours = await Api.Send(new ListGuestTourBookings(GuestId))))
+            _tours = [];
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canViewBookings = AuthState is not null && (await AuthState).User.HasPermission(FuseAction.View, FuseResource.TourBookings);
+        // Cloudbeds is the slow one: both start now.
+        var stays = LoadStaysAsync();
+        if (_canViewBookings && !await Snackbar.TryAsync(async () => _tours = await Api.Send(new ListGuestTourBookings(GuestId))))
+            _tours = [];
+        await stays;
+    }
+
+    private async Task LoadStaysAsync()
+    {
+        try
+        {
+            _stays = await Api.Send(new ListGuestHostelStays(GuestId));
+        }
+        catch (AppException)
+        {
+            _stays = new GuestHostelStays(true, [], ["every hostel"]);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static bool Faded(GuestHostelStay stay) => stay.Status is "Cancelled" or "No show";
+
+    private static string StayDates(GuestHostelStay stay) =>
+        stay.CheckIn.Year != DateTime.Today.Year ? $"{stay.CheckIn:ddd d MMM yyyy} → {stay.CheckOut:ddd d MMM yyyy}"
+        : $"{stay.CheckIn:ddd d MMM} → {stay.CheckOut:ddd d MMM}";
+
+    /// <summary>Tour names are stored in capitals ("SUNSET RIVER CRUISE TOUR"); read as "Sunset River Cruise Tour".</summary>
+    private static string Name(string name) =>
+        name.Any(char.IsLower) ? name : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+
+    private static string Plural(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
+
+    private static string Money(decimal amount) => $"$ {amount:n2}";
+
+    // As BookingStatus: red needs attention, green once checked in.
+    private static string Tone(BookingState state) => state switch
+    {
+        BookingState.CheckedIn => "good",
+        BookingState.Paid => "good",
+        BookingState.PartiallyPaid or BookingState.PartialRefund or BookingState.Refunded => "warn",
+        _ => "bad",
+    };
+
+    private static string StayTone(string status) => status switch
+    {
+        "In house" => "good",
+        "Confirmed" or "Checked out" => "neutral",
+        "Not confirmed" => "warn",
+        _ => "bad",
+    };
+}

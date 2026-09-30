@@ -1,0 +1,48 @@
+@page "/admin/management/page-management/global-seo"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Seo)]
+
+<AdminPageHeader Title="Global SEO" Description="Structured data added to every page on the website." />
+
+@if (_seo is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <AuthorizeView Context="auth">
+        @{ var canEdit = auth.User.HasPermission(FuseAction.Update, FuseResource.Seo); }
+        <MudPaper Class="admin-card" Elevation="25">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" Label="Breadcrumbs" @bind-Value="_seo.Breadcrumbs" Lines="14" Variant="Variant.Outlined" ReadOnly="!canEdit"
+                                  Class="code-field" HelperText="Wrap the markup in <script> tags" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField T="string" Label="Search" @bind-Value="_seo.SearchAction" Lines="14" Variant="Variant.Outlined" ReadOnly="!canEdit"
+                                  Class="code-field" HelperText="The site search action. Wrap the markup in <script> tags" />
+                </MudItem>
+            </MudGrid>
+            @if (canEdit)
+            {
+                <div class="admin-card__actions">
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save</MudButton>
+                </div>
+            }
+        </MudPaper>
+    </AuthorizeView>
+}
+
+@code {
+    private GlobalSeo? _seo;
+    private bool _saving;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () => _seo = await Api.Send(new GetGlobalSeo()));
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        await Snackbar.TryAsync(async () => await Api.Send(new SaveGlobalSeo(_seo!)), "Global SEO saved.");
+        _saving = false;
+    }
+}

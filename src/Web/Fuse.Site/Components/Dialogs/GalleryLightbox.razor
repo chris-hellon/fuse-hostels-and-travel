@@ -1,0 +1,59 @@
+@* Legacy's "View Gallery" (the MDB lightbox): the photos one at a time, full size, with previous / next (and the
+   arrow keys) and a count. *@
+
+<FuseModal Open="Open" OpenChanged="OpenChanged" Label="@Label" ModalClass="lightbox-modal gallery-lightbox"
+           DialogClass="modal-xl" ContentClass="rounded-0 bg-transparent border-0 shadow-0" BodyClass="@null" CloseOutside="true">
+    @if (Images.Count > 0)
+    {
+        <div class="gallery-lightbox__frame" tabindex="0" @onkeydown="Key" @ref="_frame">
+            <img src="@CdnImages.Sized(Images[_index], 2000)" alt="@($"{Label} image {_index + 1}")" />
+            @if (Images.Count > 1)
+            {
+                <button type="button" class="gallery-lightbox__arrow gallery-lightbox__arrow--prev" aria-label="Previous photo" @onclick="() => Show(_index - 1)">
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="gallery-lightbox__arrow gallery-lightbox__arrow--next" aria-label="Next photo" @onclick="() => Show(_index + 1)">
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                </button>
+                <span class="gallery-lightbox__count">@(_index + 1) / @Images.Count</span>
+            }
+        </div>
+    }
+</FuseModal>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<string> Images { get; set; } = [];
+    /// <summary>What the photos are of (for screen readers).</summary>
+    [Parameter] public string Label { get; set; } = "Gallery";
+
+    private int _index;
+    private bool _wasOpen, _focus;
+    private ElementReference _frame;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+            (_index, _focus) = (0, true);
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Focus the photo on opening, so the arrow keys work straight away.
+        if (_focus && Open && Images.Count > 0)
+        {
+            _focus = false;
+            await _frame.FocusAsync(preventScroll: true);
+        }
+    }
+
+    private void Show(int index) => _index = (index + Images.Count) % Images.Count;
+
+    private void Key(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowLeft") Show(_index - 1);
+        else if (e.Key == "ArrowRight") Show(_index + 1);
+    }
+}

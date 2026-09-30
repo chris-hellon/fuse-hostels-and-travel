@@ -1,0 +1,23 @@
+@* A dashboard figure: a small label and icon over the value (a spinner until the value arrives). *@
+
+<MudPaper Elevation="25" Class="stat-card">
+    <div class="stat-card__head">
+        <span class="stat-card__label">@Label</span>
+        <MudIcon Icon="@Icon" Class="stat-card__icon" />
+    </div>
+    @if (Value is null)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Secondary" Class="stat-card__loading" />
+    }
+    else
+    {
+        <div class="stat-card__value">@Value</div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    /// <summary>Formatted value; null while loading.</summary>
+    [Parameter] public string? Value { get; set; }
+}

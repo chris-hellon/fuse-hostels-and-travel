@@ -1,0 +1,112 @@
+@using Fuse.Contracts.Tours
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(Price is null ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+            @(Price is null ? "Create Tour Price" : "Edit Tour Price")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudSwitch @bind-Value="_model.PublishToWebsite" Color="Color.Primary" Label="Publish to Website?" LabelPlacement="Placement.End" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSwitch @bind-Value="_model.InHouseOnly" Color="Color.Primary" Label="In House Only?" LabelPlacement="Placement.End" />
+                </MudItem>
+                <MudItem xs="12" md="12">
+                    <MudNumericField T="decimal" Label="Price" Required="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                     @bind-Value="_model.Price" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="12">
+                    <MudTextField Label="Title" @bind-Value="_model.Title" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="eg. Per Person" Required="true" />
+                </MudItem>
+                <MudItem xs="12" md="12">
+                    <MudTextField Label="Description" @bind-Value="_model.Description" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="eg. (3D/2N) or Private Tour" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Duration: leave blank to use the tour's (it sets when each departure ends).</MudText>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal?" Label="Day Duration" @bind-Value="_model.DayDuration" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal?" Label="Night Duration" @bind-Value="_model.NightDuration" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal?" Label="Hour Duration" @bind-Value="_model.HourDuration" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="12">
+                    <MudNumericField T="decimal?" Label="Commission Amount" @bind-Value="_model.CommissionAmount" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudNumericField T="int?" Label="Commission Minimum Pax" @bind-Value="_model.CommissionMinimumPax" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     Min="1" HideSpinButtons="true" HelperText="Leave empty for no minimum" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect T="CommissionScope?" Label="Minimum Applies To" AnchorOrigin="Origin.BottomLeft" @bind-Value="_model.CommissionScope"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_model.CommissionMinimumPax is null">
+                        <MudSelectItem T="CommissionScope?" Value="CommissionScope.PerDeparture">Per departure</MudSelectItem>
+                        <MudSelectItem T="CommissionScope?" Value="CommissionScope.PerDay">Per day, all departures</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect Label="Month From" T="string" AnchorOrigin="Origin.BottomLeft" @bind-Value="_model.MonthFrom" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               HelperText="eg. If this price should only show for certain months" Clearable="true">
+                        @foreach (var month in Months)
+                        {
+                            <MudSelectItem T="string" Value="month">@month</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudSelect Label="Month To" T="string" AnchorOrigin="Origin.BottomLeft" @bind-Value="_model.MonthTo" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        @foreach (var month in Months)
+                        {
+                            <MudSelectItem T="string" Value="month">@month</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" OnClick="() => Dialog.Cancel()" StartIcon="@Icons.Material.Filled.Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Confirm</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly string[] Months = System.Globalization.CultureInfo.GetCultureInfo("en-US").DateTimeFormat.MonthNames.Where(m => m.Length > 0).ToArray();
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    /// <summary>The price to edit; null to create one.</summary>
+    [Parameter] public TourPriceInput? Price { get; set; }
+
+    private MudForm? _form;
+    private TourPriceInput _model = new() { PublishToWebsite = true };
+
+    protected override void OnInitialized()
+    {
+        if (Price is not null)
+            _model = Price with { };
+    }
+
+    /// <summary>Returns the edited price; the wizard saves it with the tour.</summary>
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        var problems = new TourPriceInputValidator().Validate(_model);
+        if (!problems.IsValid)
+        {
+            Snackbar.Add(problems.Errors[0].ErrorMessage, Severity.Warning);
+            return;
+        }
+        Dialog.Close(DialogResult.Ok(_model));
+    }
+}

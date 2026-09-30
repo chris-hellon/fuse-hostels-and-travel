@@ -1,0 +1,348 @@
+@* When the event is on (legacy's Schedule step): start/end (or several times a day), an optional repeat rule, and
+   the upcoming dates, where single days can be cancelled (held in the draft until the event is saved). An event booked
+   as a tour can instead follow the tour's departures: they're listed here (places left, days off), and nothing else
+   is needed. *@
+@inject IApi Api
+
+@if (Details.TourId is not null)
+{
+    <MudPaper Outlined="true" Elevation="0" Class="pa-3 mb-4">
+        <MudSwitch T="bool" @bind-Value="Details.FollowsTourDates" Color="Color.Primary" Label="Use the tour's departure dates" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
+            @(Details.FollowsTourDates
+                ? "The event is on whenever the tour departs, at the departure's time. Add or move dates on the tour; switch a date off here to hide it."
+                : "The event keeps its own dates below. Each date books the tour's departure that day, if there is one.")
+        </MudText>
+        @if (_departures is null)
+        {
+            <MudProgressLinear Indeterminate="true" Class="mt-3" />
+        }
+        else if (_departures.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">The tour has no departures in the next two months, so there's nothing to book. Add dates to the tour.</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.subtitle2" Class="mt-3 mb-1">Tour departures (next two months)</MudText>
+            <div class="occurrence-list">
+                @foreach (var departure in _departures)
+                {
+                    var off = Details.FollowsTourDates && Draft.IsCancelled(departure.Start);
+                    var matched = Details.FollowsTourDates || OwnDates.Contains(departure.Start.Date);
+                    <div class="@($"occurrence-list__item{(off ? " is-cancelled" : "")}")" @key="departure.Start">
+                        <MudText Typo="Typo.body2" Class="occurrence-list__date">
+                            @departure.Start.ToString("ddd dd MMM yyyy · h:mm tt")
+                            <span class="mud-text-secondary">
+                                · @(departure.AvailableSpaces > 0 ? $"{departure.AvailableSpaces} places" : "Full")@(departure.OnWebsite ? "" : " · not bookable online")
+                            </span>
+                            @if (!matched)
+                            {
+                                <span class="mud-text-secondary"> · no event this day</span>
+                            }
+                        </MudText>
+                        @if (Details.FollowsTourDates)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small" Color="@(off ? Color.Primary : Color.Error)"
+                                       OnClick="() => Draft.ToggleCancelled(departure.Start)">@(off ? "Restore" : "Hide")</MudButton>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+
+@if (!FollowsTour)
+{
+<MudGrid Spacing="3">
+    <MudItem xs="12" sm="6">
+        <MudSwitch T="bool" Value="Draft.Details.AllDay" ValueChanged="SetAllDay" Color="Color.Primary" Label="All-day event" />
+    </MudItem>
+    @if (!Draft.Details.AllDay)
+    {
+        <MudItem xs="12" sm="6">
+            <MudSwitch T="bool" Value="MultipleTimes" ValueChanged="SetMultipleTimes" Color="Color.Primary" Label="Multiple times each day" />
+        </MudItem>
+    }
+
+    <MudItem xs="12" sm="6" md="@(SingleTime ? 3 : 6)">
+        <MudDatePicker Label="Start date" Date="StartDate" DateChanged="d => StartDate = d" DateFormat="dd/MM/yyyy" Variant="Variant.Outlined"
+                       Editable="true" Required="true" RequiredError="Choose a start date" />
+    </MudItem>
+    @if (SingleTime)
+    {
+        <MudItem xs="12" sm="6" md="3">
+            <MudTimePicker Label="Start time" Time="StartTime" TimeChanged="t => StartTime = t" Variant="Variant.Outlined" Editable="true" />
+        </MudItem>
+    }
+    <MudItem xs="12" sm="6" md="@(SingleTime ? 3 : 6)">
+        <MudDatePicker Label="End date (optional)" Date="EndDate" DateChanged="d => EndDate = d" DateFormat="dd/MM/yyyy" Variant="Variant.Outlined"
+                       Editable="true" Clearable="true" MinDate="Draft.Details.StartDate.Date" />
+    </MudItem>
+    @if (SingleTime)
+    {
+        <MudItem xs="12" sm="6" md="3">
+            <MudTimePicker Label="End time" Time="EndTime" TimeChanged="t => EndTime = t" Variant="Variant.Outlined" Editable="true" Clearable="true" />
+        </MudItem>
+    }
+    else if (MultipleTimes)
+    {
+        <MudItem xs="12">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Times each day</MudText>
+            @foreach (var slot in Details.TimeSlots)
+            {
+                <MudGrid Spacing="3" Class="mt-0" @key="slot">
+                    <MudItem xs="5" md="3">
+                        <MudTimePicker Label="From" Time="slot.StartTime" TimeChanged="t => slot.StartTime = t ?? TimeSpan.Zero"
+                                       Variant="Variant.Outlined" Editable="true" />
+                    </MudItem>
+                    <MudItem xs="5" md="3">
+                        <MudTimePicker Label="To (optional)" Time="slot.EndTime" TimeChanged="t => slot.EndTime = t"
+                                       Variant="Variant.Outlined" Editable="true" Clearable="true" />
+                    </MudItem>
+                    <MudItem xs="2" md="1" Class="d-flex align-center">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small" aria-label="Remove time"
+                                       Disabled="Details.TimeSlots.Count == 1" OnClick="() => Details.TimeSlots.Remove(slot)" />
+                    </MudItem>
+                </MudGrid>
+            }
+            <MudButton Class="mt-2" Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddTime">Add time</MudButton>
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <MudDivider Class="my-2" />
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Recurrence</MudText>
+    </MudItem>
+
+    <MudItem xs="12" md="4">
+        <MudSelect T="EventRecurrenceType" Label="Repeats" @bind-Value="Draft.Details.RecurrenceType" Variant="Variant.Outlined">
+            <MudSelectItem T="EventRecurrenceType" Value="EventRecurrenceType.None">Does not repeat</MudSelectItem>
+            <MudSelectItem T="EventRecurrenceType" Value="EventRecurrenceType.Daily">Every day</MudSelectItem>
+            <MudSelectItem T="EventRecurrenceType" Value="EventRecurrenceType.Weekly">On certain days of the week</MudSelectItem>
+            <MudSelectItem T="EventRecurrenceType" Value="EventRecurrenceType.Monthly">Monthly</MudSelectItem>
+        </MudSelect>
+    </MudItem>
+    @if (Draft.Repeats)
+    {
+        <MudItem xs="6" md="4">
+            <MudNumericField T="int" Label="@($"Repeat every ({Unit}s)")" Value="Draft.Details.RecurrenceInterval ?? 1"
+                             ValueChanged="v => Draft.Details.RecurrenceInterval = Math.Clamp(v, 1, 365)" Min="1" Max="365" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="6" md="4">
+            <MudDatePicker Label="Until (optional)" Date="Draft.Details.RecurrenceEndDate" DateChanged="d => Draft.Details.RecurrenceEndDate = d?.Date"
+                           DateFormat="dd/MM/yyyy" Variant="Variant.Outlined" Editable="true" Clearable="true" MinDate="Draft.Details.StartDate.Date" />
+        </MudItem>
+
+        @if (Draft.Details.RecurrenceType == EventRecurrenceType.Weekly)
+        {
+            <MudItem xs="12">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">On</MudText>
+                <div class="d-flex flex-wrap align-center mt-1" style="gap: 8px;">
+                    @foreach (var day in EventRecurrence.WeekDays)
+                    {
+                        var on = EventRecurrence.Includes(Days, day);
+                        <MudChip T="string" Size="Size.Medium" Variant="@(on ? Variant.Filled : Variant.Outlined)" Color="@(on ? Color.Primary : Color.Default)"
+                                 OnClick="() => ToggleDay(day)" @key="day">@day.ToString()[..3]</MudChip>
+                    }
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => SetDays(Weekdays)">Weekdays</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => SetDays(Weekends)">Weekends</MudButton>
+                </div>
+            </MudItem>
+        }
+
+        <MudItem xs="12">
+            <MudPaper Outlined="true" Elevation="0" Class="pa-3">
+                <MudText Typo="Typo.subtitle2">Upcoming occurrences</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">@Summary</MudText>
+                @if (Upcoming.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Error">This rule produces no dates — check the start date and recurrence.</MudText>
+                }
+                else
+                {
+                    <div class="occurrence-list">
+                        @foreach (var day in Upcoming)
+                        {
+                            var cancelled = Draft.IsCancelled(day.Key);
+                            <div class="@($"occurrence-list__item{(cancelled ? " is-cancelled" : "")}")">
+                                <MudText Typo="Typo.body2" Class="occurrence-list__date">@DayText(day)</MudText>
+                                <MudButton Variant="Variant.Text" Size="Size.Small" Color="@(cancelled ? Color.Primary : Color.Error)"
+                                           OnClick="() => Draft.ToggleCancelled(day.Key)">@(cancelled ? "Restore" : "Cancel")</MudButton>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+            <SavedWithParentNote Parent="event" />
+        </MudItem>
+    }
+</MudGrid>
+}
+
+@code {
+    [Parameter, EditorRequired] public EventDraft Draft { get; set; } = null!;
+
+    /// <summary>Days shown in the preview (the website and calendar use the same rule).</summary>
+    private const int PreviewDays = 30;
+
+    private EventInput Details => Draft.Details;
+
+    private bool FollowsTour => Details.TourId is not null && Details.FollowsTourDates;
+
+    private IReadOnlyList<EventTourDeparture>? _departures;
+    private DefaultIdType? _departuresFor;
+
+    // The chosen tour's departures (again whenever the tour changes).
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Details.TourId == _departuresFor)
+            return;
+        (_departuresFor, _departures) = (Details.TourId, null);
+        if (Details.TourId is { } tourId)
+            _departures = await Api.Send(new ListEventTourDepartures(tourId));
+    }
+
+    /// <summary>The days the event's own rule has it on (to show which departures it doesn't cover).</summary>
+    private HashSet<DateTime> OwnDates => [.. Upcoming.Select(d => d.Key)];
+
+    private DateTime? StartDate
+    {
+        get => Details.StartDate.Date;
+        set
+        {
+            if (value is not { } date)
+                return;
+            // Moving the start keeps the event's length (and its end, if any, moves with it).
+            var length = Details.EndDate - Details.StartDate;
+            Details.StartDate = date.Date + Details.StartDate.TimeOfDay;
+            Details.EndDate = Details.StartDate + length;
+        }
+    }
+
+    private TimeSpan? StartTime
+    {
+        get => Details.StartDate.TimeOfDay;
+        set => Details.StartDate = Details.StartDate.Date + (value ?? TimeSpan.Zero);
+    }
+
+    private DateTime? EndDate
+    {
+        get => Details.EndDate?.Date;
+        set => Details.EndDate = value is { } date ? date.Date + (Details.EndDate?.TimeOfDay ?? Details.StartDate.TimeOfDay) : null;
+    }
+
+    private TimeSpan? EndTime
+    {
+        get => Details.EndDate?.TimeOfDay;
+        set
+        {
+            if (value is { } time)
+                Details.EndDate = (Details.EndDate ?? Details.StartDate).Date + time; // no end date yet: ends the same day
+            else if (Details.EndDate is { } end && end.Date != Details.StartDate.Date)
+                Details.EndDate = end.Date + Details.StartDate.TimeOfDay; // a later end date stays, at the start time
+            else
+                Details.EndDate = null;
+        }
+    }
+
+    private void SetAllDay(bool allDay)
+    {
+        Details.AllDay = allDay;
+        if (allDay)
+        {
+            Details.StartDate = Details.StartDate.Date;
+            Details.EndDate = Details.EndDate?.Date;
+            Details.TimeSlots.Clear();
+        }
+    }
+
+    // ---- several times a day (e.g. Happy Hour at 12pm, 5pm and 7pm) ----
+    private bool MultipleTimes => Details.TimeSlots.Count > 0;
+    private bool SingleTime => !Details.AllDay && !MultipleTimes;
+
+    private void SetMultipleTimes(bool on)
+    {
+        if (!on)
+        {
+            Details.TimeSlots.Clear();
+            return;
+        }
+        // Starts from the event's own time, so nothing is lost switching over.
+        var start = Details.StartDate.TimeOfDay == TimeSpan.Zero ? TimeSpan.FromHours(18) : Details.StartDate.TimeOfDay;
+        var end = Details.EndDate is { } e && e.Date == Details.StartDate.Date && e.TimeOfDay > start ? e.TimeOfDay : (TimeSpan?)null;
+        Details.TimeSlots.Add(new EventTimeSlotInput { StartTime = start, EndTime = end });
+    }
+
+    /// <summary>An hour after the last one (no later than 11pm).</summary>
+    private void AddTime()
+    {
+        var last = Details.TimeSlots.MaxBy(t => t.StartTime)?.StartTime ?? TimeSpan.FromHours(17);
+        Details.TimeSlots.Add(new EventTimeSlotInput { StartTime = TimeSpan.FromHours(Math.Min(23, last.TotalHours + 1)) });
+    }
+
+    private int Days => EventRecurrence.EffectiveDays(Details.RecurrenceDaysOfWeek, Details.StartDate);
+
+    /// <summary>Monday to Friday, and Saturday and Sunday, as day masks.</summary>
+    private const int Weekdays = 0b0111110, Weekends = 0b1000001;
+
+    private void SetDays(int mask) => Details.RecurrenceDaysOfWeek = mask;
+
+    private void ToggleDay(DayOfWeek day)
+    {
+        var mask = Days ^ (1 << (int)day);
+        Details.RecurrenceDaysOfWeek = mask == 0 ? null : mask;
+    }
+
+    private string Unit => Details.RecurrenceType switch
+    {
+        EventRecurrenceType.Daily => "day",
+        EventRecurrenceType.Weekly => "week",
+        _ => "month",
+    };
+
+    /// <summary>The rule in words, over the upcoming dates (e.g. "Every week on Mon, Thu").</summary>
+    private string Summary =>
+        EventRecurrence.Describe(Details.RecurrenceType, Details.StartDate, Details.RecurrenceInterval, Details.RecurrenceDaysOfWeek, Details.RecurrenceEndDate);
+
+    /// <summary>
+    /// The next days from today (or the start, if later), each with its times; cancelled ones included so they can be
+    /// restored (a cancelled day is off at every time).
+    /// </summary>
+    private IReadOnlyList<IGrouping<DateTime, DateTime>> Upcoming
+    {
+        get
+        {
+            var from = Details.StartDate.Date > DateTime.Today ? Details.StartDate.Date : DateTime.Today;
+            var times = MultipleTimes ? Details.TimeSlots.Select(t => t.StartTime).ToList() : null;
+            return [.. EventRecurrence.Expand(Details.RecurrenceType, Details.StartDate, Details.RecurrenceEndDate, Details.RecurrenceInterval,
+                    Details.RecurrenceDaysOfWeek, cancelledDates: null, from, from.AddYears(1), timesOfDay: times)
+                .GroupBy(d => d.Date)
+                .Take(PreviewDays)];
+        }
+    }
+
+    private string DayText(IGrouping<DateTime, DateTime> day) =>
+        Details.AllDay ? day.Key.ToString("ddd dd MMM yyyy")
+        : $"{day.Key:ddd dd MMM yyyy} · {string.Join(", ", day.Select(t => t.ToString("h:mm tt")))}";
+
+    /// <summary>Checked on leaving the step (the server checks again on Save).</summary>
+    public bool Validate()
+    {
+        if (FollowsTour)
+            return true; // the tour's departures are the dates
+        string? problem = null;
+        if (Details.EndDate is { } end && end < Details.StartDate)
+            problem = "The event can't end before it starts.";
+        else if (Draft.Repeats && Details.RecurrenceEndDate is { } until && until.Date < Details.StartDate.Date)
+            problem = "Until can't be before the start date.";
+        else if (MultipleTimes && Details.TimeSlots.Any(t => t.EndTime is { } to && to <= t.StartTime))
+            problem = "A time can't end before it starts.";
+        else if (MultipleTimes && Details.TimeSlots.DistinctBy(t => t.StartTime).Count() != Details.TimeSlots.Count)
+            problem = "Each time must start at a different time.";
+        if (problem is null)
+            return true;
+        Snackbar.Add(problem, Severity.Warning);
+        return false;
+    }
+}

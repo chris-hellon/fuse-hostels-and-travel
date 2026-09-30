@@ -1,0 +1,61 @@
+@using Fuse.Contracts.Bookings
+@* The additional guests on a tour (legacy GuestListPicker): search or create, then remove as needed. *@
+
+<GuestSearchBox Label="@Label" Disabled="Disabled" OnPick="AddAsync">@Toolbar</GuestSearchBox>
+
+@if (GuestIds.Count > 0)
+{
+    <MudPaper Outlined="true" Elevation="0" Class="guest-list mt-3">
+        @foreach (var id in GuestIds)
+        {
+            var name = NameOf(id);
+            <div class="guest-list__row" @key="id">
+                <div>
+                    <MudText Typo="Typo.body2"><strong>@name.Name</strong></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@name.Detail</MudText>
+                </div>
+                @if (!Disabled)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error" aria-label="Remove guest" OnClick="() => RemoveAsync(id)" />
+                }
+            </div>
+        }
+    </MudPaper>
+}
+else
+{
+    <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary d-block">No additional guests added yet.</MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<string> GuestIds { get; set; } = [];
+    [Parameter, EditorRequired] public Func<string, GuestName> NameOf { get; set; } = null!;
+    /// <summary>A guest was picked: remember their name for display.</summary>
+    [Parameter] public Action<string, GuestName>? Remember { get; set; }
+    /// <summary>The lead guest, who can't also be an additional guest.</summary>
+    [Parameter] public string? LeadGuestId { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Label { get; set; } = "Search Additional Guest";
+    [Parameter] public RenderFragment? Toolbar { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private async Task AddAsync((string Id, GuestName Name) guest)
+    {
+        if (string.Equals(guest.Id, LeadGuestId, StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add($"{guest.Name.Name} is the booking's primary guest, who's already on every tour.", Severity.Info);
+            return;
+        }
+        if (GuestIds.Contains(guest.Id, StringComparer.OrdinalIgnoreCase))
+            return;
+        Remember?.Invoke(guest.Id, guest.Name);
+        GuestIds.Add(guest.Id);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(string id)
+    {
+        GuestIds.Remove(id);
+        await OnChanged.InvokeAsync();
+    }
+}

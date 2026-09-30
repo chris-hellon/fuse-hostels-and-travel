@@ -1,0 +1,108 @@
+@page "/travaloud-payment-confirmation/{SessionId}"
+@* Legacy's website checkout returned here: checkouts still open when the site was switched over come back to it. *@
+@page "/payment-confirmation/{SessionId}"
+@implements IDisposable
+@using Fuse.Contracts.Bookings
+@inject IApi Api
+
+@* Where Stripe returns after paying (legacy PaymentConfirmation): records the payment (safe to repeat), shows the
+   order and empties the basket. Also where the admin's payment links return. *@
+
+<SeoHead PageName="Order Confirmation" />
+
+<section class="bg-light overflow-hidden position-relative">
+    <div class="container-fluid">
+        <div class="container pt-8 pb-8">
+            <div class="row d-flex justify-content-center">
+                <div class="col-lg-8">
+                    @if (_result is null)
+                    {
+                        <h1 class="display-3 mb-4 text-center">Order Confirmation</h1>
+                        <LoadingMessage Text="Confirming your payment…" />
+                    }
+                    else if (_result.Confirmed)
+                    {
+                        <h1 class="display-3 mb-4 text-center">Order Confirmation</h1>
+                        <p class="mb-0 text-center">Congratulations! Your booking with Fuse Hostels &amp; Travel is confirmed and your payment has been successfully processed. Get ready for an unforgettable backpacking adventure!</p>
+                        <div class="card mt-5">
+                            <div class="card-body p-5">
+                                <div class="d-flex justify-content-center">
+                                    <h4 class="tilted display-6">ORDER DETAILS</h4>
+                                </div>
+                                <div class="d-flex justify-content-between mt-5 border-bottom pb-3 mb-4">
+                                    <div>
+                                        <h6>Order Reference</h6>
+                                        <p>@_result.Reference</p>
+                                    </div>
+                                    <div class="text-end">
+                                        <h6>Date of Order</h6>
+                                        <p>@_result.BookingDate?.ToString("dddd, d MMMM yyyy")</p>
+                                    </div>
+                                </div>
+                                @if (_ordered.Count > 0)
+                                {
+                                    <BasketLines Lines="_ordered" />
+                                }
+                                <p class="mt-4 mb-0">We've emailed you a confirmation with everything you need.</p>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <h1 class="display-3 mb-4 text-center">Order Failed</h1>
+                        <p class="mb-0 text-center">We couldn't confirm your payment.</p>
+                        <div class="card mt-5">
+                            <div class="card-body p-5">
+                                <p>@_result.Message</p>
+                                <p class="mb-0">Please <a href="/contact">contact us</a> for assistance.</p>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    [CascadingParameter] private Basket Basket { get; set; } = null!;
+    [Parameter] public string SessionId { get; set; } = "";
+
+    private CheckoutConfirmation? _result;
+    private IReadOnlyList<BasketQuoteLine> _ordered = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Safe to run more than once (prerender, then the browser): a recorded payment is left as it is.
+            _result = await Api.Send(new ConfirmCheckout(SessionId));
+        }
+        catch (AppException)
+        {
+            _result = new CheckoutConfirmation { Message = "This payment link isn't valid." };
+        }
+        Basket.Changed += BasketLoaded;
+        await ShowAndEmptyAsync();
+    }
+
+    private void BasketLoaded() => _ = InvokeAsync(async () =>
+    {
+        await ShowAndEmptyAsync();
+        StateHasChanged();
+    });
+
+    /// <summary>Paid: show what was ordered (as legacy did, from the basket), then empty the basket.</summary>
+    private async Task ShowAndEmptyAsync()
+    {
+        if (_result?.Confirmed != true || !Basket.Loaded || (Basket.Count == 0 && Basket.PendingBookingId is null))
+            return;
+        _ordered = [.. Basket.Items.Select(i => new BasketQuoteLine
+        {
+            DepartureId = i.DepartureId, TourName = i.TourName, Start = i.Start, Guests = i.Guests, Pickup = i.Pickup, UnitPrice = i.UnitPrice,
+        })];
+        await Basket.ClearAsync();
+    }
+
+    public void Dispose() => Basket.Changed -= BasketLoaded;
+}

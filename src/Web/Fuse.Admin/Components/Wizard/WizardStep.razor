@@ -1,0 +1,90 @@
+@typeparam TModel
+@using FluentValidation
+@inject ISnackbar Snackbar
+
+@code {
+    [CascadingParameter] public Wizard<TModel>? Wizard { get; set; }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Runs after the step's fields validate, before moving on (e.g. creating a draft, server checks).
+    /// Return false to stay on the step.
+    /// </summary>
+    [Parameter] public Func<TModel, Task<bool>>? OnLeaveAsync { get; set; }
+
+    /// <summary>
+    /// Checks that run with the step's field validation, for inputs outside the form (e.g. a picked guest),
+    /// so their errors show together. Return false to stay on the step.
+    /// </summary>
+    [Parameter] public Func<bool>? Validate { get; set; }
+
+    /// <summary>
+    /// The save's own rules for what this step edits (e.g. the tour's details), checked on leaving the step as legacy
+    /// did, instead of only at Save: each field bound with <c>For</c> shows its message under it, and every message
+    /// shows in the snackbar (for rules on no single field, like "enter a duration").
+    /// </summary>
+    [Parameter] public IValidator? Validator { get; set; }
+    /// <summary>What <see cref="Validator"/> checks (and what fields bound with <c>For</c> belong to).</summary>
+    [Parameter] public object? ValidationModel { get; set; }
+    /// <summary>
+    /// Builds what <see cref="Validator"/> checks when that's the whole save (e.g. the command made from the draft),
+    /// instead of <see cref="ValidationModel"/>.
+    /// </summary>
+    [Parameter] public Func<object>? ValidationTarget { get; set; }
+    /// <summary>
+    /// The rules' properties this step edits (e.g. "Details.Name", "Rooms"); the other steps' are left for them. None:
+    /// every rule belongs to this step.
+    /// </summary>
+    [Parameter] public IReadOnlyCollection<string>? ValidationProperties { get; set; }
+
+    private MudForm? _form;
+
+    internal RenderFragment RenderStep() =>
+        @<MudForm @ref="_form" Class="travaloud-form" Model="ValidationModel" Validation="@(Validator is null ? null : (Func<object, string, Task<IEnumerable<string>>>)ValidateValueAsync)">
+            <div class="travaloud-wizard-step__content" id="travaloudWizardStepContent">
+                @ChildContent
+            </div>
+        </MudForm>;
+
+    protected override void OnInitialized()
+    {
+        if (Wizard is null)
+            throw new InvalidOperationException($"{nameof(WizardStep<TModel>)} must be inside a {nameof(Wizard<TModel>)}.");
+        Wizard.RegisterStep(this);
+    }
+
+    internal async Task<bool> ValidateAsync()
+    {
+        var valid = Validate?.Invoke() ?? true;
+        if (_form is not null)
+        {
+            await _form.ValidateAsync();
+            valid = _form.IsValid && valid;
+        }
+        if (Validator is not null && (ValidationTarget?.Invoke() ?? ValidationModel) is { } target)
+        {
+            var result = await Validator.ValidateAsync(new ValidationContext<object>(target));
+            var mine = result.Errors.Where(e => Owns(e.PropertyName)).Select(e => e.ErrorMessage).Distinct().ToList();
+            if (mine.Count > 0)
+            {
+                Snackbar.Add(string.Join(" ", mine), MudBlazor.Severity.Error);
+                valid = false;
+            }
+        }
+        return valid;
+    }
+
+    /// <summary>A rule's property is this step's: one listed, or inside one ("Rooms[0].Name" is in "Rooms").</summary>
+    private bool Owns(string? property) =>
+        ValidationProperties is null
+        || ValidationProperties.Any(p => property == p || (property ?? "").StartsWith(p + ".") || (property ?? "").StartsWith(p + "["));
+
+    /// <summary>One field's messages (MudForm asks per field bound with <c>For</c>).</summary>
+    private async Task<IEnumerable<string>> ValidateValueAsync(object model, string propertyName)
+    {
+        var result = await Validator!.ValidateAsync(ValidationContext<object>.CreateWithOptions(model, o => o.IncludeProperties(propertyName)));
+        return result.Errors.Select(e => e.ErrorMessage);
+    }
+}

@@ -1,0 +1,86 @@
+@using Fuse.Contracts.Tours
+
+@*
+    Create / edit a tour. Every step edits a TourDraft; nothing is written until Save, which sends
+    all the changes as one command (one transaction). Cancel discards them.
+    The dialog is rendered once and keeps a fixed height, so loading and switching steps don't
+    make it jump.
+*@
+
+<ModalWizard TModel="TourDraft" Model="_draft" Loading="_draft is null" OnSave="SaveAsync" OnCancel="CancelAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Tour" : "Edit Tour")
+    </TitleContent>
+    <ChildContent>
+        @if (_draft is not null && _lookups is not null)
+        {
+            <WizardStep TModel="TourDraft" Title="Basic Information" Validator="BasicRules" ValidationModel="_draft.Details">
+                <TourBasicStep Tour="_draft.Details" Lookups="_lookups" />
+            </WizardStep>
+            <WizardStep TModel="TourDraft" Title="Content" OnLeaveAsync="_ => Task.FromResult(_content?.Validate() ?? true)">
+                <TourContentStep @ref="_content" Tour="_draft.Details" />
+            </WizardStep>
+            <WizardStep TModel="TourDraft" Title="Pricing" Validator="ChangeRules" ValidationTarget="@(() => _draft.ToChanges())" ValidationProperties="@(["Prices"])">
+                <TourPricingStep Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="TourDraft" Title="Dates" Validator="ChangeRules" ValidationTarget="@(() => _draft.ToChanges())" ValidationProperties="@(["AddedDates", "AddedDates.Count", "ChangedDates"])">
+                <TourDatesStep Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="TourDraft" Title="Booking">
+                <TourBookingStep Tour="_draft.Details" Lookups="_lookups" />
+            </WizardStep>
+            <WizardStep TModel="TourDraft" Title="SEO">
+                <TourSeoStep Tour="_draft.Details" />
+            </WizardStep>
+            <WizardStep TModel="TourDraft" Title="Images">
+                <TourImagesStep Draft="_draft" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? TourId { get; set; }
+
+    private bool IsCreate => TourId is null;
+    private TourDraft? _draft;
+    private TourLookups? _lookups;
+    private TourContentStep? _content;
+
+    /// <summary>The save's rules for the tour's details (all on the Basic Information step).</summary>
+    private static readonly TourInputValidator BasicRules = new();
+    private static readonly TourChangesValidator ChangeRules = new();
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var lookups = TourLookups.LoadAsync(Api);
+        var draft = IsCreate ? Task.FromResult(TourDraft.New()) : LoadDraftAsync(TourId!.Value);
+        await Task.WhenAll(lookups, draft);
+        (_lookups, _draft) = (lookups.Result, draft.Result);
+    });
+
+    private async Task<TourDraft> LoadDraftAsync(DefaultIdType id) => TourDraft.From(await Api.Send(new GetTourEditor(id)));
+
+    private async Task<bool> SaveAsync(TourDraft draft)
+    {
+        var changes = draft.ToChanges();
+        return await Snackbar.TryAsync(async () =>
+        {
+            if (draft.IsNew)
+                await Api.Send(new CreateTour(changes));
+            else
+                await Api.Send(new UpdateTour(draft.Id!.Value, changes));
+        }, IsCreate ? "Tour created." : "Tour saved.");
+    }
+
+    private async Task<bool> CancelAsync()
+    {
+        if (_draft is not { HasChanges: true })
+            return true;
+        return await Dialogs.ConfirmAsync("Discard your changes?", "You've changed this tour but haven't saved it. If you close now, those changes are lost.",
+            "Discard changes", "Keep editing");
+    }
+}

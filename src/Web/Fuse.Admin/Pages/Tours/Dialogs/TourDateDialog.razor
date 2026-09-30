@@ -1,0 +1,113 @@
+@using Fuse.Contracts.Tours
+
+@* Adds one departure (optionally repeating) or edits one. Held in the draft until Save. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(IsCreate ? Icons.Material.Outlined.Event : Icons.Material.Outlined.EditCalendar)" Class="mr-3 mb-n1" />
+            @(IsCreate ? "Add date" : "Edit date")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                @if (Date?.Booked == true)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text">This date has bookings, so only its price override can change.</MudAlert>
+                }
+                <MudDatePicker Label="Date" @bind-Date="_date" MinDate="DateTime.Today" MaxDate="DateTime.Today.AddYears(2)" DateFormat="dd/MM/yyyy"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Choose a date" ReadOnly="Locked" />
+                <MudTimePicker Label="Start time" AmPm="true" @bind-Time="_time" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true"
+                               RequiredError="Choose a start time" ReadOnly="Locked" />
+                <MudSelect T="DefaultIdType?" Label="Price" @bind-Value="_priceKey" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true"
+                           RequiredError="Choose a price" ReadOnly="Locked">
+                    @foreach (var price in Draft.Prices)
+                    {
+                        <MudSelectItem T="DefaultIdType?" Value="price.Key">@price.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="decimal?" Label="Price override" @bind-Value="_override" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true"
+                                 Adornment="Adornment.Start" AdornmentText="$" HelperText="Optional: charge a different price on this date." />
+                @if (IsCreate)
+                {
+                    <MudSwitch T="bool" @bind-Value="_repeats" Label="Repeat this date" Color="Color.Primary" />
+                    @if (_repeats)
+                    {
+                        <MudStack Row="true" Spacing="3">
+                            <MudNumericField T="int" Label="For" @bind-Value="_repeatCount" Min="1" Max="104" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudSelect T="string" Label="Period" @bind-Value="_period" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                @foreach (var period in Periods)
+                                {
+                                    <MudSelectItem T="string" Value="period">@period</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            Repeats on the same weekday (weeks) or the same date (months and years).
+                        </MudText>
+                    }
+                }
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ConfirmAsync">@(IsCreate ? "Add" : "Done")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly string[] Periods = ["Weeks", "Months", "Years"];
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public TourDraft Draft { get; set; } = null!;
+    /// <summary>The departure to edit; null to add one.</summary>
+    [Parameter] public DateDraft? Date { get; set; }
+
+    private bool IsCreate => Date is null;
+    private bool Locked => Date?.Booked == true;
+
+    private MudForm? _form;
+    private DateTime? _date;
+    private TimeSpan? _time;
+    private DefaultIdType? _priceKey;
+    private decimal? _override;
+    private bool _repeats;
+    private int _repeatCount = 4;
+    private string _period = Periods[0];
+
+    protected override void OnInitialized()
+    {
+        if (Date is not null)
+            (_date, _time, _priceKey, _override) = (Date.StartDate.Date, Date.StartDate.TimeOfDay, Date.PriceKey, Date.PriceOverride);
+        else if (Draft.Prices.Count == 1)
+            _priceKey = Draft.Prices[0].Key;
+    }
+
+    private async Task ConfirmAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid || _date is null || _time is null || _priceKey is not { } priceKey)
+            return;
+        var start = _date.Value.Date.Add(_time.Value);
+
+        if (!IsCreate)
+        {
+            Draft.UpdateDate(Date!, start, priceKey, _override);
+            Dialog.Close(DialogResult.Ok(1));
+            return;
+        }
+
+        var first = DateOnly.FromDateTime(start);
+        var (every, interval, last) = !_repeats ? (RepeatEvery.Day, 1, first)
+            : _period == "Weeks" ? (RepeatEvery.Week, 1, first.AddDays(7 * (_repeatCount - 1)))
+            : _period == "Months" ? (RepeatEvery.Month, 1, first.AddMonths(_repeatCount - 1))
+            : (RepeatEvery.Month, 12, first.AddYears(_repeatCount - 1));
+        var starts = TourSchedule.Starts(first, last, every, interval, [TimeOnly.FromTimeSpan(_time.Value)]);
+        var added = Draft.AddDates(starts, [priceKey], _override);
+        Snackbar.Add(added == 0 ? "That date already exists." : $"{added} date{(added == 1 ? "" : "s")} will be added when you save the tour.",
+            added == 0 ? Severity.Info : Severity.Success);
+        Dialog.Close(DialogResult.Ok(added));
+    }
+}

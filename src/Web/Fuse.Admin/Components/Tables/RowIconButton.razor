@@ -1,0 +1,18 @@
+@* A table row's action as a borderless icon with its name as the tooltip (admin tables' row actions). Danger for
+   destructive ones (red); Active for a toggle that's on (e.g. a row's details shown). *@
+
+<MudTooltip Text="@Label">
+    <MudIconButton Icon="@Icon" Size="Size.Small" aria-label="@Label" Href="@Href" Target="@Target"
+                   Class="@($"row-icon{(Danger ? " row-icon--danger" : "")}{(Active ? " row-icon--active" : "")}")"
+                   OnClick="OnClick" />
+</MudTooltip>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public string? Href { get; set; }
+    [Parameter] public string? Target { get; set; }
+    [Parameter] public bool Danger { get; set; }
+    [Parameter] public bool Active { get; set; }
+}

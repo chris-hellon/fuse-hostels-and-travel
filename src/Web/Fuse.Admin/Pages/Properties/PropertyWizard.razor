@@ -1,0 +1,88 @@
+@using Fuse.Contracts.Locations
+@using Fuse.Contracts.Properties
+
+@* Create / edit a property. Every step edits a PropertyDraft; Save sends it all in one transaction. *@
+
+<ModalWizard TModel="PropertyDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" OnCancel="CancelAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Property" : "Edit Property")
+    </TitleContent>
+    <ChildContent>
+        @if (_draft is not null)
+        {
+            <WizardStep TModel="PropertyDraft" Title="Details" Validator="Rules" ValidationTarget="Changes" ValidationProperties="@(["Details.Name", "Details.AddressLine1", "Details.TelephoneNumber"])">
+                <PropertyDetailsStep Draft="_draft" Locations="_locations" />
+            </WizardStep>
+            <WizardStep TModel="PropertyDraft" Title="Content" OnLeaveAsync="_ => Task.FromResult(ContentIsValid())">
+                <ContentSections @ref="_content" Sections="_sections" />
+            </WizardStep>
+            <WizardStep TModel="PropertyDraft" Title="Rooms" Validator="Rules" ValidationTarget="Changes" ValidationProperties="@(["Rooms"])">
+                <PropertyRoomsStep Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="PropertyDraft" Title="Directions" Validator="Rules" ValidationTarget="Changes" ValidationProperties="@(["Directions"])">
+                <PropertyDirectionsStep Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="PropertyDraft" Title="SEO">
+                <SeoFieldsEditor Seo="_draft.Details" SlugExample="this-hostel" />
+            </WizardStep>
+            <WizardStep TModel="PropertyDraft" Title="Media" OnLeaveAsync="_ => Task.FromResult(_media?.Validate() ?? true)">
+                <PropertyMediaStep @ref="_media" Draft="_draft" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? PropertyId { get; set; }
+
+    private bool IsCreate => PropertyId is null;
+    private PropertyDraft? _draft;
+    /// <summary>The save's rules, checked step by step (each step lists the ones it edits).</summary>
+    private static readonly PropertyChangesValidator Rules = new();
+    private object Changes() => _draft!.ToChanges();
+    private IReadOnlyList<LocationSummary> _locations = [];
+    private IReadOnlyList<ContentSection> _sections = [];
+    private ContentSection? _full;
+    private ContentSections? _content;
+    private PropertyMediaStep? _media;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var locations = Api.Send(new ListLocations()).AsTask();
+        var draft = IsCreate ? Task.FromResult(PropertyDraft.New()) : LoadAsync(PropertyId!.Value);
+        await Task.WhenAll(locations, draft);
+        _locations = locations.Result;
+        var details = draft.Result.Details;
+        _full = new ContentSection("Full description", "The main text on the property page", () => details.Description, v => details.Description = v ?? "", Required: true);
+        _sections = [new("Short description", "A sentence or two about the property", () => details.ShortDescription, v => details.ShortDescription = v), _full];
+        _draft = draft.Result;
+    });
+
+    private async Task<PropertyDraft> LoadAsync(DefaultIdType id) => PropertyDraft.From(await Api.Send(new GetPropertyEditor(id)));
+
+    private bool ContentIsValid()
+    {
+        if (_full!.HasText)
+            return true;
+        _content?.Select(_full);
+        Snackbar.Add("Add a full description before moving on.", Severity.Warning);
+        return false;
+    }
+
+    private async Task<bool> SaveAsync(PropertyDraft draft) =>
+        await Snackbar.TryAsync(async () =>
+        {
+            if (draft.IsNew)
+                await Api.Send(new CreateProperty(draft.ToChanges()));
+            else
+                await Api.Send(new UpdateProperty(draft.Id!.Value, draft.ToChanges()));
+        }, IsCreate ? "Property created." : "Property saved.");
+
+    private async Task<bool> CancelAsync() =>
+        _draft is not { HasChanges: true }
+        || await Dialogs.ConfirmAsync("Discard your changes?", "You've changed this property but haven't saved it. If you close now, those changes are lost.",
+            "Discard changes", "Keep editing");
+}

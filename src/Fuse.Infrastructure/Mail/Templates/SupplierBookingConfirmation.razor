@@ -1,0 +1,35 @@
+@* Legacy SupplierBookingConfirmation: tells a supplier who's booked on their tours. *@
+<EmailFrame Brand="Brand" Title="New Booking Confirmed" Preheader="@($"{Brand.TenantName} Booking Confirmation")" ShowTick="true"
+            ActionIntro="If you have any questions, you can reach out to us below." ActionText="Contact Us" ActionUrl="@Brand.ContactUrl">
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
+            <p style="@EmailStyles.Paragraph">Dear Partner, a new Booking has been processed. Please confirm details of the Booking below.</p>
+        </td>
+    </tr>
+    <tr>
+        <td align="left" style="padding-top: 20px;">
+            <table cellspacing="0" cellpadding="0" border="0" width="100%">
+                @foreach (var item in Booking.Items.Where(i => i.SupplierId == SupplierId))
+                {
+                    <tr>
+                        <td width="75%" align="left" bgcolor="#eeeeee" style="@EmailStyles.HeaderCell">@EmailStyles.Line(item)</td>
+                        <td width="25%" align="left" bgcolor="#eeeeee" style="@EmailStyles.HeaderCell"></td>
+                    </tr>
+                    @foreach (var guest in item.GuestNames)
+                    {
+                        <tr>
+                            <td width="50%" align="left" style="@EmailStyles.ItemCell">@guest</td>
+                            <td width="50%" align="left" style="@EmailStyles.ItemCell">Pick Up: @item.PickupLocation</td>
+                        </tr>
+                    }
+                }
+            </table>
+        </td>
+    </tr>
+</EmailFrame>
+
+@code {
+    [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
+    [Parameter, EditorRequired] public BookingEmail Booking { get; set; } = null!;
+    [Parameter, EditorRequired] public string SupplierId { get; set; } = "";
+}

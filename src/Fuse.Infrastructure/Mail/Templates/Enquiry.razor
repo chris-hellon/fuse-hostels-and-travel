@@ -1,0 +1,26 @@
+@* Legacy ContactTemplate / TourEnquiryTemplate: what the visitor filled in, for the team (reply goes to them). *@
+<EmailFrame Brand="Brand" Title="@Email.Title" Preheader="@Email.Title">
+    <tr>
+        <td align="left" style="padding-top: 20px;">
+            <table cellspacing="0" cellpadding="0" border="0" width="100%">
+                @foreach (var field in Email.Fields.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
+                {
+                    <tr>
+                        <td width="35%" align="left" valign="top" style="@EmailStyles.HeaderCell">@field.Label</td>
+                        <td width="65%" align="left" valign="top" style="@(EmailStyles.Body) padding: 10px; white-space: pre-wrap;">@field.Value</td>
+                    </tr>
+                }
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 20px;">
+            <p style="@EmailStyles.Paragraph">Reply to this email to answer them.</p>
+        </td>
+    </tr>
+</EmailFrame>
+
+@code {
+    [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
+    [Parameter, EditorRequired] public EnquiryEmail Email { get; set; } = null!;
+}

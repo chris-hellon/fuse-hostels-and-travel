@@ -1,0 +1,420 @@
+// Styles for the Blazor components that replace legacy's jQuery, Owl and MDB widgets. The widgets keep
+// legacy's class names, so the theme styles them; these only lay out what the scripts used to.
+
+// ---- Card carousel (was Owl Carousel) --------------------------------------------------------------
+// Owl hid the scrollbar, paged by whole slides and showed 1 / 2 / 3 cards with 20px between them.
+.fuse-carousel {
+  .fuse-carousel__track {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    // Owl's .owl-stage-outer padding (room for the offcut borders).
+    padding-left: 5px;
+    padding-right: 3px;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    @media (max-width: 991px) {
+      padding: 0;
+    }
+  }
+
+  .fuse-carousel__item {
+    flex: 0 0 100%;
+    min-width: 0;
+    scroll-snap-align: start;
+
+    @media (min-width: 768px) {
+      flex-basis: calc((100% - 20px) / 2);
+    }
+
+    @media (min-width: 1415px) {
+      flex-basis: calc((100% - 40px) / 3);
+    }
+  }
+}
+
+// ---- Select (was MDB select) --------------------------------------------------------------------------
+// MDB placed the dropdown with Popper at the end of <body>; here it hangs under the field. The theme gives
+// form columns z-index 2 (each its own layer), so the open select's column is lifted over its neighbours.
+.fuse-select__dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  z-index: 1070;
+}
+
+// The arrow (and a field's trailing icon, e.g. the calendar) sit over the input: clicks go through to it.
+.select-wrapper .select-arrow,
+.form-outline .trailing {
+  pointer-events: none;
+}
+
+[class*="col-"]:has(> * > .select-wrapper.is-open),
+[class*="col-"]:has(> .select-wrapper.is-open) {
+  z-index: 3 !important;
+}
+
+// ---- Validation messages -------------------------------------------------------------------------------
+.travaloud-validation.field-validation-valid {
+  display: none;
+}
+
+// ---- Introduction video (was videoplayer.js) --------------------------------------------------------------
+// The play mask fades out while the video plays (jQuery fadeOut / fadeIn).
+.fuse-video__mask {
+  transition: opacity .4s;
+
+  &.is-playing {
+    opacity: 0;
+  }
+}
+
+// ---- Header slideshow (was MDB carousel-fade) ------------------------------------------------------------
+// The photos stack and cross-fade; MDB did this with transitional classes from its script.
+.fuse-slideshow .carousel-item {
+  display: block;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .6s ease-in-out;
+
+  &.active {
+    opacity: 1;
+  }
+}
+
+// Banners: dark, not white, for the moment before even the photo's preview arrives (CdnImages.Background).
+.header-banner .header-banner-image-background { background-color: #1b1b1b; }
+
+// A hostel's card (Components/Sections/HostelDetails.razor): photo (with the offcut border), a tilted name over its
+// edge, contact details and links. Wide (photo beside) for a single hostel from lg.
+.hostel-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f5f5f5;
+}
+
+.hostel-card__photo {
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: #1b1b1b;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: filter .3s ease;
+  }
+
+  &:hover img { filter: brightness(1.08); }
+}
+
+.hostel-card__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0 2rem 2rem;
+}
+
+h4.tilted.hostel-card__name {
+  margin: -1.4rem 0 1.75rem -1rem;
+  position: relative;
+  z-index: 4;
+}
+
+.hostel-card__contact {
+  list-style: none;
+  margin: 0 0 1.75rem;
+  padding: 0;
+  font-family: var(--mdb-font-din-2014-narrow);
+  font-size: 1.2rem;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: .9rem;
+    margin-bottom: .6rem;
+  }
+
+  i { width: 1.1rem; color: var(--mdb-primary); text-align: center; }
+  a { color: inherit; }
+  a:hover { color: var(--mdb-primary); }
+}
+
+.hostel-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-top: auto;
+}
+
+@media (min-width: 992px) {
+  .hostel-card--wide {
+    flex-direction: row;
+
+    .hostel-card__photo { flex: 0 0 45%; aspect-ratio: auto; min-height: 340px; }
+    .hostel-card__body { justify-content: center; padding: 2.5rem 3rem; }
+    h4.tilted.hostel-card__name { margin: 0 0 1.75rem -4.5rem; }
+    .hostel-card__actions { margin-top: 0; }
+  }
+}
+
+// ---- Enquiry forms (contact page, tour Enquire Now) ---------------------------------------------------------------
+// The thank-you that replaces a sent form.
+.enquiry-sent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem 0 .5rem;
+  text-align: center;
+
+  i { font-size: 3rem; color: var(--mdb-primary); }
+  p { margin: 0; font-size: 1.1rem; }
+}
+
+// Google's box is a fixed 304px; narrow phones scale it down rather than overflow.
+.fuse-captcha { min-height: 78px; }
+@media (max-width: 360px) {
+  .fuse-captcha { transform: scale(.85); transform-origin: 0 0; }
+}
+
+// ---- Book modal: hostels or tours -----------------------------------------------------------------------------------
+.book-now-choice .nav-link { margin: 0 .25rem; }
+
+.book-now-choice__all {
+  display: inline-block;
+  margin-top: 1rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+// ---- A modal with a footer (FuseModal Footer): title and buttons fixed, the body scrolls between them ----------
+.fuse-modal {
+  padding: 0;
+
+  .fuse-modal__head {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    padding: 3rem 3rem 1.25rem;
+    text-align: center;
+  }
+
+  .fuse-modal__subtitle {
+    margin: .5rem 0 0;
+    font-family: var(--mdb-font-din-2014-narrow-bold);
+    font-size: 1.1rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--mdb-primary);
+  }
+
+  // Room either side for the fields' row gutters, so nothing scrolls sideways.
+  .fuse-modal__body {
+    padding: 1rem 3rem 1.5rem;
+    overflow-x: hidden;
+  }
+
+  .fuse-modal__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-shrink: 0;
+    padding: 1.25rem 3rem;
+    border-top: 1px solid rgba(9, 5, 17, .1);
+  }
+
+  .fuse-modal__problem {
+    flex-basis: 100%;
+    margin: 0;
+    color: #f66;
+  }
+
+  @media (max-width: 575px) {
+    .fuse-modal__head { padding: 2rem 1.5rem 1rem; }
+    .fuse-modal__body { padding: 1rem 1.5rem 1.5rem; }
+    .fuse-modal__foot { padding: 1rem 1.5rem; }
+  }
+}
+
+// A card's summary (Components/Cards/ContentCard.razor): six lines at most, ending in an ellipsis.
+.content-card__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+
+  p { margin-bottom: 0; }
+  p + p { margin-top: 1rem; }
+}
+
+// The page starts below the always-white header (every page but home). fuse.js's padMain measures and sets this once
+// the page is interactive; reserving it here too means the prerendered page is already in place, so nothing jumps
+// down when the app starts. Heights as measured: 68px below lg (the phone header), 99px from lg (the menu wraps to
+// two lines), 82px from xl.
+body:has(nav.navbar.always-shadow) main {
+  padding-top: 68px !important;
+
+  @media (min-width: 992px) {
+    padding-top: 99px !important;
+  }
+
+  @media (min-width: 1200px) {
+    padding-top: 82px !important;
+  }
+}
+
+// Loading placeholders: shapes where content will be, with a light sweeping across them. --dark for over photos.
+@keyframes skeleton-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+.skeleton {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+  height: 0.8em;
+  background: linear-gradient(90deg, #ececec 30%, #f8f8f8 50%, #ececec 70%) 0 0 / 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+.skeleton--dark {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.14) 30%, rgba(255, 255, 255, 0.32) 50%, rgba(255, 255, 255, 0.14) 70%);
+}
+
+// The title in a banner's black box (HeaderBanner) and the home hero's headline, while the page's record loads.
+.banner-title-skeleton {
+  width: 5em;
+  height: 0.7em;
+}
+
+.carousel-item {
+  .hero-line-skeleton { width: 9em; }
+  .hero-line-skeleton--short { width: 7em; }
+  // Title size (the hero's spans are otherwise smaller).
+  h1 > .hero-title-skeleton {
+    font-size: inherit;
+    width: 2.6em;
+    height: 0.75em;
+  }
+}
+
+// A page's content while it loads (Components/Sections/PageSkeleton.razor).
+.page-skeleton {
+  min-height: 100vh;
+  padding-top: 4rem;
+  padding-bottom: 4rem;
+
+  .skeleton { display: block; }
+}
+
+.page-skeleton__intro {
+  margin-bottom: 3rem;
+
+  .skeleton { margin-left: auto; margin-right: auto; }
+}
+
+.page-skeleton__heading {
+  width: 18rem;
+  height: 2.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-skeleton__line {
+  width: 36rem;
+  height: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.page-skeleton__line--short { width: 24rem; }
+
+.page-skeleton__card {
+  width: 100%;
+  height: 22rem;
+}
+
+// The site's oval dots, bouncing in turn (Components/Sections/LoadingDots.razor).
+.loading-dots {
+  display: flex;
+  gap: .6rem;
+
+  span {
+    width: 1.1rem;
+    height: .75rem;
+    border-radius: 50%;
+    background: var(--mdb-primary);
+    animation: loading-dot 1s ease-in-out infinite;
+
+    &:nth-child(2) { animation-delay: .15s; }
+    &:nth-child(3) { animation-delay: .3s; }
+  }
+}
+
+@keyframes loading-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+  40% { transform: translateY(-.6rem); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots span { animation: none; opacity: 1; }
+}
+
+// Part of a page waiting for its data: the dots over a line (Components/Sections/LoadingMessage.razor).
+.loading-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 3rem 1rem;
+
+  p {
+    margin: 0;
+    font-family: var(--mdb-font-din-2014-narrow-bold);
+    font-size: 1.25rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    text-align: center;
+  }
+}
+
+// A banner whose photo hasn't come yet (a hostel's, tour's… page loading): the message in the middle, in white.
+.banner-loading {
+  position: absolute;
+  inset: 0;
+  justify-content: center;
+
+  p { color: #fff; }
+}
+
+// A page with no banner waiting for its data (e.g. a job's application): the message, a window high.
+.page-loading-section {
+  min-height: 100vh;
+  padding-top: 4rem;
+}
+
+// The header's hover dropdowns (Hostels, Tours, My Account) are desktop only: on phones the same menu items have
+// accordions, and hovering (or tapping) one would otherwise open its dropdown over the panel.
+@media (max-width: 991.98px) {
+  #fusehostelstravelNavbar .dropdown-menu {
+    display: none !important;
+  }
+}

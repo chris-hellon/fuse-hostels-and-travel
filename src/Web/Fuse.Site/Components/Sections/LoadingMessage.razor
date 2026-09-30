@@ -1,0 +1,11 @@
+@* A part of a page waiting for its data: the bouncing dots over a short line ("LOADING YOUR BASKET…"). *@
+
+<div class="@($"loading-message {Class}".TrimEnd())" role="status">
+    <LoadingDots />
+    <p>@Text</p>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Loading…";
+    [Parameter] public string? Class { get; set; }
+}

@@ -1,0 +1,24 @@
+@* OutlineInput's multi-line twin: the MDB outline, floating label and notch around a <textarea>. *@
+
+<div class="@($"form-outline {Class}".TrimEnd())">
+    <textarea id="@Id" class="@($"form-control{(string.IsNullOrEmpty(Value) ? "" : " active")}")" rows="@Rows" value="@Value"
+              @oninput="InputAsync" @attributes="AdditionalAttributes"></textarea>
+    <label class="form-label" for="@Id">@Label</label>
+    <FormNotch />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public int Rows { get; set; } = 4;
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private Task InputAsync(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        return ValueChanged.InvokeAsync(Value ?? "");
+    }
+}

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Fuse.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fuse.Contracts\Fuse.Contracts.csproj" />
+    <ProjectReference Include="..\Fuse.Domain\Fuse.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Fuse.Application.Tests" />
+    <!-- The Mediator source generator in the host registers the internal handlers. -->
+    <InternalsVisibleTo Include="Fuse.Web" />
+    <InternalsVisibleTo Include="Fuse.Web.Tests" />
+  </ItemGroup>
+
+</Project>

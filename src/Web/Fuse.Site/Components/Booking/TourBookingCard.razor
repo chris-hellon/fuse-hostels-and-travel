@@ -1,0 +1,206 @@
+@* Legacy's "BOOK YOUR TOUR" card, clearer: pick a day from the tour's departure calendar, then a time (with its
+   price and places left), the number of guests and where to be picked up; the total shows as you go. Adds the
+   departure to the basket, or adds it and goes to checkout. The basket is re-priced at checkout. A tour that can't be
+   booked online (no web prices, or no open dates) offers Enquire Now instead, as legacy. *@
+@inject IApi Api
+@inject NavigationManager Navigation
+
+<div class="tour-booking bg-white p-5 p-lg-6">
+    <div class="text-center">
+        <h4 class="tilted mt-n7 mb-4 display-6">BOOK YOUR TOUR</h4>
+    </div>
+    <div class="d-flex justify-content-between align-items-start gap-3">
+        <div>
+            @if (!string.IsNullOrEmpty(Tour.Duration))
+            {
+                <p><i class="fa-solid fa-clock me-2"></i> @Tour.Duration</p>
+            }
+            @foreach (var price in Tour.Prices)
+            {
+                <p><i class="fa-solid fa-circle-dollar-to-slot me-2"></i> @Money.Usd(price.Price) @(Tour.Prices.Count > 1 ? price.Title : "")</p>
+            }
+        </div>
+        @if (Tour.Prices.Count > 0)
+        {
+            <span class="@($"badge rounded-pill {(Ready ? "badge-success" : "badge-primary")}")">@Feedback</span>
+        }
+    </div>
+
+    @if (Tour.Prices.Count == 0 || _departures is { Count: 0 } || _departures?.All(d => d.AvailableSpaces == 0) == true)
+    {
+        <p class="tour-booking__note">@(Tour.Prices.Count == 0 ? "This tour is booked on request." : "No dates are open for booking just now.") Send us an enquiry and we'll sort it out for you.</p>
+        <div class="text-center mb-n7 mt-4">
+            <button type="button" class="btn btn-primary" @onclick="() => Dialogs.OpenTourEnquiry(Tour.Id, Tour.Name)">Enquire Now</button>
+        </div>
+    }
+    else if (_departures is null)
+    {
+        <p class="tour-booking__note">Loading dates…</p>
+    }
+    else
+    {
+        <p class="tour-booking__step">1. Choose a date</p>
+        <DepartureCalendar Departures="_departures" Selected="_day" SelectedChanged="PickDay" />
+
+        @if (_day is { } day)
+        {
+            <p class="tour-booking__step">2. Choose a time</p>
+            <div class="tour-booking__times">
+                @foreach (var departure in _departures.Where(d => DateOnly.FromDateTime(d.Start) == day))
+                {
+                    <button type="button" class="@($"tour-booking__time{(departure.Id == _departure?.Id ? " is-selected" : "")}")" @key="departure.Id"
+                            disabled="@(departure.AvailableSpaces == 0)" aria-pressed="@(departure.Id == _departure?.Id ? "true" : "false")" @onclick="() => PickDeparture(departure)">
+                        <span class="tour-booking__time-at">@departure.Start.ToString("h:mm tt")</span>
+                        <span class="tour-booking__time-meta">
+                            @Money.Usd(departure.Price)@(Tour.Prices.Count > 1 ? $" {departure.PriceTitle}" : "")
+                            · @(departure.AvailableSpaces == 0 ? "Sold out" : departure.AvailableSpaces <= 5 ? $"{departure.AvailableSpaces} left" : "Available")
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+
+        @if (_departure is { } chosen)
+        {
+            <p class="tour-booking__step">3. Guests@(Tour.Pickups.Count > 1 ? " & pick-up" : "")</p>
+            <div class="tour-booking__guests">
+                <span>No. of guests</span>
+                <div class="tour-booking__stepper">
+                    <button type="button" aria-label="One fewer guest" disabled="@(_guests <= 1)" @onclick="() => _guests--"><i class="fas fa-minus"></i></button>
+                    <span aria-live="polite">@_guests</span>
+                    <button type="button" aria-label="One more guest" disabled="@(_guests >= chosen.AvailableSpaces)" @onclick="() => _guests++"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+            @if (Tour.Pickups.Count > 1)
+            {
+                <div class="mt-3" style="min-height:47px;">
+                    <FuseSelect Label="Pick up Location" Options="Pickups" Class="bg-white" @bind-Value="_pickup" />
+                </div>
+            }
+            else if (Tour.Pickups.Count == 1)
+            {
+                <p class="tour-booking__pickup"><i class="fa-solid fa-location-dot me-2"></i>Pick-up from @Tour.Pickups[0]</p>
+            }
+            <div class="tour-booking__total">
+                <span>@_guests × @Money.Usd(chosen.Price)</span>
+                <strong>@Money.Usd(_guests * chosen.Price)</strong>
+            </div>
+        }
+
+        @if (_added)
+        {
+            <p class="tour-booking__added"><i class="fas fa-check me-2"></i>Added to your basket. <a href="/basket">View basket</a></p>
+        }
+
+        <div class="text-center mb-n7 mt-4">
+            <button type="button" class="btn btn-primary me-2" disabled="@(!Ready)" @onclick="AddAsync">@(_editing ? "Update Basket" : "Add To Basket")</button>
+            <button type="button" class="btn btn-outline-primary" disabled="@(!Ready && Basket.Count == 0)" @onclick="CheckoutAsync">Proceed To Checkout</button>
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Basket Basket { get; set; } = null!;
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+
+    [Parameter, EditorRequired] public SiteTour Tour { get; set; } = null!;
+    /// <summary>A departure to start on (legacy's basket "edit" link), with its guests.</summary>
+    [Parameter] public DefaultIdType? DepartureId { get; set; }
+    [Parameter] public int? Guests { get; set; }
+    /// <summary>From a staff member's booking QR code: their dates and prices, and the booking credited to them.</summary>
+    [Parameter] public DefaultIdType? StaffId { get; set; }
+
+    private IReadOnlyList<SiteDeparture>? _departures;
+    private DateOnly? _day;
+    private SiteDeparture? _departure;
+    private int _guests = 1;
+    private string? _pickup;
+    private bool _added, _editing;
+
+    private IReadOnlyList<FuseSelect.SelectOption> Pickups => [.. Tour.Pickups.Select(p => new FuseSelect.SelectOption(p, p))];
+
+    private bool Ready => _departure is { AvailableSpaces: > 0 } && _guests >= 1 && (Tour.Pickups.Count <= 1 || !string.IsNullOrEmpty(_pickup));
+
+    /// <summary>Legacy's status pill, guiding each step.</summary>
+    private string Feedback =>
+        _departure is null ? (_day is null ? "Select a Date" : "Select a Time")
+        : Tour.Pickups.Count > 1 && string.IsNullOrEmpty(_pickup) ? "Select a Pickup Location"
+        : _departure.AvailableSpaces <= 5 ? $"{_departure.AvailableSpaces} spaces available"
+        : "Ready to book";
+
+    // Departures are live (places change), so fetched in the browser rather than while prerendering.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Tour.Prices.Count == 0)
+            return;
+        _departures = await Api.Send(new ListSiteTourDepartures(Tour.Id, StaffId));
+        if (Tour.Pickups.Count == 1)
+            _pickup = Tour.Pickups[0];
+        if (DepartureId is { } id && _departures.FirstOrDefault(d => d.Id == id) is { } start)
+        {
+            PickDeparture(start);
+            _guests = Math.Clamp(Guests ?? Basket.Find(id)?.Guests ?? 1, 1, Math.Max(1, start.AvailableSpaces));
+            _pickup = Basket.Find(id)?.Pickup ?? _pickup;
+            // Legacy's basket "edit" link, or a date chosen elsewhere (an event's Book): only the first updates the basket.
+            _editing = Basket.Find(id) is not null;
+        }
+        StateHasChanged();
+    }
+
+    private void PickDay(DateOnly day)
+    {
+        _day = day;
+        _added = false;
+        // One departure that day: choose it straight away.
+        var open = _departures!.Where(d => DateOnly.FromDateTime(d.Start) == day && d.AvailableSpaces > 0).ToList();
+        _departure = open.Count == 1 ? open[0] : null;
+        ClampGuests();
+    }
+
+    private void PickDeparture(SiteDeparture departure)
+    {
+        _day = DateOnly.FromDateTime(departure.Start);
+        _departure = departure;
+        _added = false;
+        ClampGuests();
+    }
+
+    private void ClampGuests()
+    {
+        if (_departure is { } d)
+            _guests = Math.Clamp(_guests, 1, Math.Max(1, d.AvailableSpaces));
+    }
+
+    private Task AddToBasketAsync() =>
+        Basket.AddAsync(new BasketItem
+        {
+            TourId = Tour.Id,
+            TourName = Tour.Name,
+            TourSlug = Tour.Slug,
+            ImagePath = Tour.ImagePath,
+            DepartureId = _departure!.Id,
+            Start = _departure.Start,
+            End = _departure.End,
+            PriceTitle = _departure.PriceTitle,
+            UnitPrice = _departure.Price,
+            Guests = _guests,
+            Pickup = _pickup,
+        }, StaffId);
+
+    private async Task AddAsync()
+    {
+        if (!Ready)
+            return;
+        await AddToBasketAsync();
+        _added = true;
+        if (!_editing)
+            (_day, _departure, _guests) = (null, null, 1); // as legacy: ready for another date
+    }
+
+    private async Task CheckoutAsync()
+    {
+        if (Ready)
+            await AddToBasketAsync();
+        Navigation.NavigateTo("/checkout");
+    }
+}

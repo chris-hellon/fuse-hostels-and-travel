@@ -1,0 +1,88 @@
+@* Several long rich text fields: a section list on the left (with filled / empty markers) and one
+   editor that fills the rest, with its toolbar fixed at the top and an Expand option. *@
+
+@* The host is a size container, so the layout follows the space it's given (dialog, page, phone). *@
+<div class="content-sections-host">
+<div class="content-sections">
+    <nav class="content-sections__nav" aria-label="Sections">
+        @foreach (var section in Sections)
+        {
+            var selected = section == Current;
+            <button type="button" class="@($"content-sections__item{(selected ? " is-selected" : "")}")" aria-current="@(selected ? "true" : null)"
+                    @onclick="() => _current = section">
+                <span class="@($"content-sections__dot{(section.HasText ? " is-filled" : section.Required ? " is-missing" : "")}")" aria-hidden="true"></span>
+                <span class="content-sections__text">
+                    <span class="content-sections__label">@section.Label@(section.Required ? " *" : "")</span>
+                    @if (section.Hint is not null)
+                    {
+                        <span class="content-sections__hint">@section.Hint</span>
+                    }
+                </span>
+            </button>
+        }
+        <div class="content-sections__legend">
+            <span><span class="content-sections__dot is-filled" aria-hidden="true"></span> Filled in</span>
+            <span><span class="content-sections__dot" aria-hidden="true"></span> Empty</span>
+        </div>
+    </nav>
+    <div class="content-sections__editor">
+        <div class="content-sections__head">
+            <MudText Typo="Typo.subtitle2">@Current.Label</MudText>
+            @if (Current.Form is null)
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInFull" OnClick="ExpandAsync">Expand</MudButton>
+            }
+        </div>
+        @if (Current.Form is { } form)
+        {
+            <div class="content-sections__form" @key="Current">@form</div>
+        }
+        else
+        {
+            @* A fresh editor per section (@key), so switching never mixes one section's text into another. *@
+            <RichText @key="Current" Value="@Current.Get()" ValueChanged="Current.Set" Fill="true" UploadImage="UploadImage" />
+        }
+    </div>
+</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ContentSection> Sections { get; set; } = [];
+    /// <summary>Where the editors' image button stores pictures (see <see cref="RichText.UploadImage"/>).</summary>
+    [Parameter] public Func<FileUpload, Task<string>>? UploadImage { get; set; }
+
+    private ContentSection? _current;
+    private ContentSection Current => _current is not null && Sections.Contains(_current) ? _current : Sections[0];
+
+    /// <summary>Shows a section (e.g. a required one that's still empty).</summary>
+    public void Select(ContentSection section)
+    {
+        _current = section;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Checked when leaving the step: shows the first required section that's still empty and says so.
+    /// (Fields in a <see cref="ContentSection.Fields"/> section are only on screen while it's selected,
+    /// so the step's own form can't check them.)
+    /// </summary>
+    public bool EnsureRequired()
+    {
+        if (Sections.FirstOrDefault(s => s.Required && !s.HasText) is not { } missing)
+            return true;
+        Select(missing);
+        Snackbar.Add(missing.Form is null ? $"Add the {missing.Label.ToLowerInvariant()} before moving on." : $"Fill in the {missing.Label.ToLowerInvariant()} before moving on.",
+            Severity.Warning);
+        return false;
+    }
+
+    private async Task ExpandAsync()
+    {
+        var section = Current;
+        var dialog = await Dialogs.ShowAsync<RichTextDialog>(null, new DialogParameters<RichTextDialog> { { d => d.Section, section }, { d => d.UploadImage, UploadImage } },
+            new DialogOptions { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseButton = false, BackdropClick = false });
+        await dialog.Result;
+        // The expanded editor wrote straight into the section; re-render so this editor shows it too.
+        StateHasChanged();
+    }
+}

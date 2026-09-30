@@ -1,0 +1,43 @@
+@* Header for a wizard step or section. Left: view tabs (if any), else a title, plus a short
+   summary. Right: secondary actions (quiet text buttons) | divider | the main actions. Sticks to the top of the dialog body while the
+   content scrolls. *@
+
+<div class="@($"step-toolbar{(Sticky ? "" : " step-toolbar--static")}")">
+    <div class="step-toolbar__lead">
+        @if (Views is not null)
+        {
+            @Views
+        }
+        else if (Title is not null)
+        {
+            <MudText Typo="Typo.subtitle1">@Title</MudText>
+        }
+        @if (Subtitle is not null)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary step-toolbar__subtitle">@Subtitle</MudText>
+        }
+    </div>
+    <div class="step-toolbar__actions">
+        @if (SecondaryActions is not null)
+        {
+            <div class="step-toolbar__secondary">@SecondaryActions</div>
+            <span class="step-toolbar__divider" role="separator"></span>
+        }
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    /// <summary>Stick to the top while the step scrolls. Turn off when a step has several sections.</summary>
+    [Parameter] public bool Sticky { get; set; } = true;
+    [Parameter] public string? Subtitle { get; set; }
+    /// <summary>View tabs (a <see cref="ViewSwitch{TView}"/>), shown instead of the title.</summary>
+    [Parameter] public RenderFragment? Views { get; set; }
+    /// <summary>
+    /// Less common or destructive actions (text buttons), kept apart from the main actions by a divider.
+    /// </summary>
+    [Parameter] public RenderFragment? SecondaryActions { get; set; }
+    /// <summary>The main actions; group related ones in a MudButtonGroup.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

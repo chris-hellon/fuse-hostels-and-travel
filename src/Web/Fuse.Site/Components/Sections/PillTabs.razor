@@ -1,0 +1,41 @@
+@* Legacy NavPillsComponent: a heading, pill tabs, and the chosen tab's panel on a dark box (a hostel's
+   "Getting to" directions). *@
+@typeparam TItem
+
+<div class="container pt-8 pb-8 ovals-container-parent">
+    <div class="row mb-5 justify-content-lg-center text-center has-parallax-scroll">
+        <div class="col-12">
+            <h2>@Title</h2>
+        </div>
+    </div>
+    <div class="row justify-content-lg-center has-parallax-scroll nav-pills-container">
+        <div class="col-12">
+            <ul class="nav nav-pills mb-0" role="tablist">
+                @for (var i = 0; i < Items.Count; i++)
+                {
+                    var index = i;
+                    <li class="nav-item" role="presentation">
+                        <a class="@($"nav-link{(index == _active ? " active" : "")} mb-0")" href="" role="tab" aria-selected="@(index == _active ? "true" : "false")"
+                           @onclick="() => _active = index" @onclick:preventDefault="true">@TabTitle(Items[index])</a>
+                    </li>
+                }
+            </ul>
+            @* Every tab's panel is in the page (the theme hides all but the active one), so search engines read them all. *@
+            <div class="tab-content bg-gray text-white p-4 p-lg-7">
+                @for (var i = 0; i < Items.Count; i++)
+                {
+                    <div class="@($"tab-pane fade{(i == _active ? " show active" : "")}")" role="tabpanel">@ItemTemplate(Items[i])</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public Func<TItem, string> TabTitle { get; set; } = null!;
+    [Parameter, EditorRequired] public RenderFragment<TItem> ItemTemplate { get; set; } = null!;
+
+    private int _active;
+}

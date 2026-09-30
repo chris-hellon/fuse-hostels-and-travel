@@ -1,0 +1,236 @@
+@page "/admin/calendar"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Calendar)]
+@using System.Globalization
+@using Heron.MudCalendar
+
+@* Legacy booking calendar: each tour departure with paid guests (time, tour, guest count); click one for its guest list.
+   Filter by tour category, or hide rentals. The month shows up to MonthLimit departures a day, then "+N more", which
+   opens that day. The week shows each at its start time in a half-hour slot, with the name wrapping; the day is a plain
+   list (time, tour, category, guests). *@
+
+<AdminPageHeader Title="Calendar" Description="Tour departures with paid guests. Click one to see who's on it." />
+
+<div class="calendar-filters">
+    <MudSelect T="string" Label="Categories" MultiSelection="true" SelectedValues="_categories" SelectedValuesChanged="SetCategories"
+               Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="calendar-filters__categories"
+               MultiSelectionTextFunc="@(values => values.Count == 0 ? "All categories" : string.Join(", ", values))" Placeholder="All categories">
+        @foreach (var category in Categories)
+        {
+            <MudSelectItem T="string" Value="category">@category</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSwitch T="bool" Value="_hideRentals" ValueChanged="SetHideRentals" Color="Color.Secondary" Label="Hide rentals" />
+</div>
+
+@if (_view == CalendarView.Day)
+{
+    @* Day: a plain list, earliest first, with its own toolbar (as the calendar's). *@
+    <MudPaper Elevation="0" Class="calendar-panel">
+        <div class="day-list__toolbar">
+            <MudButton Variant="Variant.Filled" Color="Color.Dark" Class="day-list__nav" aria-label="Previous day" OnClick="() => MoveDayAsync(-1)">
+                <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Dark" Class="day-list__nav" aria-label="Next day" OnClick="() => MoveDayAsync(1)">
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" />
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="() => GoToDayAsync(DateTime.Today)">Today</MudButton>
+            <span class="day-list__date">@_day.ToString("dddd d MMMM yyyy")</span>
+            <MudButtonGroup Variant="Variant.Outlined" Color="Color.Dark" Class="day-list__views">
+                <MudButton OnClick="() => _view = CalendarView.Month">Month</MudButton>
+                <MudButton OnClick="() => _view = CalendarView.Week">Week</MudButton>
+                <MudButton Variant="Variant.Filled">Day</MudButton>
+            </MudButtonGroup>
+        </div>
+        @if (_dayDepartures is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Secondary" />
+        }
+        else if (!DayShown.Any())
+        {
+            <div class="day-list__empty">No departures with paid guests on this day@(DeparturesHidden ? " (some are hidden by the filters)" : "").</div>
+        }
+        else
+        {
+            <div class="day-list">
+                @foreach (var departure in DayShown)
+                {
+                    <button type="button" class="day-list__row" title="See who's on it" @onclick="() => ShowGuestsAsync(departure)">
+                        <span class="day-list__time">@departure.Start.ToString("HH:mm")<small>@(departure.End > departure.Start ? $"– {departure.End:HH:mm}" : "")</small></span>
+                        <span class="day-list__tour">
+                            <span class="day-list__name">@Name(departure.TourName)</span>
+                            @if (departure.Category is { } category)
+                            {
+                                <span class="day-list__category">@category</span>
+                            }
+                        </span>
+                        <span class="day-list__guests"><MudIcon Icon="@Icons.Material.Outlined.Group" Size="Size.Small" /> @Guests(departure.Guests)</span>
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="day-list__go" />
+                    </button>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+else
+{
+    <MudPaper Elevation="0" Class="calendar-panel">
+        <MudCalendar T="DepartureCalendarItem" Items="Items" MonthCellMinHeight="130" Color="Color.Dark" ShowTodayButton="true"
+                     @bind-View="_view" @bind-CurrentDay="_day" DayStartTime="new TimeOnly(6, 0)"
+                     DateRangeChanged="RangeChangedAsync" ItemClicked="OpenAsync">
+            <CellTemplate>
+                @if (context.Departure is { } departure)
+                {
+                    <MudTooltip Inline="false" RootStyle="width:100%; height:100%;">
+                        <ChildContent>
+                            <div class="@($"event-chip{(_view == CalendarView.Month ? "" : " event-chip--timeline")}")">
+                                <span class="event-chip__time">@departure.Start.ToString("HH:mm")</span>
+                                <span class="event-chip__name">@Name(departure.TourName)</span>
+                                <span class="event-chip__count">@departure.Guests</span>
+                            </div>
+                        </ChildContent>
+                        <TooltipContent>
+                            <MudText Typo="Typo.subtitle2">@Name(departure.TourName)</MudText>
+                            <MudText Typo="Typo.caption" Class="d-block">@departure.Start.ToString("ddd d MMM, HH:mm") – @departure.End.ToString("HH:mm")</MudText>
+                            <MudText Typo="Typo.caption" Class="d-block">@Guests(departure.Guests)@(departure.Category is { } category ? $" · {category}" : "")</MudText>
+                        </TooltipContent>
+                    </MudTooltip>
+                }
+                else
+                {
+                    <div class="event-chip event-chip--more">+@context.More more</div>
+                }
+            </CellTemplate>
+        </MudCalendar>
+    </MudPaper>
+}
+
+@code {
+    /// <summary>A month day shows this many departures, then "+N more".</summary>
+    private const int MonthLimit = 5;
+
+    private IReadOnlyList<CalendarDeparture> _departures = [];
+    private IReadOnlyCollection<string> _categories = [];
+    /// <summary>The categories to choose from: those on show in the month / week, or the day.</summary>
+    private IEnumerable<CalendarDeparture> Known => _departures.Concat(_dayDepartures ?? []);
+    private bool _hideRentals;
+    private CalendarView _view = CalendarView.Month;
+    private DateTime _day = DateTime.Today;
+    private DateRange? _range;
+
+    private IEnumerable<string> Categories => Known.Select(d => d.Category ?? "No category").Distinct().Order();
+
+    private static bool IsRental(CalendarDeparture d) =>
+        (d.Category?.Contains("rental", StringComparison.OrdinalIgnoreCase) ?? false) || d.TourName.Contains("rental", StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<CalendarDeparture> Shown => Filter(_departures);
+
+    private IEnumerable<CalendarDeparture> Filter(IEnumerable<CalendarDeparture> departures) => departures
+        .Where(d => _categories.Count == 0 || _categories.Contains(d.Category ?? "No category"))
+        .Where(d => !_hideRentals || !IsRental(d));
+
+    /// <summary>Day view: that day's departures (asked for on their own), filtered, earliest first.</summary>
+    private IReadOnlyList<CalendarDeparture>? _dayDepartures;
+    private DateTime? _dayLoaded;
+
+    private IEnumerable<CalendarDeparture> DayShown => Filter(_dayDepartures ?? []).OrderBy(d => d.Start);
+
+    private bool DeparturesHidden => (_dayDepartures?.Count ?? 0) > DayShown.Count();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_view == CalendarView.Day && _dayLoaded != _day.Date)
+            await LoadDayAsync();
+    }
+
+    private async Task LoadDayAsync()
+    {
+        _dayLoaded = _day.Date;
+        _dayDepartures = null;
+        StateHasChanged();
+        IReadOnlyList<CalendarDeparture> departures = [];
+        await Snackbar.TryAsync(async () => departures = await Api.Send(new ListCalendarDepartures(_day.Date, _day.Date)));
+        if (_dayLoaded == _day.Date)
+        {
+            _dayDepartures = departures;
+            StateHasChanged();
+        }
+    }
+
+    private Task MoveDayAsync(int days) => GoToDayAsync(_day.AddDays(days));
+
+    private async Task GoToDayAsync(DateTime day)
+    {
+        _day = day.Date;
+        await LoadDayAsync();
+    }
+
+    /// <summary>The filtered departures; in the month, each day's first few then "+N more".</summary>
+    private List<DepartureCalendarItem> Items => _view != CalendarView.Month
+        ? [.. Shown.Select(Slot)]
+        : [.. Shown.GroupBy(d => d.Start.Date).SelectMany(day =>
+        {
+            var ordered = day.OrderBy(d => d.Start).ToList();
+            if (ordered.Count <= MonthLimit + 1)
+                return ordered.Select(Item);
+            return ordered.Take(MonthLimit).Select(Item).Append(new DepartureCalendarItem
+            {
+                Start = day.Key.AddDays(1).AddSeconds(-2),
+                End = day.Key.AddDays(1).AddSeconds(-1),
+                More = ordered.Count - MonthLimit,
+            });
+        })];
+
+    /// <summary>Month: the departure on its day (its end, cut at midnight, only keeps it to that day).</summary>
+    private static DepartureCalendarItem Item(CalendarDeparture d)
+    {
+        var endOfDay = d.Start.Date.AddDays(1).AddSeconds(-1);
+        var end = d.End <= d.Start ? d.Start.AddMinutes(30) : d.End;
+        return new DepartureCalendarItem { Departure = d, Start = d.Start, End = end > endOfDay ? endOfDay : end, Text = d.TourName };
+    }
+
+    /// <summary>
+    /// Week and day: a half-hour slot at its start (the tooltip has its real times). Drawn at full length, tours of a few
+    /// hours overlap everything after them and each is squeezed into a sliver.
+    /// </summary>
+    private static DepartureCalendarItem Slot(CalendarDeparture d)
+    {
+        var endOfDay = d.Start.Date.AddDays(1).AddSeconds(-1);
+        var end = d.Start.AddMinutes(30);
+        return new DepartureCalendarItem { Departure = d, Start = d.Start, End = end > endOfDay ? endOfDay : end, Text = d.TourName };
+    }
+
+    private static string Guests(int count) => count == 1 ? "1 guest" : $"{count} guests";
+
+    /// <summary>Tour names are stored in capitals ("SUNSET RIVER CRUISE TOUR"); read as "Sunset River Cruise Tour".</summary>
+    private static string Name(string name) =>
+        name.Any(char.IsLower) ? name : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+
+    private void SetCategories(IReadOnlyCollection<string>? categories) => _categories = categories ?? [];
+
+    private void SetHideRentals(bool hide) => _hideRentals = hide;
+
+    /// <summary>Loads the dates on show. The same range again (a re-render) is ignored.</summary>
+    private async Task RangeChangedAsync(DateRange range)
+    {
+        if (range is not { Start: not null, End: not null } || (_range?.Start == range.Start && _range?.End == range.End))
+            return;
+        _range = range;
+        await Snackbar.TryAsync(async () => _departures = await Api.Send(new ListCalendarDepartures(range.Start.Value, range.End.Value)));
+    }
+
+    private async Task OpenAsync(DepartureCalendarItem item)
+    {
+        if (item.Departure is not { } departure)
+        {
+            // "+N more": that day, every departure.
+            _day = item.Start.Date;
+            _view = CalendarView.Day;
+            return;
+        }
+        await ShowGuestsAsync(departure);
+    }
+
+    private async Task ShowGuestsAsync(CalendarDeparture departure) =>
+        await Dialogs.ShowAsync<DepartureGuestsDialog>(null, new DialogParameters<DepartureGuestsDialog> { { d => d.Departure, departure } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+}

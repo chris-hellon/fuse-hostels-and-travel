@@ -1,0 +1,172 @@
+@* The check in / out picker: pick check in, then check out (at least one night later); it closes once both are
+   chosen, as legacy's did. Two months on desktop, one on phones (a bottom sheet). Lives in the layout, above
+   everything else. *@
+
+@if (Open)
+{
+    <div class="fuse-dates" @onclick="CloseAsync" @onkeydown="KeyDownAsync" tabindex="-1" @ref="_root">
+        <div class="fuse-dates__panel" role="dialog" aria-modal="true" aria-label="Choose check in and check out dates" @onclick:stopPropagation="true">
+            <div class="fuse-dates__header">
+                <div class="fuse-dates__stays">
+                    <div class="@($"fuse-dates__stay{(ChoosingCheckOut ? "" : " is-active")}")">
+                        <span class="fuse-dates__stay-label">Check in</span>
+                        <span class="fuse-dates__stay-date">@(_start?.ToString("ddd d MMM") ?? "Add date")</span>
+                    </div>
+                    <i class="fas fa-arrow-right fuse-dates__stays-arrow" aria-hidden="true"></i>
+                    <div class="@($"fuse-dates__stay{(ChoosingCheckOut ? " is-active" : "")}")">
+                        <span class="fuse-dates__stay-label">Check out</span>
+                        <span class="fuse-dates__stay-date">@(_end?.ToString("ddd d MMM") ?? "Add date")</span>
+                    </div>
+                    @if (Nights is { } nights)
+                    {
+                        <span class="fuse-dates__nights">@nights night@(nights == 1 ? "" : "s")</span>
+                    }
+                </div>
+                <button type="button" class="fuse-dates__close" aria-label="Close" @onclick="CloseAsync"><i class="fas fa-xmark"></i></button>
+            </div>
+
+            <div class="fuse-dates__months">
+                <button type="button" class="fuse-dates__nav fuse-dates__nav--prev" aria-label="Previous month"
+                        disabled="@(_left <= ThisMonth)" @onclick="() => _left = _left.AddMonths(-1)">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                @Month(_left)
+                <div class="fuse-dates__second">@Month(_left.AddMonths(1))</div>
+                <button type="button" class="fuse-dates__nav fuse-dates__nav--next" aria-label="Next month" @onclick="() => _left = _left.AddMonths(1)">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <div class="fuse-dates__footer">
+                <span class="fuse-dates__hint">@(_start is null ? "Select your check in date" : ChoosingCheckOut ? "Select your check out date" : "")</span>
+                <button type="button" class="fuse-dates__clear" disabled="@(_start is null)" @onclick="Clear">Clear dates</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public DateOnly? Start { get; set; }
+    [Parameter] public DateOnly? End { get; set; }
+    /// <summary>The range, once check out is chosen (the picker then closes).</summary>
+    [Parameter] public EventCallback<(DateOnly Start, DateOnly End)> Picked { get; set; }
+
+    private static readonly string[] Days = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private static DateOnly ThisMonth => new(Today.Year, Today.Month, 1);
+
+    private ElementReference _root;
+    private DateOnly _left;
+    private DateOnly? _start, _end, _hover;
+    private bool _wasOpen, _focus;
+
+    /// <summary>Check in is chosen; the next click picks check out.</summary>
+    private bool ChoosingCheckOut => _start is not null && _end is null;
+
+    private int? Nights => _start is { } start && (_end ?? _hover) is { } end && end > start ? end.DayNumber - start.DayNumber : null;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            (_start, _end, _hover) = (Start, End, null);
+            _left = _start is { } start ? new DateOnly(start.Year, start.Month, 1) : ThisMonth;
+            _focus = true;
+        }
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Focus the picker so Escape closes it.
+        if (!_focus || !Open)
+            return;
+        _focus = false;
+        await _root.FocusAsync();
+    }
+
+    private RenderFragment Month(DateOnly month) =>
+        @<div class="fuse-dates__month">
+            <div class="fuse-dates__title">@month.ToString("MMMM yyyy")</div>
+            <div class="fuse-dates__grid" role="grid">
+                @foreach (var day in Days)
+                {
+                    <span class="fuse-dates__weekday">@day</span>
+                }
+                @for (var blank = 0; blank < (int)month.DayOfWeek; blank++)
+                {
+                    <span></span>
+                }
+                @for (var date = month; date.Month == month.Month; date = date.AddDays(1))
+                {
+                    var day = date;
+                    var past = day < Today;
+                    <button type="button" class="@DayClass(day)" disabled="@past" aria-label="@day.ToString("dddd d MMMM yyyy")"
+                            aria-pressed="@(day == _start || day == _end ? "true" : "false")"
+                            @onclick="() => ChooseAsync(day)" @onmouseenter="() => Hover(day)">
+                        <span>@day.Day</span>
+                    </button>
+                }
+            </div>
+        </div>;
+
+    private string DayClass(DateOnly date)
+    {
+        var end = _end ?? _hover;
+        var ranged = _start is { } start && end is { } last && last > start;
+        var classes = "fuse-dates__day";
+        if (date == Today)
+            classes += " is-today";
+        if (date == _start)
+            classes += " is-start";
+        if (date == _end)
+            classes += " is-end";
+        if (ranged && date == _start)
+            classes += " has-range-after";
+        if (ranged && date == end)
+            classes += " has-range-before";
+        if (ranged && date > _start && date < end)
+            classes += " is-in-range";
+        if (_end is null && _hover == date && ranged)
+            classes += " is-preview";
+        return classes;
+    }
+
+    private void Hover(DateOnly date)
+    {
+        if (_start is not null && _end is null)
+            _hover = date;
+    }
+
+    private async Task ChooseAsync(DateOnly date)
+    {
+        if (_start is null || _end is not null || date <= _start)
+        {
+            // A new check in (the first click, after a full range, or a date not after check in).
+            (_start, _end, _hover) = (date, null, null);
+            return;
+        }
+
+        _end = date;
+        await Picked.InvokeAsync((_start.Value, date));
+        await CloseAsync();
+    }
+
+    private void Clear() => (_start, _end, _hover) = (null, null, null);
+
+    private async Task KeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        Open = false;
+        _wasOpen = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+}

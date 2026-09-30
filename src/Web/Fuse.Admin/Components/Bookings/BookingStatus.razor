@@ -1,0 +1,16 @@
+@using Fuse.Contracts.Dashboard
+@* A booking's (or guest's) state as a small coloured pill: red when it needs attention, green once checked in. *@
+
+<span class="@($"status-pill status-pill--{Tone}")">@BookingStates.Label(State)</span>
+
+@code {
+    [Parameter, EditorRequired] public BookingState State { get; set; }
+
+    private string Tone => State switch
+    {
+        BookingState.CheckedIn => "good",
+        BookingState.Paid => "neutral",
+        BookingState.PartiallyPaid or BookingState.PartialRefund or BookingState.Refunded => "warn",
+        _ => "bad", // unpaid, cancelled, no show
+    };
+}

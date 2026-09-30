@@ -1,0 +1,20 @@
+@implements IDisposable
+
+<MudText Class="admin-clock">@_now</MudText>
+
+@code {
+    private Timer? _timer;
+    private string _now = "";
+
+    protected override void OnInitialized()
+    {
+        Tick();
+        // Only tick once interactive; prerendering renders the time once.
+        if (OperatingSystem.IsBrowser())
+            _timer = new Timer(_ => InvokeAsync(() => { Tick(); StateHasChanged(); }), null, 1000, 1000);
+    }
+
+    private void Tick() => _now = DateTime.Now.ToString("ddd d MMM · h:mm tt");
+
+    public void Dispose() => _timer?.Dispose();
+}

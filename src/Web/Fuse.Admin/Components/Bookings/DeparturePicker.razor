@@ -1,0 +1,100 @@
+@using Fuse.Contracts.Bookings
+@* A tour's price and departure (legacy Add Tour(s) "Departures"). With the price set by a pack or
+   package, any departure time can be chosen. *@
+
+<MudPaper Outlined="true" Elevation="0" Class="pa-3 mb-3">
+    <MudText Typo="Typo.subtitle2" Class="mb-2">@TourName</MudText>
+    @if (Loading)
+    {
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" />
+    }
+    else if (Departures.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Error">No upcoming departures with space for this tour.</MudText>
+    }
+    else
+    {
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="6">
+                @if (PriceLocked)
+                {
+                    <MudTextField T="string" Label="Price" Value="@(PriceNote ?? "Set by the pack")" ReadOnly="true" Disabled="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                }
+                else
+                {
+                    <MudSelect T="DefaultIdType?" Label="Price" Value="_priceId" ValueChanged="SetPriceAsync" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Placeholder="Select a price" Disabled="Disabled">
+                        @foreach (var price in Prices)
+                        {
+                            <MudSelectItem T="DefaultIdType?" Value="@price.PriceId">@($"{price.PriceTitle} — {price.Price:$#,##0.00}")</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="DefaultIdType?" Label="Departure" Value="DepartureId" ValueChanged="DepartureIdChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Disabled="@(Disabled || (!PriceLocked && _priceId is null))" Placeholder="Select a departure">
+                    @foreach (var departure in Upcoming(Choices))
+                    {
+                        <MudSelectItem T="DefaultIdType?" Value="@departure.Id">@Label(departure)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string TourName { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<DepartureOption> Departures { get; set; } = [];
+    [Parameter] public bool Loading { get; set; }
+    /// <summary>A pack or package sets the price: the tour's own prices don't matter.</summary>
+    [Parameter] public bool PriceLocked { get; set; }
+    [Parameter] public string? PriceNote { get; set; }
+    /// <summary>The price and departure can't change (legacy: a refunded booking's tour).</summary>
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>With a package that books a set price of the tour, only that price's departures.</summary>
+    [Parameter] public DefaultIdType? OnlyPriceId { get; set; }
+    [Parameter] public DefaultIdType? DepartureId { get; set; }
+    [Parameter] public EventCallback<DefaultIdType?> DepartureIdChanged { get; set; }
+
+    private DefaultIdType? _priceId;
+
+    private IEnumerable<DepartureOption> Available => OnlyPriceId is { } only && Departures.Any(d => d.PriceId == only)
+        ? Departures.Where(d => d.PriceId == only)
+        : Departures;
+
+    private IReadOnlyList<DepartureOption> Prices => [.. Available.GroupBy(d => d.PriceId).Select(g => g.First()).OrderBy(d => d.Price)];
+
+    /// <summary>The chosen price's departures; with the price locked, one per start time.</summary>
+    private IEnumerable<DepartureOption> Choices => PriceLocked
+        ? Available.GroupBy(d => d.StartDate).Select(g => g.FirstOrDefault(d => d.Id == DepartureId) ?? g.OrderByDescending(d => d.AvailableSpaces).First()).OrderBy(d => d.StartDate)
+        : Available.Where(d => d.PriceId == _priceId);
+
+    /// <summary>Upcoming departures first (soonest first); administrators also get the past month's, after them, newest first.</summary>
+    private static IEnumerable<DepartureOption> Upcoming(IEnumerable<DepartureOption> departures)
+    {
+        var now = DateTime.Now;
+        var list = departures.ToList();
+        return list.Where(d => d.StartDate >= now).OrderBy(d => d.StartDate)
+            .Concat(list.Where(d => d.StartDate < now).OrderByDescending(d => d.StartDate));
+    }
+
+    private static string Label(DepartureOption d) =>
+        $"{d.StartDate:ddd dd MMM yyyy · HH:mm} — {d.AvailableSpaces} spaces{(d.StartDate < DateTime.Now ? " (past)" : "")}";
+
+    protected override void OnParametersSet()
+    {
+        if (DepartureId is { } id && Departures.FirstOrDefault(d => d.Id == id) is { } chosen)
+            _priceId = chosen.PriceId;
+        else if (_priceId is null && Prices.Count == 1)
+            _priceId = Prices[0].PriceId; // a single price: just pick the date
+    }
+
+    private async Task SetPriceAsync(DefaultIdType? priceId)
+    {
+        _priceId = priceId;
+        var dates = Available.Where(d => d.PriceId == priceId).ToList();
+        await DepartureIdChanged.InvokeAsync(dates.Count == 1 ? dates[0].Id : null);
+    }
+}

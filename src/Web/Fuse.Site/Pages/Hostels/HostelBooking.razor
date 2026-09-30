@@ -1,0 +1,134 @@
+@page "/hostels/{Slug}/book"
+@inherits JsComponent
+@inject IApi Api
+@inject NavigationManager Navigation
+
+@* Booking a stay without leaving the site (Site:HostelBooking = Embed): the hostel's photo and name, links to the
+   other hostels (dates kept), and Cloudbeds' booking engine (Immersive Experience 2.0) in the site's type and
+   corners. The engine reads ?checkin=…&checkout=… from this page's address. It only works on a domain whitelisted in
+   each hostel's Cloudbeds settings (Booking Engine › Embeds), so not on localhost (use the ngrok launch profile).
+   If the engine doesn't appear (not whitelisted, Cloudbeds' error page, down, script blocked), the visitor is sent to the hostel's
+   own Cloudbeds booking page with the same dates, as Redirect mode does. *@
+
+@if (Engine is { } engine)
+{
+    <SeoHead PageName="@($"Book {engine.Name}")" Parent="@(("Hostels", "/hostels"))" ImageUrl="@engine.ImagePath" />
+
+    <section id="headerBanner">
+        <HeaderBanner Headings="@(new PageHeadings(engine.Name.ToUpperInvariant(), "BOOK YOUR STAY", null))" ImageUrl="@engine.ImagePath" />
+    </section>
+    <section class="hostel-booking bg-light">
+        <div class="container pt-7 pb-8">
+            @if (Others.Count > 0)
+            {
+                <nav class="hostel-booking__switch" aria-label="Book another hostel">
+                    <span>Staying somewhere else?</span>
+                    @foreach (var hostel in Others)
+                    {
+                        @* target: the engine reads the hostel and dates once, so a whole new page. *@
+                        <a class="btn btn-outline-primary btn-sm" href="@($"/hostels/{hostel.Slug}/book{Query}")" target="_top" @key="hostel.Id">@hostel.Name</a>
+                    }
+                </nav>
+            }
+            <div class="hostel-booking__engine" @ref="_engine">
+                @* Shown until the engine has drawn itself (Cloudbeds' own "Loading…" stays hidden), or while leaving for Cloudbeds. *@
+                <div class="hostel-booking__loading" role="status">
+                    <div class="offcut-image-border hostel-booking__loading-card">
+                        <LoadingDots />
+                        <p class="hostel-booking__waiting">FINDING YOU A BED AT @engine.Name.ToUpperInvariant()…</p>
+                        <p class="hostel-booking__leaving">TAKING YOU TO OUR BOOKING PAGE…</p>
+                    </div>
+                </div>
+                <cb-immersive-experience mode="standard" property-code="@engine.PropertyCode" lang="en"></cb-immersive-experience>
+            </div>
+            <p class="hostel-booking__help">
+                Trouble booking? <a href="@HostedPage(engine)" target="_top">Book on our booking page instead</a>
+            </p>
+        </div>
+    </section>
+}
+else
+{
+    @* Arriving from another page: the banner (its photo is the hostel's) and content while they load. *@
+    <section id="headerBanner">
+        <HeaderBanner Headings="null" LoadingText="Loading the hostel…" />
+    </section>
+    <PageSkeleton />
+}
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    [Parameter] public string Slug { get; set; } = "";
+
+    [PersistentState] public HostelBookingEngine? Engine { get; set; }
+
+    /// <summary>How long the engine has to appear before the visitor is sent to Cloudbeds' own page.</summary>
+    private const int EngineTimeoutMs = 20_000;
+
+    private ElementReference _engine;
+
+    /// <summary>The site's other bookable hostels.</summary>
+    private IReadOnlyList<SiteLink> Others =>
+        [.. (Chrome?.BookableHostels ?? []).Where(h => !h.Slug.Equals(Engine?.Slug, StringComparison.OrdinalIgnoreCase))];
+
+    /// <summary>This page's ?checkin=…&checkout=…, carried to another hostel.</summary>
+    private string Query => new Uri(Navigation.Uri).Query;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Engine?.Slug.Equals(Slug, StringComparison.OrdinalIgnoreCase) == true)
+            return;
+        Engine = null; // from another hostel's booking page: loading, not the last hostel
+        try
+        {
+            Engine = await Api.Send(new GetHostelBookingEngine(Slug));
+        }
+        catch (NotFoundException)
+        {
+            Navigation.NotFound();
+        }
+    }
+
+    private bool _started;
+
+    // Once the engine's page shows (arriving from another page, that's once it has loaded).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_started || Engine is null)
+            return;
+        _started = true;
+        // Google Ads' "Website traffic conversion": someone opened a hostel's booking page.
+        if (Chrome?.HostelBookingConversion is { Length: > 0 } conversion)
+            await Js.InvokeVoidAsync("trackConversion", conversion);
+        if (await Js.InvokeAsync<bool>("watchCloudbeds", _engine, EngineTimeoutMs))
+            return;
+
+        // The engine didn't load: Cloudbeds' own booking page instead, with the dates (and a signed-in guest's details).
+        string link;
+        try
+        {
+            link = await Api.Send(new GetHostelBookingLink(Slug, QueryDate("checkin"), QueryDate("checkout")));
+        }
+        catch (AppException)
+        {
+            link = HostedPage(Engine);
+        }
+        Navigation.NavigateTo(link, forceLoad: true, replace: true);
+    }
+
+    /// <summary>The hostel's page on Cloudbeds (legacy's redirect), with the dates.</summary>
+    private string HostedPage(HostelBookingEngine engine)
+    {
+        var dates = string.Join("&", new[] { ("checkin", QueryDate("checkin")), ("checkout", QueryDate("checkout")) }
+            .Where(d => d.Item2 is not null).Select(d => $"{d.Item1}={d.Item2:yyyy-MM-dd}"));
+        return $"https://hotels.cloudbeds.com/reservation/{engine.PropertyCode}{(dates.Length > 0 ? "#&" + dates : "")}";
+    }
+
+    [SupplyParameterFromQuery(Name = "checkin")] private string? CheckIn { get; set; }
+    [SupplyParameterFromQuery(Name = "checkout")] private string? CheckOut { get; set; }
+
+    private DateOnly? QueryDate(string name) =>
+        DateOnly.TryParseExact(name == "checkin" ? CheckIn : CheckOut, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var date) ? date : null;
+}

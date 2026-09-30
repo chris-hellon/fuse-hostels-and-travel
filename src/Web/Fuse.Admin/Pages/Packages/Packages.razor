@@ -1,0 +1,49 @@
+@page "/admin/management/tours/packages"
+@page "/admin/management/packages"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Packages)]
+@using Fuse.Contracts.Packages
+
+<AdminPageHeader Title="Packages" Description="Bundle multiple tours together at a set price." />
+
+<EntityTable @ref="_table" T="PackageSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Packages" Resource="@FuseResource.Packages"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<PackageSummary>> Fields =
+    [
+        new(p => p.Name, "Name", nameof(PackageSummary.Name)),
+        new(p => p.CategoryName, "Category", nameof(PackageSummary.CategoryName)),
+        new(p => Price(p), "Price"),
+        new(p => p.Tours, "Tours", nameof(PackageSummary.Tours)),
+        EntityField<PackageSummary>.Bool(p => p.PublishToSite, "Published", nameof(PackageSummary.PublishToSite)),
+    ];
+
+    private EntityTable<PackageSummary>? _table;
+
+    /// <summary>One tier total, or the lowest to highest across tiers.</summary>
+    private static string Price(PackageSummary p) => p.PriceLow is not { } low ? "—"
+        : low == p.PriceHigh ? $"${low:N2}" : $"${low:N2} – ${p.PriceHigh:N2}";
+
+    private async Task<PagedResult<PackageSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchPackages()), cancellationToken);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(PackageSummary package) => OpenWizardAsync(package.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<PackageWizard>(null, new DialogParameters<PackageWizard> { { w => w.PackageId, id } }, PackageWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(PackageSummary package)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this package?", $"\"{package.Name}\" will be deleted straight away.", "Delete package", "Keep package",
+                detail: "Bookings already made keep their own copy of the package."))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeletePackage(package.Id)), "Package deleted."))
+            await _table!.ReloadAsync();
+    }
+}

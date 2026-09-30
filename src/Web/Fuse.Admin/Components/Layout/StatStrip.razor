@@ -1,0 +1,42 @@
+@* Secondary figures in one thin row (the dashboard's totals for its range): a lead cell naming what they're for, then
+   each figure, zeros greyed. A spinner in each until they arrive. *@
+
+<MudPaper Elevation="25" Class="stat-strip">
+    <div class="stat-strip__lead">
+        <span class="stat-card__label">@Label</span>
+        <span class="stat-strip__period">@Period</span>
+    </div>
+    @foreach (var item in Items)
+    {
+        <div class="stat-strip__item">
+            <span class="stat-card__label">@item.Label</span>
+            @if (item.Value is null)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Secondary" Class="stat-card__loading" />
+            }
+            else
+            {
+                <span class="@($"stat-strip__value{(item.IsZero ? " is-zero" : "")}")">
+                    @item.Value
+                    @if (item.Detail is { } detail)
+                    {
+                        <span class="stat-strip__detail">@detail</span>
+                    }
+                </span>
+            }
+        </div>
+    }
+</MudPaper>
+
+@code {
+    /// <param name="Label">Above the figure.</param>
+    /// <param name="Value">Formatted; null while loading.</param>
+    /// <param name="Detail">A smaller second figure beside it (e.g. the cancelled bookings' value).</param>
+    /// <param name="IsZero">Greyed: nothing to see.</param>
+    public sealed record Item(string Label, string? Value, string? Detail = null, bool IsZero = false);
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    /// <summary>What the figures cover ("Last 30 days").</summary>
+    [Parameter] public string? Period { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<Item> Items { get; set; } = [];
+}

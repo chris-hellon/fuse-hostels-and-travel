@@ -1,0 +1,52 @@
+@* Saving changes the total of a paid booking (legacy: "flag as unpaid and charge" or "process refund"). *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(Increase ? "Charge the difference?" : "Refund the difference?")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Class="mb-2">This booking is paid and its total changes from <strong>@From.ToString("$#,##0.00")</strong> to <strong>@To.ToString("$#,##0.00")</strong>.</MudText>
+        @if (Increase)
+        {
+            <MudText Class="mb-2">Saving marks the booking unpaid and the guest owes the extra <strong>@Difference.ToString("$#,##0.00")</strong>.</MudText>
+            <MudText Class="mud-text-secondary">Or keep the amount already paid as the booking's total.</MudText>
+        }
+        else
+        {
+            <MudText Class="mb-4">Refund some or all of the <strong>@Difference.ToString("$#,##0.00")</strong>, or leave it at zero to keep the amount already paid.</MudText>
+            <MudNumericField T="decimal" @bind-Value="_refund" Label="Amount to refund" Variant="Variant.Outlined" Min="0" Max="Difference"
+                             Format="N2" Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Back</MudButton>
+        @if (Increase)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="() => Close(PaidTotalChange.KeepAmountPaid)">Keep amount paid</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="() => Close(PaidTotalChange.ChargeDifference)">Charge @Difference.ToString("$#,##0.00")</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="@(_refund < 0 || _refund > Difference)"
+                       OnClick="() => Close(_refund > 0 ? PaidTotalChange.Refund : PaidTotalChange.KeepAmountPaid)">
+                @(_refund > 0 ? $"Refund {_refund:$#,##0.00} and save" : "Save without a refund")
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public decimal From { get; set; }
+    [Parameter] public decimal To { get; set; }
+
+    private bool Increase => To > From;
+    private decimal Difference => Math.Abs(To - From);
+    private decimal _refund;
+
+    public sealed record Choice(PaidTotalChange Change, decimal RefundAmount);
+
+    private void Close(PaidTotalChange change) => Dialog.Close(DialogResult.Ok(new Choice(change, change == PaidTotalChange.Refund ? _refund : 0)));
+}

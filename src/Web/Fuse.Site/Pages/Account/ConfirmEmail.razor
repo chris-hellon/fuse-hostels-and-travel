@@ -1,0 +1,56 @@
+@page "/my-account/confirm-email"
+@inject IApi Api
+
+@* The link emailed when a guest changes their email: confirms it (signed in or not: the link is the proof). *@
+
+<SeoHead PageName="Confirm Email" />
+
+<LegalPage Id="confirmEmail" Title="CONFIRM EMAIL">
+    <div class="account-empty">
+        @if (_done)
+        {
+            <i class="fas fa-circle-check account-empty__icon" aria-hidden="true"></i>
+            <h2 class="display-6">ALL SET</h2>
+            <p>Your email is now <strong>@Email</strong>. Use it to sign in from now on.</p>
+            <a class="btn btn-primary" href="@AccountShell.Profile">My Account</a>
+        }
+        else if (_error is not null)
+        {
+            <h2 class="display-6">THAT DIDN'T WORK</h2>
+            <p>@_error</p>
+            <a class="btn btn-primary" href="@AccountShell.Security">Try Again</a>
+        }
+        else
+        {
+            <LoadingMessage Text="Confirming your email…" />
+        }
+    </div>
+</LegalPage>
+
+@code {
+    [SupplyParameterFromQuery(Name = "user")] private string? UserId { get; set; }
+    [SupplyParameterFromQuery(Name = "email")] private string? Email { get; set; }
+    [SupplyParameterFromQuery(Name = "token")] private string? Token { get; set; }
+
+    private bool _done;
+    private string? _error;
+
+    // Once interactive (not while prerendering), so the link is used once.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            if (string.IsNullOrEmpty(UserId) || string.IsNullOrEmpty(Email) || string.IsNullOrEmpty(Token))
+                throw new BusinessRuleException("This link is incomplete. Open it straight from the email, or ask for a new one.");
+            await Api.Send(new Contracts.Identity.ConfirmMyEmailChange(UserId, Email, Token));
+            _done = true;
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+        }
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,62 @@
+@typeparam TItem
+@* Ordered images with move / remove, plus an "add" tile (click or drop, several at once). *@
+
+<div class="image-gallery">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var index = i;
+        var item = Items[i];
+        var url = Url(item);
+        <div class="image-gallery__tile" @key="item">
+            @if (_broken.Contains(url))
+            {
+                <div class="image-gallery__broken"><MudIcon Icon="@Icons.Material.Outlined.BrokenImage" Class="mud-text-secondary" /></div>
+            }
+            else
+            {
+                <img src="@url" alt="Image @(index + 1)" loading="lazy" @onerror="() => _broken.Add(url)" />
+            }
+            <span class="image-gallery__index">@(index + 1)</span>
+            @if (Badge?.Invoke(item) is { } badge)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="image-gallery__badge">@badge</MudChip>
+            }
+            <div class="image-gallery__actions">
+                <MudTooltip Text="Move earlier">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" Disabled="@(index == 0 || Busy)" OnClick="() => OnMove.InvokeAsync((index, -1))" aria-label="Move earlier" />
+                </MudTooltip>
+                <MudTooltip Text="Remove">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" Disabled="Busy" OnClick="() => OnRemove.InvokeAsync(item)" aria-label="Remove" />
+                </MudTooltip>
+                <MudTooltip Text="Move later">
+                    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Disabled="@(index == Items.Count - 1 || Busy)" OnClick="() => OnMove.InvokeAsync((index, 1))" aria-label="Move later" />
+                </MudTooltip>
+            </div>
+        </div>
+    }
+    <div class="image-gallery__tile image-gallery__add">
+        <InputFile class="image-picker__input" multiple accept="@ImagePicker.Accept" OnChange="OnAdd" disabled="@Busy" title="" />
+        @if (Busy)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Secondary" />
+        }
+        else
+        {
+            <MudIcon Icon="@Icons.Material.Outlined.AddPhotoAlternate" Class="mud-text-secondary" />
+            <MudText Typo="Typo.caption">Add images</MudText>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public Func<TItem, string> Url { get; set; } = null!;
+    /// <summary>Optional badge text per image (e.g. "Unsaved").</summary>
+    [Parameter] public Func<TItem, string?>? Badge { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnAdd { get; set; }
+    [Parameter] public EventCallback<TItem> OnRemove { get; set; }
+    [Parameter] public EventCallback<(int Index, int By)> OnMove { get; set; }
+
+    private readonly HashSet<string> _broken = [];
+}

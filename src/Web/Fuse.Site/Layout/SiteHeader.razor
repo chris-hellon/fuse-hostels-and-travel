@@ -1,0 +1,224 @@
+@* Legacy _NavigationPartial: transparent over the home page hero until scrolled, white with a shadow
+   elsewhere. Desktop menus open on hover; on phones the menu is a full-height panel with accordions. *@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<header>
+    <nav class="@NavClass">
+        <div class="container">
+            <a class="navbar-brand navbar-brand-mobile nav-link d-flex d-lg-none" href="/">
+                <img src="@Logo" alt="Fuse Hostels &amp; Travel Brand Logo" height="85" />
+            </a>
+            <button id="navbarToggler" class="navbar-toggler ms-auto m-0 p-0" type="button" aria-controls="fusehostelstravelNavbar"
+                    aria-expanded="@(_menuOpen ? "true" : "false")" aria-label="Toggle navigation" @onclick="ToggleMenu">
+                <div class="@($"animated-icon3{(_menuOpen ? " open" : "")}")">
+                    <span style="@IconColour"></span><span style="@IconColour"></span><span style="@IconColour"></span>
+                </div>
+            </button>
+            <div class="@($"collapse navbar-collapse justify-content-lg-between d-lg-flex{(_menuOpen ? " show" : "")}")" id="fusehostelstravelNavbar">
+                <div class="col-lg-2 d-none d-lg-block pt-5 pt-lg-0">
+                    <a class="navbar-brand navbar-brand-desktop nav-link" href="/">
+                        <img src="@Logo" alt="Fuse Hostels &amp; Travel Brand Logo" height="90" />
+                    </a>
+                </div>
+                <div class="pt-5 pt-lg-0">
+                    <ul class="navbar-nav">
+                        @Menu("hostels", "Hostels", "/hostels", Chrome.Hostels.Select(h => (h.Name, $"/hostels/{h.Slug}")))
+                        @Menu("tours", "Tours", "/tours", Chrome.Tours.Select(t => (t.Name, $"/tours/{t.Slug}")))
+                        <li class="nav-item mt-4 mt-lg-0"><a class="@Link("/our-story")" href="/our-story">Our Story</a></li>
+                        <li class="nav-item mt-4 mt-lg-0"><a class="@Link("/blogs-and-tips")" href="/blogs-and-tips">Blogs &amp; Tips</a></li>
+                        <li class="nav-item mt-4 mt-lg-0"><a class="@Link("/events")" href="/events">Events</a></li>
+                        <li class="nav-item mt-4 mt-lg-0"><a class="@Link("/contact")" href="/contact">Contact</a></li>
+                        <li class="nav-item mt-4 mt-lg-0 d-none d-lg-block">
+                            <a class="nav-link" href="/basket" rel="nofollow" aria-label="Basket">
+                                <i class="fas fa-basket-shopping"></i>
+                                @BasketCount
+                            </a>
+                        </li>
+                        <li class="nav-item mt-4 mt-lg-0 d-block d-lg-none">
+                            <a class="@LinkClass" href="/basket" rel="nofollow">Basket <i class="fas fa-basket-shopping"></i> @BasketCount</a>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <ul class="navbar-nav mb-2 mb-lg-0 d-flex align-items-lg-center">
+                        <AuthorizeView>
+                            <Authorized>
+                                <li class="@($"nav-item dropdown mt-4 mt-lg-0 mb-lg-0{(_hovered == "account" ? " show" : "")}")"
+                                    @onmouseenter="@(() => _hovered = "account")" @onmouseleave="@(() => _hovered = null)">
+                                    <a class="nav-link d-none d-lg-block dropdown-toggle" role="button" aria-expanded="@(_hovered == "account" ? "true" : "false")" aria-haspopup="true">MY ACCOUNT</a>
+                                    <ul class="@($"dropdown-menu{(_hovered == "account" ? " show" : "")}")" style="right:1rem; left:unset;">
+                                        <li class="text-dark text-end"><a class="dropdown-item text-dark text-end" href="/my-account/profile">Manage</a></li>
+                                        <li class="text-dark text-end"><a class="dropdown-item text-dark text-end" href="/my-account/bookings">My Bookings</a></li>
+                                        <li class="text-dark"><button type="button" class="dropdown-item bg-transparent border-0 text-dark float-end text-end" aria-label="Logout" @onclick="SignOutAsync">Logout</button></li>
+                                    </ul>
+                                    <div class="accordion accordion-flush accordion-borderless d-lg-none d-block">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="@($"accordion-button collapsed{(_menuOpen ? " text-white" : "")}")" type="button"
+                                                        aria-expanded="@(_expanded == "account" ? "true" : "false")" @onclick="@(() => Expand("account"))">
+                                                    MY ACCOUNT <i class="@($"fa-solid {(_expanded == "account" ? "fa-caret-up" : "fa-caret-down")} ms-3")"></i>
+                                                </button>
+                                            </h2>
+                                            <div class="@($"accordion-collapse collapse{(_expanded == "account" ? " show" : "")}")">
+                                                <div class="accordion-body mt-4 mb-1">
+                                                    <ul>
+                                                        <li class="nav-item mb-0"><a class="@LinkClass" href="/my-account/profile">Manage</a></li>
+                                                        <li class="nav-item mt-4 mb-0"><a class="@LinkClass" href="/my-account/bookings">My Bookings</a></li>
+                                                        <li class="nav-item mt-4 mb-0"><button type="button" class="@($"{LinkClass} me-lg-2 bg-transparent border-0 text-end")" aria-label="Logout" @onclick="SignOutAsync">Logout</button></li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class="nav-item mt-4 mt-lg-0">
+                                    <button class="btn btn-primary mb-1 pe-5 ps-5 d-none d-lg-block" aria-label="Book" @onclick="Dialogs.OpenBookNow">Book</button>
+                                    <button class="@($"{LinkClass} mb-1 p-0 d-block d-lg-none bg-transparent text-start border-0")" aria-label="Book" @onclick="OpenBookNow">Book</button>
+                                </li>
+                            </Authorized>
+                            <NotAuthorized>
+                                <li class="nav-item mt-4 mt-lg-0">
+                                    <button class="@($"{LinkClass} me-lg-2 border-0 bg-transparent")" aria-label="Sign In" @onclick="OpenSignIn">Sign In</button>
+                                </li>
+                                <li class="nav-item mt-4 mt-lg-0">
+                                    <button class="btn btn-primary mb-1 ms-lg-3 pe-5 ps-5 d-none d-lg-block" aria-label="Book" @onclick="Dialogs.OpenBookNow">Book</button>
+                                    <button class="@($"{LinkClass} mb-1 p-0 d-block d-lg-none bg-transparent text-start border-0")" aria-label="Book" @onclick="OpenBookNow">Book</button>
+                                </li>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+</header>
+
+@code {
+    public const string Logo = "https://travaloud.azureedge.net/fuse/assets/images/Fuse-primary-logo.svg";
+
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+    [CascadingParameter] private Basket Basket { get; set; } = null!;
+    [Inject] private IAuthClient Auth { get; set; } = null!;
+
+    [Parameter, EditorRequired] public SiteChrome Chrome { get; set; } = null!;
+    /// <summary>Past legacy's 86px: the header turns white with a shadow.</summary>
+    [Parameter] public bool Scrolled { get; set; }
+
+    private bool _menuOpen;
+    private string? _hovered, _expanded;
+
+    /// <summary>Legacy: the header is transparent over the home page's hero only.</summary>
+    private bool OnHome => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Length == 0;
+
+    private string NavClass =>
+        "navbar navbar-expand-lg navbar-dark d-lg-block bg-lg-white fixed-top py-4 py-lg-3"
+        + (OnHome ? "" : " shadow always-shadow")
+        + (OnHome && Scrolled ? " shadow" : "")
+        + (_menuOpen ? " toggled" : "");
+
+    private bool Light => !_menuOpen && (Scrolled || !OnHome);
+
+    /// <summary>Legacy set the toggler bars dark on the white header and white otherwise.</summary>
+    private string IconColour => Light ? "background: #090511;" : "background: #FFFFFF;";
+
+    private string LinkClass => _menuOpen ? "nav-link text-white" : "nav-link";
+
+    /// <summary>A top-level link, highlighted on its own page (legacy "active").</summary>
+    private string Link(string href) => IsCurrent(href) ? $"{LinkClass} active" : LinkClass;
+
+    /// <summary>The page is this section or one of its pages ("/hostels", "/hostels/hoi-an-old-town").</summary>
+    private bool IsCurrent(string href)
+    {
+        var path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+        return path.Equals(href, StringComparison.OrdinalIgnoreCase) || path.StartsWith(href + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Legacy's count on the basket icon (hidden when empty).</summary>
+    private RenderFragment BasketCount =>
+        @<span class="@($"badge rounded-pill badge-notification bg-danger{(Basket.Count == 0 ? " d-none" : "")}")" style="letter-spacing:0px;">@Basket.Count</span>;
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += Closed;
+        Basket.Changed += BasketChanged;
+    }
+
+    private void BasketChanged() => InvokeAsync(StateHasChanged);
+
+    private void Closed(object? sender, LocationChangedEventArgs e)
+    {
+        _menuOpen = false;
+        _hovered = _expanded = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= Closed;
+        Basket.Changed -= BasketChanged;
+    }
+
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+
+    private void Expand(string menu) => _expanded = _expanded == menu ? null : menu;
+
+    private void OpenSignIn()
+    {
+        _menuOpen = false;
+        Dialogs.OpenSignIn();
+    }
+
+    private void OpenBookNow()
+    {
+        _menuOpen = false;
+        Dialogs.OpenBookNow();
+    }
+
+    private async Task SignOutAsync()
+    {
+        await Auth.SignOutAsync();
+        Navigation.NavigateTo("/");
+    }
+
+    // Accordion headings always keep "collapsed" (legacy's click handler re-added it), so an open one isn't highlighted.
+
+    /// <summary>A menu with children: a hover dropdown on desktop, an accordion ending "View All" on phones.</summary>
+    private RenderFragment Menu(string key, string title, string href, IEnumerable<(string Name, string Href)> children) => __builder =>
+    {
+        var items = children.ToList();
+        var open = _hovered == key;
+        var expanded = _expanded == key;
+        var current = IsCurrent(href);
+        <li class="@($"nav-item dropdown mt-4 mt-lg-0 mb-lg-0{(open ? " show" : "")}")" @onmouseenter="@(() => _hovered = key)" @onmouseleave="@(() => _hovered = null)">
+            <a class="@($"nav-link d-none d-lg-block dropdown-toggle{(current ? " active" : "")}")" id="@($"navbarDropdown{key}")" role="button" aria-expanded="@(open ? "true" : "false")" aria-haspopup="true" href="@href">@title</a>
+            <ul class="@($"dropdown-menu{(open ? " show" : "")}")">
+                @foreach (var item in items)
+                {
+                    <li><a class="dropdown-item" href="@item.Href">@item.Name</a></li>
+                }
+            </ul>
+            <div class="accordion accordion-flush accordion-borderless d-lg-none d-block" id="@($"navbarAccordion{key}")">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="@($"navbarAccordion{key}Heading")">
+                        <button class="@($"accordion-button collapsed{(current ? " active" : "")}{(_menuOpen ? " text-white" : "")}")" type="button"
+                                aria-expanded="@(expanded ? "true" : "false")" aria-controls="@($"navbarAccordion{key}Collapse")" @onclick="@(() => Expand(key))">
+                            @title <i class="@($"fa-solid {(expanded ? "fa-caret-up" : "fa-caret-down")} ms-3")"></i>
+                        </button>
+                    </h2>
+                    <div id="@($"navbarAccordion{key}Collapse")" class="@($"accordion-collapse collapse{(expanded ? " show" : "")}")">
+                        <div class="accordion-body mt-4 mb-1">
+                            <ul>
+                                @for (var i = 0; i < items.Count; i++)
+                                {
+                                    <li class="@(i == 0 ? "nav-item mb-0" : "nav-item mt-4 mb-0")"><a class="@LinkClass" href="@items[i].Href">@items[i].Name</a></li>
+                                }
+                                <li class="nav-item mt-4"><a class="@LinkClass" href="@href">View All</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </li>
+    };
+}

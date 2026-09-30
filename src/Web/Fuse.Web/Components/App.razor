@@ -1,0 +1,87 @@
+@inject IHostEnvironment Environment
+@inject IConfiguration Configuration
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    @if (IsAdmin)
+    {
+        @* Inter for text and figures; DIN (admin.css) for headings, buttons and the menu. *@
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+        <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
+        <link rel="stylesheet" href="@Assets["_content/Heron.MudCalendar/Heron.MudCalendar.min.css"]" />
+        <link rel="stylesheet" href="@Assets["_content/Fuse.Admin/admin.css"]" />
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" />
+    }
+    else
+    {
+        <link href="/favicon.ico" rel="icon" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+        <link rel="stylesheet" href="@Assets["_content/Fuse.Site/css/fuse.css"]" />
+        <link rel="stylesheet" href="@Assets["app.css"]" />
+        @if (Analytics is { } analytics)
+        {
+            @* As legacy: Google Analytics, Google Ads and Tag Manager. Production only, so testing never pollutes the stats. *@
+            <script async src="https://www.googletagmanager.com/gtag/js?id=@analytics.GoogleTagId"></script>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag() { dataLayer.push(arguments); }
+                gtag('js', new Date());
+                gtag('config', '@analytics.GoogleTagId');
+                gtag('config', '@analytics.GoogleAdsId');
+            </script>
+            <script>
+                (function (w, d, s, l, i) {
+                    w[l] = w[l] || []; w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+                    var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : '';
+                    j.async = true; j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+                })(window, document, 'script', 'dataLayer', '@analytics.TagManagerId');
+            </script>
+        }
+    }
+    <ImportMap />
+    <HeadOutlet @rendermode="PageRenderMode" />
+</head>
+
+<body>
+    @if (!IsAdmin && Analytics is { } tags)
+    {
+        <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=@tags.TagManagerId" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    }
+    <Routes @rendermode="PageRenderMode" />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    @if (IsAdmin)
+    {
+        <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+        <script src="@Assets["_content/Heron.MudCalendar/Heron.MudCalendar.min.js"]"></script>
+        <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+    }
+</body>
+
+</html>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = null!;
+
+    // The public site and the back office share one host but not their stylesheets or scripts. The error page renders
+    // at /error, so it goes by where the error happened.
+    private bool IsAdmin =>
+        (HttpContext.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>()?.Path ?? HttpContext.Request.Path.Value ?? "")
+        .StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The browser app everywhere, except pages that only render on the server (the error page).</summary>
+    private IComponentRenderMode? PageRenderMode => HttpContext.AcceptsInteractiveRouting() ? InteractiveWebAssembly : null;
+
+    private SiteAnalytics? Analytics =>
+        Environment.IsProduction() && Configuration.GetSection("Site:Analytics").Get<SiteAnalytics>() is { GoogleTagId.Length: > 0 } analytics
+            ? analytics
+            : null;
+
+    private sealed record SiteAnalytics(string GoogleTagId, string GoogleAdsId, string TagManagerId);
+}

@@ -1,0 +1,55 @@
+@using Fuse.Admin.Pages.Bookings
+@inject IDialogService Dialogs
+
+@* The app bar's one-click shortcuts, each only for staff who can use it: a new booking (the booking wizard, over
+   whichever page you're on), the calendar, the manifest, the bookings and enquiries. *@
+
+<AuthorizeView>
+    @{
+        var user = context.User;
+        bool Can(string action, string resource) => user.HasPermission(action, resource);
+    }
+    <nav class="quick-actions" aria-label="Quick actions">
+        @if (Can(FuseAction.Create, FuseResource.TourBookings))
+        {
+            <MudTooltip Text="New booking">
+                <button type="button" class="quick-action quick-action--primary" aria-label="New booking" @onclick="NewBookingAsync"><MudIcon Icon="@Icons.Material.Filled.Add" /></button>
+            </MudTooltip>
+        }
+        @if (Can(FuseAction.View, FuseResource.Calendar))
+        {
+            <MudTooltip Text="Calendar">
+                <a class="quick-action" href="/admin/calendar" aria-label="Calendar"><MudIcon Icon="@Icons.Material.Outlined.CalendarMonth" /></a>
+            </MudTooltip>
+        }
+        @if (Can(FuseAction.View, FuseResource.TourBookings))
+        {
+            <MudTooltip Text="Manifest">
+                <a class="quick-action" href="/admin/manifest" aria-label="Manifest"><MudIcon Icon="@Icons.Material.Filled.Checklist" /></a>
+            </MudTooltip>
+        }
+        @if (Can(FuseAction.View, FuseResource.TourBookings))
+        {
+            <MudTooltip Text="Bookings">
+                <a class="quick-action" href="/admin/bookings/tour-bookings" aria-label="Bookings"><MudIcon Icon="@Icons.Material.Outlined.ConfirmationNumber" /></a>
+            </MudTooltip>
+        }
+        @if (Can(FuseAction.View, FuseResource.Enquiries))
+        {
+            <MudTooltip Text="Enquiries">
+                <a class="quick-action" href="/admin/enquiries/general-enquiries" aria-label="Enquiries"><MudIcon Icon="@Icons.Material.Outlined.Forum" /></a>
+            </MudTooltip>
+        }
+    </nav>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter] private BookingsChanged? BookingsChanged { get; set; }
+
+    private async Task NewBookingAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<BookingWizard>(null, new DialogParameters<BookingWizard> { { w => w.BookingId, null } }, BookingWizard.Options);
+        if (await dialog.Result is { Canceled: false } && BookingsChanged is not null)
+            await BookingsChanged.NotifyAsync();
+    }
+}

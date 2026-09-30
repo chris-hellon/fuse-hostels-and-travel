@@ -1,0 +1,53 @@
+@page "/events"
+@inherits SitePage
+
+<SeoHead Page="Page" PageName="Events" Keywords="events, what's on, what's happening, facebook events, fuse events" />
+
+<section id="headerBanner">
+    <HeaderBanner Headings="BannerHeadings()" ImageUrl="https://travaloudcdn.azureedge.net/fuse/assets/images/26885dcf-2138-4b69-8540-5203a35e65dd.jpg">
+        <NavPills Items="Pills" />
+    </HeaderBanner>
+</section>
+@if (Page is not null)
+{
+    <WhatsOn Events="@(Listed ?? [])" ShowLinks="false" />
+    <section id="events-calendar">
+        <div class="container-fluid bg-gray">
+            <div class="container py-5 px-4 px-lg-0">
+                <div class="row justify-content-between align-items-center mb-4">
+                    <div class="col-lg-auto mb-2 mb-lg-0">
+                        <h4 class="tilted mt-2 mb-0">WHAT'S ON THIS MONTH</h4>
+                    </div>
+                    <div class="col-lg-auto">
+                        @* target: a server route (the iCal feed), so the browser loads it rather than Blazor's router. *@
+                        <a class="btn btn-primary" href="/events/calendar.ics" target="_top"><i class="fas fa-calendar-plus me-2"></i>Add to your calendar</a>
+                    </div>
+                </div>
+                <EventsCalendar />
+            </div>
+        </div>
+    </section>
+    <StayUpToDate />
+    <HostelDetails Hostels="@(Hostels ?? [])" />
+}
+else
+{
+    @* Arriving from another page: its content is loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [PersistentState] public IReadOnlyList<SiteEvent>? Listed { get; set; }
+    [PersistentState] public IReadOnlyList<SiteHostelContact>? Hostels { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.Events;
+
+    private static readonly (string, string)[] Pills = [("WHAT'S ON", "events"), ("STAY UP TO DATE", "stay-up-to-date"), ("HOSTELS", "hostels")];
+
+    protected override async Task LoadAsync()
+    {
+        var events = Api.Send(new ListSiteEvents()).AsTask();
+        var hostels = Api.Send(new ListSiteHostelContacts()).AsTask();
+        (Listed, Hostels) = (await events, await hostels);
+    }
+}

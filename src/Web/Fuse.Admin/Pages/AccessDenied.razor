@@ -1,0 +1,6 @@
+@page "/admin/access-denied"
+@attribute [AllowAnonymous]
+
+<AdminPageHeader Title="Access denied" />
+<MudAlert Severity="Severity.Warning">Your account doesn't have access to that page. Ask an administrator if you need it.</MudAlert>
+<MudButton Href="/admin" Variant="Variant.Text" Class="mt-4">Back to the dashboard</MudButton>

@@ -1,0 +1,44 @@
+@* Legacy StripeQrCodeDialog: the guest scans the code (or is sent the link) to pay what's owed by card. *@
+@inject IJSRuntime Js
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Scan to pay @Link.Amount.ToString("$#,##0.00")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="payment-qr">
+            <img src="@Link.QrCodeDataUrl" alt="Payment QR code" class="payment-qr__code" />
+            <MudText Typo="Typo.body2" Class="mud-text-secondary text-center">The booking is marked paid as soon as the payment goes through.</MudText>
+            <MudTextField T="string" Value="@Link.Url" Label="Payment link" ReadOnly="true" Variant="Variant.Outlined" Class="payment-qr__link"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.ContentCopy" OnAdornmentClick="CopyAsync" AdornmentAriaLabel="Copy link" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Href="@Link.Url" Target="_blank" StartIcon="@Icons.Material.Filled.OpenInNew">Open checkout</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="() => Dialog.Close()">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public PaymentLink Link { get; set; } = null!;
+
+    private async Task CopyAsync()
+    {
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", Link.Url);
+        Snackbar.Add("Payment link copied.", Severity.Success);
+    }
+
+    /// <summary>Makes the link and shows it; false (with the reason shown) when it can't be made.</summary>
+    public static async Task<bool> ShowAsync(IApi api, IDialogService dialogs, ISnackbar snackbar, DefaultIdType bookingId)
+    {
+        PaymentLink? link = null;
+        if (!await snackbar.TryAsync(async () => link = await api.Send(new CreatePaymentLink(bookingId))) || link is null)
+            return false;
+        var dialog = await dialogs.ShowAsync<PaymentQrDialog>(null, new DialogParameters<PaymentQrDialog> { { d => d.Link, link } }, Options);
+        await dialog.Result;
+        return true;
+    }
+}

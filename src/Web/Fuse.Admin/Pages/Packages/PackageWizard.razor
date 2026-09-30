@@ -1,0 +1,113 @@
+@using Fuse.Contracts.Packages
+@using Fuse.Contracts.Tours
+
+@* Create / edit a package: details, content and tours with prices, all saved together on Save. *@
+
+<ModalWizard TModel="PackageDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" OnCancel="CancelAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Package" : "Edit Package")
+    </TitleContent>
+    <ChildContent>
+        @if (_draft is not null)
+        {
+            <WizardStep TModel="PackageDraft" Title="Details" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["Changes.Details.Name", "Changes.Details.CommissionAmount"])">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Name" @bind-Value="_draft.Details.Name" Required="true" RequiredError="Name is required" MaxLength="1024"
+                                      HelperText="Enter a package name" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSelect T="DefaultIdType?" Label="Category" @bind-Value="_draft.Details.TourCategoryId" Clearable="true" Variant="Variant.Outlined"
+                                   HelperText="Does this package belong to a category?">
+                            @foreach (var category in _categories)
+                            {
+                                <MudSelectItem T="DefaultIdType?" Value="category.Id">@category.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Price label" @bind-Value="_draft.Details.PriceLabel" Variant="Variant.Outlined"
+                                      HelperText="Shown next to the price, e.g. 'from' or 'per person'" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudNumericField T="decimal?" Label="Package commission (per guest)" @bind-Value="_draft.Details.CommissionAmount" Min="0" Step=".5M"
+                                         Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true"
+                                         HelperText="Paid instead of the tours' own commissions. Leave empty to pay each tour's commission under its own rules." />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudSwitch T="bool" @bind-Value="_draft.Details.CommissionIgnoresMinimumPax" Color="Color.Primary" Disabled="@(_draft.Details.CommissionAmount is null)"
+                                   Label="Pay the package commission even if tours miss their minimum pax" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField Label="Notes" @bind-Value="_draft.Details.Notes" Lines="3" Variant="Variant.Outlined" HelperText="Staff only" />
+                    </MudItem>
+                </MudGrid>
+            </WizardStep>
+            <WizardStep TModel="PackageDraft" Title="Content">
+                <ContentSections Sections="_sections" />
+            </WizardStep>
+            <WizardStep TModel="PackageDraft" Title="Tours" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["Changes.Tiers", "Changes.Items"])" OnLeaveAsync="_ => Task.FromResult(_tours?.Validate() ?? true)">
+                <PackageToursStep @ref="_tours" Draft="_draft" TourOptions="_tourOptions" />
+            </WizardStep>
+            <WizardStep TModel="PackageDraft" Title="Image" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["Image"])">
+                <ImagePicker Label="Image" Hint="Optional. Shown for the package on the website." Src="@Preview" Pending="_draft.NewImage is not null"
+                             OnPick="PickImageAsync" OnRemove="() => _draft.SetImage(null)" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? PackageId { get; set; }
+
+    private bool IsCreate => PackageId is null;
+    private PackageDraft? _draft;
+    /// <summary>The save's rules, checked step by step (each step lists the ones it edits).</summary>
+    private static readonly SavePackageValidator Rules = new();
+    private object Command() => new SavePackage(_draft!.Id, _draft.ToChanges(), _draft.NewImage, _draft.RemoveImage);
+    private PackageToursStep? _tours;
+    private IReadOnlyList<TourCategoryItem> _categories = [];
+    private IReadOnlyList<PackageTourOption> _tourOptions = [];
+    private IReadOnlyList<ContentSection> _sections = [];
+
+    private string? Preview => _draft?.NewImage is { } image
+        ? $"data:{image.ContentType};base64,{Convert.ToBase64String(image.Content)}"
+        : _draft?.ImagePath;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var categories = Api.Send(new ListTourCategories()).AsTask();
+        var tours = Api.Send(new ListPackageTourOptions()).AsTask();
+        var draft = IsCreate ? Task.FromResult(PackageDraft.New()) : LoadAsync(PackageId!.Value);
+        await Task.WhenAll(categories, tours, draft);
+
+        (_categories, _tourOptions) = (categories.Result, tours.Result);
+        var loaded = draft.Result;
+        foreach (var option in _tourOptions.Where(o => o.DefaultPrice is not null))
+            loaded.DefaultPrices[option.Id] = option.DefaultPrice!.Value;
+        var details = loaded.Details;
+        _sections =
+        [
+            new("Short description", "A sentence or two about the package", () => details.ShortDescription, v => details.ShortDescription = v),
+            new("Description", "The main text about the package", () => details.Description, v => details.Description = v),
+        ];
+        _draft = loaded;
+    });
+
+    private async Task<PackageDraft> LoadAsync(DefaultIdType id) => PackageDraft.From(await Api.Send(new GetPackageEditor(id)));
+
+    private async Task PickImageAsync(InputFileChangeEventArgs e) =>
+        await Snackbar.TryAsync(async () => _draft!.SetImage(await e.File.ToUploadAsync()));
+
+    private async Task<bool> SaveAsync(PackageDraft draft) =>
+        await Snackbar.TryAsync(async () => await Api.Send(new SavePackage(draft.Id, draft.ToChanges(), draft.NewImage, draft.RemoveImage)),
+            IsCreate ? "Package created." : "Package saved.");
+
+    private async Task<bool> CancelAsync() =>
+        _draft is not { HasChanges: true }
+        || await Dialogs.ConfirmAsync("Discard your changes?", "You've changed this package but haven't saved it. If you close now, those changes are lost.",
+            "Discard changes", "Keep editing");
+}

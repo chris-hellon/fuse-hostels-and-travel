@@ -1,0 +1,156 @@
+@page "/blogs-and-tips/{Slug}"
+@inherits JsComponent
+@inject IApi Api
+@inject NavigationManager Navigation
+
+@* Legacy TravelGuide/Index: the guide's photos filling the screen with its title, date and author (and View Gallery
+   when it has more than one), then its subtitle, share buttons, a table of contents beside the text, and three
+   other guides. *@
+
+@if (Guide is { } guide)
+{
+    <SeoHead PageName="@guide.Title" Parent="@(("Blogs & Tips", "/blogs-and-tips"))" ImageUrl="@guide.ImagePath"
+             Keywords="@(guide.MetaKeywords ?? "")" MetaDescription="@guide.MetaDescription">
+        @((MarkupString)BlogPosting(guide))
+    </SeoHead>
+
+    <section id="fullPageCarousel" class="carousel slide guide-hero" aria-label="@($"{guide.Title} photos")">
+        <Slideshow Images="guide.Images" />
+        <div class="mask guide-hero__mask"></div>
+        <div class="guide-hero__overlay">
+            <div class="text-white text-center full-cover-single-title-container">
+                <h1 class="full-cover-single-title">
+                    @guide.Title
+                    <span class="d-block full-cover-single-span">
+                        Published <u>@guide.Published.ToString("dd/MM/yyyy")</u>
+                        @if (guide.Author is { } author)
+                        {
+                            <br />@($"by {author}")
+                        }
+                    </span>
+                </h1>
+                @if (guide.Images.Count > 1)
+                {
+                    <button type="button" class="btn btn-primary mt-lg-5 mt-3 pe-5 ps-5" @onclick="() => _gallery = true">View Gallery</button>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section id="introduction" class="bg-light">
+        <div class="container-fluid">
+            <div class="container pt-8">
+                <div class="row">
+                    <div class="col-md-9 mb-4 mb-lg-3 has-parallax-scroll">
+                        @if (guide.SubTitle.Length > 0)
+                        {
+                            <h2 class="display-4" id="@guide.Contents[0].Id">@guide.SubTitle.ToUpperInvariant()</h2>
+                        }
+                    </div>
+                    <div class="col-md-3 mb-4 text-center text-md-end">
+                        <a class="btn text-white btn-lg btn-floating guide-share guide-share--facebook" target="_blank" rel="noopener"
+                           href="@($"https://www.facebook.com/sharer/sharer.php?u={Uri.EscapeDataString(Address)}")" aria-label="Share on Facebook">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a class="btn text-white btn-lg btn-floating guide-share guide-share--twitter" target="_blank" rel="noopener"
+                           href="@($"https://twitter.com/intent/tweet?text={Uri.EscapeDataString(guide.Title)}&url={Uri.EscapeDataString(Address)}")" aria-label="Share on X (Twitter)">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                    </div>
+
+                    @if (guide.Contents.Count > 0)
+                    {
+                        <div class="col-lg-3 mb-5 mb-lg-0">
+                            <nav class="card sticky-top guide-contents" aria-label="Table of contents">
+                                <div class="card-header"><p class="mb-0"><strong>Table of Contents</strong></p></div>
+                                <div class="card-body">
+                                    <ul class="nav flex-column nav-pills menu-sidebar">
+                                        @foreach (var heading in guide.Contents)
+                                        {
+                                            <li class="nav-item" @key="heading.Id">
+                                                <a class="nav-link" href="@($"#{heading.Id}")" @onclick="() => ScrollAsync(heading.Id)" @onclick:preventDefault="true">@heading.Title</a>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </nav>
+                        </div>
+                    }
+                    <div class="@($"col-md-12 col-lg-{(guide.Contents.Count > 0 ? 9 : 12)} mb-5 mb-lg-0 guide-body")">
+                        @((MarkupString)guide.Description)
+                    </div>
+                </div>
+            </div>
+        </div>
+        @if (guide.Related.Count > 0)
+        {
+            <div class="container"><div class="border-top mt-4"></div></div>
+            <ToursCarousel Id="related" Title="Related Travel Guides" Text="" Tours="@([.. guide.Related.Select(TravelGuides.Card)])"
+                           Href="@(card => $"/blogs-and-tips/{card.Slug}")" ButtonText="Read More"
+                           Label="@(card => TravelGuides.Date(guide.Related.First(r => r.Id == card.Id)))" />
+        }
+    </section>
+
+    <GalleryLightbox @bind-Open="_gallery" Images="guide.Images" Label="@guide.Title" />
+}
+else
+{
+    @* Arriving from another page: the banner (its photo is the guide's) and content while they load. *@
+    <section id="headerBanner">
+        <HeaderBanner Headings="null" LoadingText="Loading the guide…" />
+    </section>
+    <PageSkeleton />
+}
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    [Parameter] public string Slug { get; set; } = "";
+
+    // Fetched once while prerendering and handed to the browser, so WebAssembly doesn't re-fetch.
+    [PersistentState] public SiteTravelGuide? Guide { get; set; }
+
+    private bool _gallery;
+
+    /// <summary>This guide's address on the live site (what's shared).</summary>
+    private string Address => $"{Chrome?.Seo.WebsiteUrl ?? Navigation.BaseUri.TrimEnd('/')}/blogs-and-tips/{Guide?.Slug}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Guide?.Slug.Equals(Slug, StringComparison.OrdinalIgnoreCase) == true)
+            return;
+        Guide = null; // from another guide: loading, not the last guide
+        try
+        {
+            Guide = await Api.Send(new GetSiteTravelGuide(Slug));
+        }
+        catch (NotFoundException)
+        {
+            // Legacy showed an empty page; a real 404 is better for visitors and search engines.
+            Navigation.NotFound();
+        }
+    }
+
+    private Task ScrollAsync(string id) => Js.InvokeVoidAsync("scrollToSection", id).AsTask();
+
+    /// <summary>Legacy's BlogPosting (JSON-LD), without the whole text (the page has it).</summary>
+    private string BlogPosting(SiteTravelGuide guide) =>
+        "<script type=\"application/ld+json\">" + System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "BlogPosting",
+            ["headline"] = guide.Title,
+            ["author"] = guide.Author is null ? null : new Dictionary<string, object> { ["@type"] = "Person", ["name"] = guide.Author },
+            ["datePublished"] = guide.Published.ToString("yyyy-MM-dd"),
+            ["image"] = guide.ImagePath,
+            ["description"] = guide.MetaDescription,
+            ["publisher"] = new Dictionary<string, object>
+            {
+                ["@type"] = "Organization",
+                ["name"] = "Fuse Hostels and Travel",
+                ["logo"] = new Dictionary<string, object> { ["@type"] = "ImageObject", ["url"] = "https://travaloud.azureedge.net/fuse/assets/images/Fuse-primary-logo.svg" },
+            },
+            ["mainEntityOfPage"] = new Dictionary<string, object> { ["@type"] = "WebPage", ["@id"] = Address },
+        }, new System.Text.Json.JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull })
+            .Replace("</", "<\\/") + "</script>";
+}

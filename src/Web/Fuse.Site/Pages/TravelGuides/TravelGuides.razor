@@ -1,0 +1,106 @@
+@page "/blogs-and-tips"
+@page "/blogs-and-tips/{PageNumber:int}"
+@inherits SitePage
+@inject NavigationManager Navigation
+
+@* Legacy TravelGuides/Index ("BLOGS & TIPS"): the banner, then seven guides a page, newest first: the first large
+   beside its summary, the rest in rows of three; numbered pages below. *@
+
+<SeoHead Page="Page" PageName="Blogs & Tips" Keywords="travel guides, what's on, what's happening, facebook events, fuse events"
+         MetaDescription="What's on at Fuse Hostels and Travel? View our weekly events." />
+
+<section id="headerBanner">
+    <HeaderBanner Headings="@BannerHeadings("BLOGS & TIPS")" ImageUrl="https://travaloudcdn.azureedge.net/fuse/assets/images/20f8de8d-fea6-403e-8b79-f171b314d7fe.jpg" />
+</section>
+@if (Page is not null)
+{
+    <section id="travelGuides" class="pt-8 pb-5 overflow-hidden">
+        <div class="container">
+            @if (Guides is { Guides.Count: > 0 } list)
+            {
+                var first = list.Guides[0];
+                <article class="row gx-lg-7 gy-5 align-items-center border-bottom pb-7 mb-7 guide-feature">
+                    <div class="col-md-6 has-parallax-scroll">
+                        <a class="d-block offcut-image-border guide-feature__image" href="@Link(first)">
+                            <img src="@CdnImages.Sized(first.ImagePath, 900)" alt="@($"{first.Title} image")" width="900" height="560" />
+                        </a>
+                    </div>
+                    <div class="col-md-6 has-parallax-scroll">
+                        <h4 class="tilted display-6 mb-4">@(list.Page == 1 ? "LATEST TRAVEL GUIDE" : Date(first))</h4>
+                        <a class="guide-feature__title" href="@Link(first)"><h2 class="display-5">@first.Title</h2></a>
+                        @if (list.Page == 1)
+                        {
+                            <p class="content-card__label">@Date(first)</p>
+                        }
+                        <div class="text-muted">@((MarkupString)(first.ShortDescription ?? ""))</div>
+                        <a class="btn btn-primary mt-3" href="@Link(first)">Read More</a>
+                    </div>
+                </article>
+
+                <div class="row g-6">
+                    @foreach (var guide in list.Guides.Skip(1))
+                    {
+                        <div class="col-lg-4 col-md-6 has-parallax-scroll" @key="guide.Id">
+                            <ContentCard Card="Card(guide)" Href="@Link(guide)" ButtonText="Read More" Label="@Date(guide)" InCarousel="true" />
+                        </div>
+                    }
+                </div>
+
+                @if (list.TotalPages > 1)
+                {
+                    <nav class="mt-8 mb-4" aria-label="Travel guide pages">
+                        <ul class="pagination pagination-circle justify-content-center flex-wrap">
+                            @if (list.Page > 1)
+                            {
+                                <li class="page-item"><a class="page-link" href="@PageLink(list.Page - 1)">Previous</a></li>
+                            }
+                            @for (var number = 1; number <= list.TotalPages; number++)
+                            {
+                                <li class="@($"page-item{(number == list.Page ? " active" : "")}")" aria-current="@(number == list.Page ? "page" : null)">
+                                    <a class="page-link" href="@PageLink(number)">@number</a>
+                                </li>
+                            }
+                            @if (list.Page < list.TotalPages)
+                            {
+                                <li class="page-item"><a class="page-link" href="@PageLink(list.Page + 1)">Next</a></li>
+                            }
+                        </ul>
+                    </nav>
+                }
+            }
+        </div>
+    </section>
+}
+else
+{
+    @* Arriving from another page: its content is loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [Parameter] public int? PageNumber { get; set; }
+
+    [PersistentState] public SiteTravelGuidePage? Guides { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.TravelGuides;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var wanted = PageNumber ?? 1;
+        if (Guides?.Page == wanted)
+            return;
+        Guides = await Api.Send(new ListSiteTravelGuides(wanted));
+        if (wanted > 1 && Guides.Guides.Count == 0)
+            Navigation.NotFound();
+    }
+
+    private static string Link(SiteTravelGuideCard guide) => $"/blogs-and-tips/{guide.Slug}";
+
+    private static string PageLink(int number) => number == 1 ? "/blogs-and-tips" : $"/blogs-and-tips/{number}";
+
+    /// <summary>Legacy's date (day first, as the live site shows it).</summary>
+    public static string Date(SiteTravelGuideCard guide) => guide.Published.ToString("dd/MM/yyyy");
+
+    public static SiteCard Card(SiteTravelGuideCard guide) =>
+        new() { Id = guide.Id, Name = guide.Title, Slug = guide.Slug, ShortDescription = guide.ShortDescription, ImagePath = guide.ImagePath };
+}

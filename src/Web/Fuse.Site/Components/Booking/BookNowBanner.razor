@@ -1,0 +1,13 @@
+@* Legacy _BookNowBannerPartial (not floating): the booking form in a white box, e.g. at the foot of the hostels page. *@
+
+<div class="container bg-white py-4 p-lg-4 rounded booking-banner has-parallax-scroll">
+    <div class="d-flex justify-content-center mb-4 d-lg-none">
+        <h4 class="tilted">Book Your Stay</h4>
+    </div>
+    <BookNowForm Style="BookNowStyle.Banner" HostelId="HostelId" />
+</div>
+
+@code {
+    /// <summary>The hostel chosen to start with.</summary>
+    [Parameter] public DefaultIdType? HostelId { get; set; }
+}

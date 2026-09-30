@@ -1,0 +1,69 @@
+@* My Account's frame (legacy Manage/_Layout, redesigned): a short pool party banner with "MY {section}" (legacy's was
+   240px, so switching tabs doesn't mean scrolling past a full-screen photo), the section tabs, then the section. Signed out, it asks the visitor to sign in instead (legacy sent them to a missing
+   /login page). *@
+
+<section id="headerBanner" class="account-banner">
+    <HeaderBanner Headings="@(new PageHeadings(Title, "MY", null))" ImageUrl="https://travaloudcdn.azureedge.net/fuse/assets/images/POOLPARTY_23-03-22-12.jpg"
+                  Style="background-position-y: 25%;" />
+</section>
+
+<section id="account" class="account bg-light">
+    <div class="container pt-8 pb-8">
+        @if (SignedIn)
+        {
+            <nav class="account__tabs" aria-label="My account">
+                @foreach (var (label, href, icon) in Tabs)
+                {
+                    <a class="@($"account__tab{(href == Active ? " is-active" : "")}")" href="@href" aria-current="@(href == Active ? "page" : null)">
+                        <i class="@($"fa-solid {icon}")" aria-hidden="true"></i><span>@label</span>
+                    </a>
+                }
+            </nav>
+            @ChildContent
+        }
+        else if (_checked)
+        {
+            <div class="account-empty">
+                <span class="account-empty__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                <h2 class="display-6">SIGN IN TO YOUR ACCOUNT</h2>
+                <p>See your bookings, pay anything still owed and keep your details up to date.</p>
+                <button type="button" class="btn btn-primary" @onclick="Dialogs.OpenSignIn">Sign In</button>
+                <p class="account-empty__small">Booked with us before? Your account was made with your booking's email address.</p>
+            </div>
+        }
+        else
+        {
+            <LoadingMessage />
+        }
+    </div>
+</section>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+
+    /// <summary>The banner's word after "MY" (BOOKINGS, PROFILE…).</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>The tab to highlight (its address).</summary>
+    [Parameter, EditorRequired] public string Active { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    public const string Bookings = "/my-account/bookings", Profile = "/my-account/profile", Security = "/my-account/password", Data = "/my-account/personal-data";
+
+    private static readonly (string Label, string Href, string Icon)[] Tabs =
+    [
+        ("BOOKINGS", Bookings, "fa-ticket"),
+        ("PROFILE", Profile, "fa-user"),
+        ("EMAIL & PASSWORD", Security, "fa-lock"),
+        ("YOUR DATA", Data, "fa-file-arrow-down"),
+    ];
+
+    private bool SignedIn { get; set; }
+    private bool _checked;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        SignedIn = AuthState is not null && (await AuthState).User.Identity?.IsAuthenticated == true;
+        _checked = true;
+    }
+}

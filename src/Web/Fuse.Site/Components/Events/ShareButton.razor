@@ -1,0 +1,15 @@
+@* Legacy's Share button: the device's share sheet, else copy the link, else open it. *@
+@inherits JsComponent
+@inject NavigationManager Navigation
+
+<button type="button" class="@Class" @onclick="ShareAsync"><i class="fas fa-share-nodes me-1"></i>Share</button>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>What to share (relative to the site); the current page without.</summary>
+    [Parameter] public string? Url { get; set; }
+    [Parameter] public string Class { get; set; } = "btn btn-outline-primary";
+
+    private Task ShareAsync() =>
+        Js.InvokeVoidAsync("share", Title, Navigation.ToAbsoluteUri(Url ?? Navigation.Uri).ToString()).AsTask();
+}

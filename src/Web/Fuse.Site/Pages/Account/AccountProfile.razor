@@ -1,0 +1,123 @@
+@page "/my-account/profile"
+@inherits AccountPage
+@using Fuse.Contracts.Identity
+@using Fuse.Shared.Globalization
+
+@* Legacy Manage/Index (one long column of fields), redesigned: about you, then travel documents (for tours that need
+   them), each in its own card, and one Save. The email is changed on the Email & Password tab. *@
+
+<SeoHead PageName="My Profile" />
+
+<AccountShell Title="PROFILE" Active="@AccountShell.Profile">
+    @if (_profile is { } profile)
+    {
+        <form novalidate @onsubmit="SaveAsync">
+            <div class="account-card">
+                <h4 class="tilted display-6 account-card__title">ABOUT YOU</h4>
+                <div class="row g-4">
+                    <div class="col-md-6 position-relative">
+                        <OutlineInput Id="Profile_FirstName" Label="First Name" @bind-Value="profile.FirstName" autocomplete="given-name" />
+                        <Validation Message="@Error("FirstName")" />
+                    </div>
+                    <div class="col-md-6 position-relative">
+                        <OutlineInput Id="Profile_Surname" Label="Surname" @bind-Value="profile.LastName" autocomplete="family-name" />
+                        <Validation Message="@Error("LastName")" />
+                    </div>
+                    <div class="col-md-6 position-relative">
+                        <OutlineDate Id="Profile_DateOfBirth" Label="Date Of Birth" @bind-Value="profile.DateOfBirth" Max="DateTime.Today" autocomplete="bday" />
+                        <Validation Message="@Error("DateOfBirth")" />
+                    </div>
+                    <div class="col-md-6 position-relative">
+                        <OutlineInput Id="Profile_Phone" Label="Phone Number" type="tel" @bind-Value="profile.PhoneNumber" autocomplete="tel" />
+                        <Validation Message="@Error("PhoneNumber")" />
+                    </div>
+                    <div class="col-md-6" style="min-height:47px;">
+                        <FuseSelect Label="Gender" Options="Genders" Class="bg-white" @bind-Value="profile.Gender" />
+                    </div>
+                    <div class="col-md-6" style="min-height:47px;">
+                        <FuseSelect Label="Nationality" Options="Countries_" Class="bg-white" @bind-Value="profile.Nationality" />
+                    </div>
+                    <div class="col-12">
+                        <div class="account-readonly">
+                            <span><i class="fa-solid fa-at me-2" aria-hidden="true"></i>@(profile.Email ?? "No email address")</span>
+                            <a href="@AccountShell.Security">Change email</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="account-card">
+                <h4 class="tilted display-6 account-card__title">TRAVEL DOCUMENTS</h4>
+                <p class="text-muted">Optional. Some tours need these; adding them here saves time at pick-up.</p>
+                <div class="row g-4">
+                    <div class="col-md-6"><OutlineInput Id="Profile_Passport" Label="Passport Number" @bind-Value="profile.PassportNumber" /></div>
+                    <div class="col-md-6" style="min-height:47px;">
+                        <FuseSelect Label="Passport Issuing Country" Options="Countries_" Class="bg-white" @bind-Value="profile.PassportIssuingCountry" />
+                    </div>
+                    <div class="col-md-6"><OutlineDate Id="Profile_PassportIssued" Label="Passport Issue Date" @bind-Value="profile.PassportIssueDate" Max="DateTime.Today" /></div>
+                    <div class="col-md-6"><OutlineDate Id="Profile_PassportExpires" Label="Passport Expiry Date" @bind-Value="profile.PassportExpiryDate" /></div>
+                    <div class="col-md-6"><OutlineDate Id="Profile_VisaIssued" Label="Visa Issue Date" @bind-Value="profile.VisaIssueDate" Max="DateTime.Today" /></div>
+                    <div class="col-md-6"><OutlineDate Id="Profile_VisaExpires" Label="Visa Expiry Date" @bind-Value="profile.VisaExpiryDate" /></div>
+                </div>
+            </div>
+
+            <div class="account-save">
+                <span role="status" class="@(_saved ? "text-success" : "text-danger")">@(_saved ? "Your profile has been updated." : _error)</span>
+                <button type="submit" class="btn btn-primary" disabled="@_busy">@(_busy ? "Saving…" : "Save Changes")</button>
+            </div>
+        </form>
+    }
+    else
+    {
+        <LoadingMessage Text="Loading your profile…" />
+    }
+</AccountShell>
+
+@code {
+    private static readonly IReadOnlyList<FuseSelect.SelectOption> Genders = [new("Male", "Male"), new("Female", "Female")];
+    private static readonly IReadOnlyList<FuseSelect.SelectOption> Countries_ = [.. Countries.All.Select(c => new FuseSelect.SelectOption(c.Name, c.Name))];
+
+    [PersistentState] public UserDetails? Me { get; set; }
+
+    private UserProfile? _profile;
+    private Dictionary<string, string[]> _errors = [];
+    private string? _error;
+    private bool _busy, _saved;
+
+    protected override async Task LoadAsync()
+    {
+        Me = await Api.Send(new GetMyProfile());
+        _profile = Me.Profile with { };
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        _profile ??= Me is null ? null : Me.Profile with { };
+        return base.OnParametersSetAsync();
+    }
+
+    private string? Error(string field) => _errors.TryGetValue($"Profile.{field}", out var messages) || _errors.TryGetValue(field, out messages) ? messages.FirstOrDefault() : null;
+
+    private async Task SaveAsync()
+    {
+        (_busy, _saved, _error, _errors) = (true, false, null, []);
+        try
+        {
+            await Api.Send(new UpdateMyProfile(_profile!));
+            _saved = true;
+        }
+        catch (RequestValidationException invalid)
+        {
+            _errors = invalid.Errors.ToDictionary(e => e.Key, e => e.Value);
+            _error = "Please check the details above.";
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

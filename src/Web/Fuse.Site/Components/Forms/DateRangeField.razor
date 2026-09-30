@@ -1,0 +1,27 @@
+@* Legacy "Check In / Out" field: a read-only outline input that opens the date range picker. *@
+
+<OutlineInput Id="@Id" Label="Check In / Out" Class="h-100 w-100" Style="min-height:47px;" InputClass="check-in-out-date cursor-pointer h-100"
+              Value="@Text" placeholder="Check In / Out Date" readonly="true" type="text" InputStyle="background-color:#fff !important;"
+              @onclick="Open" @onkeydown="KeyDown">
+    <Icon><i class="fas fa-calendar-days trailing text-primary"></i></Icon>
+</OutlineInput>
+
+@code {
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter] public DateOnly? Start { get; set; }
+    [Parameter] public DateOnly? End { get; set; }
+    /// <summary>Check in and check out, once both are chosen.</summary>
+    [Parameter] public EventCallback<(DateOnly Start, DateOnly End)> Changed { get; set; }
+
+    private string? Text => Start is not null && End is not null ? $"{Start:dd/MM/yyyy} - {End:dd/MM/yyyy}" : null;
+
+    private void Open() => Dialogs.PickDates(Start, End, (start, end) => Changed.InvokeAsync((start, end)));
+
+    private void KeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+            Open();
+    }
+}

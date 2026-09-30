@@ -1,0 +1,17 @@
+@* Legacy GenericBannerComponent: a centred section heading with its text (the text's markup varies by
+   page, so it's passed in; a plain <p> in the row takes the full width like a column). *@
+
+<div class="@Class">
+    <div class="row justify-content-lg-center has-parallax-scroll">
+        <div class="col-12">
+            <h2>@Title</h2>
+        </div>
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Class { get; set; } = "container pt-8 pb-8 text-center ovals-container-parent";
+}

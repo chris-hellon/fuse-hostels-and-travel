@@ -1,0 +1,28 @@
+@* A near full-screen editor for one long rich text field (opened from ContentSections' Expand). *@
+
+<MudDialog ContentClass="rich-text-dialog__content">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Section.Label</MudText>
+    </TitleContent>
+    <DialogContent>
+        <RichText @ref="_editor" Value="@Section.Get()" ValueChanged="Section.Set" Fill="true" UploadImage="UploadImage" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="DoneAsync">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public ContentSection Section { get; set; } = null!;
+    [Parameter] public Func<FileUpload, Task<string>>? UploadImage { get; set; }
+
+    private RichText? _editor;
+
+    private async Task DoneAsync()
+    {
+        if (_editor is not null)
+            await _editor.FlushAsync();
+        Dialog.Close();
+    }
+}

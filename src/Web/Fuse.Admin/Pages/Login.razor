@@ -1,0 +1,73 @@
+@page "/admin/login"
+@layout AdminBlankLayout
+@attribute [AllowAnonymous]
+@inject IAuthClient Auth
+@inject NavigationManager Navigation
+
+@* Ported look of the legacy admin sign-in (centred card, logo, outlined fields). Sign In waits until the page runs in
+   the browser: before that a click would post the form to the server, which can't sign anyone in. *@
+
+<PageTitle>Log in</PageTitle>
+
+<AuthCard Title="Sign In" Intro="Enter your credentials to get started.">
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync" FormName="admin-sign-in">
+        <MudGrid Spacing="3">
+            @if (_error is not null)
+            {
+                <MudItem xs="12"><MudAlert Severity="Severity.Error">@_error</MudAlert></MudItem>
+            }
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Email" Placeholder="Email" Variant="Variant.Outlined" InputType="InputType.Email" Required="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_model.Password" Placeholder="Password" Variant="Variant.Outlined" InputType="InputType.Password" Required="true" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudButton StartIcon="@Icons.Material.Filled.LockReset" Href="/admin/forgot-password">Forgot password?</MudButton>
+            </MudItem>
+            <MudItem xs="12" Class="d-flex justify-center">
+                <MudButton ButtonType="ButtonType.Submit" Disabled="@(_busy || !RendererInfo.IsInteractive)" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.Login" Style="width: 100%;">
+                    @(!RendererInfo.IsInteractive ? "Loading…" : _busy ? "Signing in…" : "Sign In")
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </EditForm>
+</AuthCard>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] private string? ReturnUrl { get; set; }
+
+    private readonly SignInModel _model = new();
+    private string? _error;
+    private bool _busy;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Auth.SignInAsync(new SignInRequest { Email = _model.Email, Password = _model.Password, StaffOnly = true });
+            Navigation.NavigateTo(ReturnUrl is { Length: > 1 } && ReturnUrl.StartsWith("/admin") ? ReturnUrl : "/admin");
+        }
+        catch (RequestValidationException validation)
+        {
+            _error = string.Join(" ", validation.Errors.SelectMany(e => e.Value));
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private sealed class SignInModel
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+}

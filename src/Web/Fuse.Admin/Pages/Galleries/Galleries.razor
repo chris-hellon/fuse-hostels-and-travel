@@ -1,0 +1,38 @@
+@page "/admin/management/galleries"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Gallery)]
+@using Fuse.Contracts.Galleries
+
+<AdminPageHeader Title="Galleries" Description="Manage Galleries." />
+
+<EntityTable @ref="_table" T="GallerySummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Galleries" Resource="@FuseResource.Gallery"
+             OnCreate="() => OpenAsync(null)" OnEdit="g => OpenAsync(g.Id)" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<GallerySummary>> Fields =
+    [
+        new(g => g.Title, "Title", nameof(GallerySummary.Title)),
+        new(g => g.Images, "Images", nameof(GallerySummary.Images)),
+        new(g => g.CreatedOn.ToString("d MMM yyyy"), "Created On", nameof(GallerySummary.CreatedOn)),
+    ];
+
+    private EntityTable<GallerySummary>? _table;
+
+    private async Task<PagedResult<GallerySummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchGalleries()), cancellationToken);
+
+    private async Task OpenAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<GalleryWizard>(null, new DialogParameters<GalleryWizard> { { w => w.GalleryId, id } }, GalleryWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(GallerySummary gallery)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this gallery?", $"\"{gallery.Title}\" will be deleted straight away and taken off the website.",
+                "Delete gallery", "Keep gallery"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteGallery(gallery.Id)), "Gallery deleted."))
+            await _table!.ReloadAsync();
+    }
+}

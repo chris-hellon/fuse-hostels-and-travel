@@ -1,0 +1,18 @@
+@* Legacy OvalContainerComponent: the dotted oval pattern placed around sections (offsets in %). *@
+
+<div class="ovals-container" id="@Id" style="@Style"> </div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter] public int? Top { get; set; }
+    [Parameter] public int? Bottom { get; set; }
+    [Parameter] public int? Left { get; set; }
+    [Parameter] public int? Right { get; set; }
+
+    private string Style =>
+        string.Concat(
+            Top is { } top ? $"top:{top}%;" : "",
+            Bottom is { } bottom ? $"bottom:{bottom}%;" : "",
+            Left is { } left ? $"left:{left}%;" : "",
+            Right is { } right ? $"right:{right}%;" : "");
+}

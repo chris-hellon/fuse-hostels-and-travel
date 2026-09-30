@@ -1,0 +1,24 @@
+@* Legacy FusePageTitle: large H1 and a short description, optional buttons on the right.
+   A plain flex row, not a MudToolBar: the toolbar's fixed height squashed the title and description. *@
+
+<PageTitle>@Title</PageTitle>
+
+<div class="admin-page-header">
+    <div class="admin-page-header__text">
+        <MudText Typo="Typo.h1" Color="Color.Primary" Class="admin-page-header__title">@Title</MudText>
+        @if (Description is not null)
+        {
+            <MudText Class="admin-page-header__description">@Description</MudText>
+        }
+    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="admin-page-header__actions">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

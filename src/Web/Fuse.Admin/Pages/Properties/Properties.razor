@@ -1,0 +1,43 @@
+@page "/admin/management/properties"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Properties)]
+@using Fuse.Contracts.Properties
+
+<AdminPageHeader Title="Properties" Description="Manage Properties." />
+
+<EntityTable @ref="_table" T="PropertySummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Properties" Resource="@FuseResource.Properties"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<PropertySummary>> Fields =
+    [
+        new(p => p.Name, "Name", nameof(PropertySummary.Name)),
+        new(p => p.LocationName, "Location", nameof(PropertySummary.LocationName)),
+        new(p => p.Rooms, "Rooms", nameof(PropertySummary.Rooms)),
+        EntityField<PropertySummary>.Bool(p => p.PublishToSite, "Published", nameof(PropertySummary.PublishToSite)),
+    ];
+
+    private EntityTable<PropertySummary>? _table;
+
+    private async Task<PagedResult<PropertySummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchProperties()), cancellationToken);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(PropertySummary property) => OpenWizardAsync(property.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<PropertyWizard>(null, new DialogParameters<PropertyWizard> { { w => w.PropertyId, id } }, PropertyWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(PropertySummary property)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this property?", $"\"{property.Name}\" will be deleted straight away.", "Delete property", "Keep property",
+                detail: "Properties that tours pick guests up from can't be deleted."))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteProperty(property.Id)), "Property deleted."))
+            await _table!.ReloadAsync();
+    }
+}

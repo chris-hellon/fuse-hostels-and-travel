@@ -1,0 +1,107 @@
+@page "/admin/manifest"
+@attribute [RequirePermission(FuseAction.View, FuseResource.TourBookings)]
+@inject FileSaver Files
+@using Fuse.Admin.Components.Bookings
+@using Fuse.Contracts.Dashboard
+@using Fuse.Contracts.Manifest
+@using Fuse.Contracts.Tours
+
+@* Legacy "Today's Manifest": everyone departing today, filterable by tour and departure time, with
+   check in / no show / cancel per guest and the manifest export. *@
+
+<AdminPageHeader Title="Today's Manifest" Description="@($"Everyone departing today, {DateTime.Today:dddd d MMMM}.")" />
+
+<EntityTable @ref="_table" T="ManifestRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Guests" Resource="@FuseResource.TourBookings"
+             OnExport="ExportAsync" ExpandAdvancedSearch="true">
+    <AdvancedSearchContent>
+        <TourFilter Tours="_tours" Value="_tourId" ValueChanged="SelectTourAsync" />
+        <MudSelect T="TimeOnly?" Value="_time" ValueChanged="SelectTimeAsync" Label="Filter by Time" Clearable="true" Disabled="@(_tourId is null)"
+                   AnchorOrigin="Origin.BottomLeft" HelperText="@(_tourId is null ? "Choose a tour to filter by its departure times" : null)">
+            @foreach (var time in _times)
+            {
+                <MudSelectItem T="TimeOnly?" Value="time">@time.ToString("HH:mm")</MudSelectItem>
+            }
+        </MudSelect>
+    </AdvancedSearchContent>
+    <ExtraActions>
+        @if (context.Status != BookingState.CheckedIn)
+        {
+            <MudMenuItem OnClick="() => SetAsync(context, GuestAttendance.CheckedIn)">Check in</MudMenuItem>
+        }
+        @if (context.Status != BookingState.NoShow)
+        {
+            <MudMenuItem OnClick="() => SetAsync(context, GuestAttendance.NoShow)">No show</MudMenuItem>
+        }
+        @if (context.Status != BookingState.Cancelled)
+        {
+            <MudMenuItem Class="row-menu__danger" OnClick="() => MenuActions.AfterMenuCloses(() => CancelAsync(context), DispatchExceptionAsync)">Cancel</MudMenuItem>
+        }
+    </ExtraActions>
+</EntityTable>
+
+@code {
+    private static readonly IReadOnlyList<EntityField<ManifestRow>> Fields =
+    [
+        EntityField<ManifestRow>.Reference(r => r.Reference, nameof(ManifestRow.Reference)),
+        new(r => r.TourName, "Tour", nameof(ManifestRow.TourName)),
+        new(r => r.GuestName, "Guest", nameof(ManifestRow.GuestName), r => @<GuestLink GuestId="@r.GuestId" Name="@r.GuestName" />),
+        new(r => r.StartDate.ToString("HH:mm"), "Start Time", nameof(ManifestRow.StartDate)),
+        new(r => r.EndDate?.ToString("HH:mm"), "End Time", nameof(ManifestRow.EndDate)),
+        new(r => r.Status, "Status", nameof(ManifestRow.Status), r => @<BookingStatus State="r.Status" />),
+        EntityField<ManifestRow>.Bool(r => r.WaiverSigned, "Waiver Signed", nameof(ManifestRow.WaiverSigned)),
+    ];
+
+    private EntityTable<ManifestRow>? _table;
+    private IReadOnlyList<LookupItem> _tours = [];
+    private IReadOnlyList<TimeOnly> _times = [];
+    private DefaultIdType? _tourId;
+    private TimeOnly? _time;
+    private string? _keyword;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () => _tours = await Api.Send(new ListManifestTours()));
+
+    private async Task<PagedResult<ManifestRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        var query = request.Apply(new SearchManifest { TourId = _tourId, StartTime = _time });
+        _keyword = query.Keyword;
+        return await Api.Send(query, cancellationToken);
+    }
+
+    /// <summary>A new tour clears the time (one reload, not two) and loads that tour's times.</summary>
+    private async Task SelectTourAsync(DefaultIdType? tourId)
+    {
+        _tourId = tourId;
+        _time = null;
+        _times = [];
+        if (tourId is { } id)
+            await Snackbar.TryAsync(async () => _times = await Api.Send(new ListManifestTimes(id)));
+        await _table!.ReloadAsync();
+    }
+
+    private async Task SelectTimeAsync(TimeOnly? time)
+    {
+        _time = time;
+        await _table!.ReloadAsync();
+    }
+
+    private async Task SetAsync(ManifestRow row, GuestAttendance attendance)
+    {
+        var done = attendance switch
+        {
+            GuestAttendance.CheckedIn => $"{row.GuestName} checked in.",
+            GuestAttendance.NoShow => $"{row.GuestName} marked as a no show.",
+            _ => $"{row.GuestName} cancelled.",
+        };
+        if (await Snackbar.TryAsync(async () => await Api.Send(new SetGuestAttendance(row.Reference, row.TourId, row.StartDate, row.TourDateId, row.GuestId, attendance)), done))
+            await _table!.ReloadAsync();
+    }
+
+    private async Task CancelAsync(ManifestRow row)
+    {
+        if (await Dialogs.ConfirmAsync("Cancel this guest?", $"{row.GuestName} will be cancelled on {row.TourName} at {row.StartDate:HH:mm} straight away.",
+                "Cancel guest", "Keep guest", detail: "They leave the manifest. This doesn't refund the booking."))
+            await SetAsync(row, GuestAttendance.Cancelled);
+    }
+
+    private Task ExportAsync() => Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportManifest(_tourId, _time, _keyword))));
+}

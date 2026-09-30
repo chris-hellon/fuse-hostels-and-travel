@@ -1,0 +1,17 @@
+@* Legacy PaymentReminder: what's owed on a booking, with a link to pay it by card. *@
+<EmailFrame Brand="Brand" Title="@($"Outstanding Payment Reminder for Booking {Booking.Reference}")" Preheader="@($"Outstanding Payment Reminder for Booking {Booking.Reference}")"
+            ActionIntro="If you'd like to complete your payment, please click the link below." ActionText="Complete Payment" ActionUrl="@CheckoutUrl">
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
+            <p style="@EmailStyles.Paragraph">Hi, @Booking.GuestName, we'd just like to let you know that you have an outstanding payment for a booking with us. Here's some details of your booking.</p>
+        </td>
+    </tr>
+    <BookingItemsTable Booking="Booking" TotalLabel="TOTAL" Total="Booking.AmountDue" />
+    <SignOff />
+</EmailFrame>
+
+@code {
+    [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
+    [Parameter, EditorRequired] public BookingEmail Booking { get; set; } = null!;
+    [Parameter, EditorRequired] public string CheckoutUrl { get; set; } = "";
+}

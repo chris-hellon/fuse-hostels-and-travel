@@ -1,0 +1,36 @@
+@* A dark strip with a tilted heading, some text and a button (legacy's "GET IN TOUCH" on the tours page and
+   "STAY UP TO DATE" on the events page). *@
+
+<section id="@Id">
+    <div class="container-fluid bg-gray">
+        <div class="@ContainerClass">
+            <div class="row justify-content-lg-between align-items-center">
+                <div class="col-lg-auto mb-3 mb-lg-0">
+                    <div class="row flex-column">
+                        <h4 class="tilted mt-2">@Title</h4>
+                    </div>
+                </div>
+                <div class="@($"{TextColumn} mb-3 mb-lg-0")">
+                    <div class="row flex-column">@ChildContent</div>
+                </div>
+                <div class="col-lg-auto">
+                    <div class="row flex-column">
+                        <a class="btn btn-primary" href="@Href" target="@Target">@ButtonText</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>The text: white paragraphs.</summary>
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = null!;
+    [Parameter, EditorRequired] public string ButtonText { get; set; } = "";
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+    [Parameter] public string? Target { get; set; }
+    [Parameter] public string TextColumn { get; set; } = "col-lg-4";
+    [Parameter] public string ContainerClass { get; set; } = "container pt-5 pb-5";
+}

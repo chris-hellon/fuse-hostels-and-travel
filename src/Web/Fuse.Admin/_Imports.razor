@@ -1,0 +1,32 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@using MudBlazor
+@using Fuse.Contracts.Api
+@using Fuse.Contracts.Auth
+@using Fuse.Contracts.Common
+@using Fuse.Contracts.Identity
+@using Fuse.Shared.Authorization
+@using Fuse.Shared.Globalization
+@using Fuse.UI
+@using Fuse.UI.Auth
+@using Fuse.UI.Forms
+@using Fuse.Admin
+@using Fuse.Admin.Components
+@using Fuse.Admin.Layout
+@using Fuse.Admin.Components.Wizard
+@using Fuse.Admin.Components.Images
+@using Fuse.Admin.Components.Tables
+@using Fuse.Admin.Components.Forms
+@using Fuse.Admin.Components.Layout
+@using Fuse.Admin.Components.Users
+
+@* Services almost every screen uses. Components still @inject anything else they need. *@
+@inject IApi Api
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@using Fuse.Admin.Components.Dialogs

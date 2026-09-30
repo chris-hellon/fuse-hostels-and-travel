@@ -1,0 +1,76 @@
+@page "/admin/enquiries/general-enquiries"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Enquiries)]
+@using Fuse.Contracts.Enquiries
+@inject FileSaver Files
+
+@* Legacy General Enquiries: the contact page's messages, newest first. View one to read and reply; mark it replied. *@
+
+<AdminPageHeader Title="General Enquiries" Description="Messages sent from the website's contact page." />
+
+<EntityTable @ref="_table" T="GeneralEnquirySummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="General Enquiries" Resource="@FuseResource.Enquiries"
+             OnExport="ExportAsync" OnDelete="DeleteAsync">
+    <AdvancedSearchContent>
+        <EnquiryRepliedFilter Value="_replied" ValueChanged="FilterAsync" />
+    </AdvancedSearchContent>
+    <RowButtons>
+        <RowIconButton Icon="@Icons.Material.Outlined.Visibility" Label="View" OnClick="() => ViewAsync(context)" />
+    </RowButtons>
+</EntityTable>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private static readonly IReadOnlyList<EntityField<GeneralEnquirySummary>> Fields =
+    [
+        new(e => e.Submitted.ToString("dd/MM/yyyy HH:mm"), "Sent", nameof(GeneralEnquirySummary.Submitted)) { Width = "1%" },
+        new(e => e.Name, "Name", nameof(GeneralEnquirySummary.Name)),
+        new(e => e.Email, "Email", nameof(GeneralEnquirySummary.Email)),
+        new(e => e.ContactNumber, "Contact Number", nameof(GeneralEnquirySummary.ContactNumber)),
+        EntityField<GeneralEnquirySummary>.Bool(e => e.Replied, "Replied", nameof(GeneralEnquirySummary.Replied)),
+    ];
+
+    private EntityTable<GeneralEnquirySummary>? _table;
+    private string? _keyword;
+    private bool? _replied;
+
+    private async Task<PagedResult<GeneralEnquirySummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        _keyword = request.Keyword;
+        return await Api.Send(request.Apply(new SearchGeneralEnquiries { Replied = _replied }), cancellationToken);
+    }
+
+    private async Task FilterAsync(bool? replied)
+    {
+        _replied = replied;
+        await _table!.ReloadAsync();
+    }
+
+    private async Task ViewAsync(GeneralEnquirySummary row)
+    {
+        GeneralEnquiryDetails? details = null;
+        if (!await Snackbar.TryAsync(async () => details = await Api.Send(new GetGeneralEnquiry(row.Id))))
+            return;
+        var e = details!.Summary;
+        var dialog = await Dialogs.ShowAsync<EnquiryDialog>(null, new DialogParameters<EnquiryDialog>
+        {
+            { d => d.Title, $"Enquiry from {e.Name}" }, { d => d.Submitted, e.Submitted }, { d => d.Email, e.Email },
+            { d => d.Fields, [("Name", e.Name), ("Email", e.Email), ("Contact Number", e.ContactNumber), ("Message", details.Message)] },
+            { d => d.Kind, EnquiryKind.General }, { d => d.Id, e.Id }, { d => d.Replied, e.Replied },
+            { d => d.CanUpdate, EnquiryPages.CanUpdate(AuthState is null ? null : (await AuthState).User) },
+            { d => d.ReplySubject, "Your enquiry to Fuse Hostels & Travel" },
+        }, EnquiryPages.DialogOptions);
+        if ((await dialog.Result)?.Data is true)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task ExportAsync() =>
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportEnquiries(EnquiryKind.General, _keyword, _replied))));
+
+    private async Task DeleteAsync(GeneralEnquirySummary e)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this enquiry?", $"The enquiry from {e.Name} will be deleted.", "Delete enquiry", "Keep enquiry"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteEnquiry(EnquiryKind.General, e.Id)), "Enquiry deleted."))
+            await _table!.ReloadAsync();
+    }
+}

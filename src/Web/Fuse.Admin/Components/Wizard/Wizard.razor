@@ -1,0 +1,113 @@
+@typeparam TModel
+@attribute [CascadingTypeParameter(nameof(TModel))]
+
+@* Ported from the legacy back office. The step list is shown by the host (ModalWizard puts WizardSteps in its title row). *@
+
+<div id="travaloud-wizard" class="travaloud-wizard">
+    <div class="travaloud-wizard__body">
+        @if (CurrentStep is not null)
+        {
+            @CurrentStep.RenderStep()
+        }
+    </div>
+
+    <CascadingValue Value="this" IsFixed="true">
+        @ChildContent
+    </CascadingValue>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TModel Model { get; set; } = default!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback<TModel> OnFinished { get; set; }
+
+    /// <summary>Raised whenever the active step or busy state changes (the modal re-renders its buttons).</summary>
+    [Parameter] public EventCallback OnStateChanged { get; set; }
+
+    private readonly List<WizardStep<TModel>> _steps = [];
+    private int _activeIndex;
+    private int _reached;
+
+    public bool Busy { get; private set; }
+    public bool CanGoBack => _activeIndex > 0 && !Busy;
+    public bool CanGoNext => _activeIndex < _steps.Count - 1 && !Busy;
+    public bool CanFinish => _steps.Count > 0 && _activeIndex == _steps.Count - 1 && !Busy;
+    public int ActiveIndex => _activeIndex;
+    /// <summary>The furthest step reached so far: every step up to it can be jumped to from the step list.</summary>
+    public int Reached => _reached;
+    /// <summary>Step titles in order (the host shows them, e.g. <see cref="WizardSteps"/> in a dialog's title row).</summary>
+    public IReadOnlyList<string> StepTitles => [.. _steps.Select(s => s.Title)];
+    private WizardStep<TModel>? CurrentStep => _activeIndex >= 0 && _activeIndex < _steps.Count ? _steps[_activeIndex] : null;
+
+    internal void RegisterStep(WizardStep<TModel> step)
+    {
+        _steps.Add(step);
+        StateHasChanged();
+        _ = OnStateChanged.InvokeAsync();
+    }
+
+    public Task NextAsync() => RunAsync(async () =>
+    {
+        if (await ValidateCurrentAsync() && _activeIndex < _steps.Count - 1)
+            _reached = Math.Max(_reached, ++_activeIndex);
+    });
+
+    /// <summary>
+    /// A step picked from the step list: back to any step straight away; forward to one already reached once this
+    /// step checks out (as Next).
+    /// </summary>
+    public Task JumpToAsync(int index) => RunAsync(async () =>
+    {
+        if (index == _activeIndex || index < 0 || index > _reached || index >= _steps.Count)
+            return;
+        if (index > _activeIndex && !await ValidateCurrentAsync())
+            return;
+        _activeIndex = index;
+    });
+
+    public Task BackAsync() => RunAsync(() =>
+    {
+        if (_activeIndex > 0)
+            _activeIndex--;
+        return Task.CompletedTask;
+    });
+
+    public Task FinishAsync() => RunAsync(async () =>
+    {
+        if (await ValidateCurrentAsync() && OnFinished.HasDelegate)
+            await OnFinished.InvokeAsync(Model);
+    });
+
+    public Task GoToAsync(int index) => RunAsync(() =>
+    {
+        _activeIndex = Math.Clamp(index, 0, _steps.Count - 1);
+        _reached = Math.Max(_reached, _activeIndex);
+        return Task.CompletedTask;
+    });
+
+    private async Task<bool> ValidateCurrentAsync()
+    {
+        var step = CurrentStep;
+        if (step is null)
+            return false;
+        if (!await step.ValidateAsync())
+            return false;
+        return step.OnLeaveAsync is null || await step.OnLeaveAsync(Model);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        Busy = true;
+        await OnStateChanged.InvokeAsync();
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            Busy = false;
+            StateHasChanged();
+            await OnStateChanged.InvokeAsync();
+        }
+    }
+}

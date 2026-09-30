@@ -1,0 +1,16 @@
+@* A booking's state as a pill: paid (green), owed (the site's yellow), awaiting payment, cancelled / refunded (grey). *@
+
+<span class="@($"booking-status booking-status--{Status.ToString().ToLowerInvariant()}")">@Label</span>
+
+@code {
+    [Parameter, EditorRequired] public Contracts.Identity.MyBookingStatus Status { get; set; }
+
+    private string Label => Status switch
+    {
+        Contracts.Identity.MyBookingStatus.Paid => "PAID",
+        Contracts.Identity.MyBookingStatus.Due => "PAYMENT DUE",
+        Contracts.Identity.MyBookingStatus.AwaitingPayment => "AWAITING PAYMENT",
+        Contracts.Identity.MyBookingStatus.Cancelled => "CANCELLED",
+        _ => "REFUNDED",
+    };
+}

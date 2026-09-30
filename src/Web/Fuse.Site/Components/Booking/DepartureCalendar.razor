@@ -1,0 +1,69 @@
+@* A month of a tour's departure dates to pick from: days with places left can be chosen, sold-out days are struck
+   through, the rest are greyed. The site's date-picker look (Styles/components/_date-range-picker). *@
+
+<div class="departure-calendar">
+    <div class="departure-calendar__head">
+        <button type="button" class="departure-calendar__nav" aria-label="Previous month" disabled="@(_month <= First)" @onclick="() => _month = _month.AddMonths(-1)">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <span class="departure-calendar__title">@_month.ToString("MMMM yyyy")</span>
+        <button type="button" class="departure-calendar__nav" aria-label="Next month" disabled="@(_month >= Last)" @onclick="() => _month = _month.AddMonths(1)">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+    <div class="departure-calendar__grid" role="grid">
+        @foreach (var day in Weekdays)
+        {
+            <span class="departure-calendar__weekday">@day</span>
+        }
+        @for (var blank = 0; blank < ((int)_month.DayOfWeek + 6) % 7; blank++)
+        {
+            <span></span>
+        }
+        @for (var date = _month; date.Month == _month.Month; date = date.AddDays(1))
+        {
+            var day = date;
+            var state = State(day);
+            <button type="button" class="@DayClass(day, state)" disabled="@(state != DayState.Open)" aria-pressed="@(day == Selected ? "true" : "false")"
+                    aria-label="@($"{day:dddd d MMMM}{(state == DayState.SoldOut ? ", sold out" : "")}")" @onclick="() => SelectedChanged.InvokeAsync(day)">
+                @day.Day
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SiteDeparture> Departures { get; set; } = [];
+    [Parameter] public DateOnly? Selected { get; set; }
+    [Parameter] public EventCallback<DateOnly> SelectedChanged { get; set; }
+
+    private static readonly string[] Weekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+    private enum DayState { None, Open, SoldOut }
+
+    private DateOnly _month;
+    private ILookup<DateOnly, SiteDeparture> _byDay = Enumerable.Empty<SiteDeparture>().ToLookup(d => default(DateOnly));
+
+    private DateOnly First => Month(Departures.Count > 0 ? DateOnly.FromDateTime(Departures[0].Start) : DateOnly.FromDateTime(DateTime.Today));
+    private DateOnly Last => Month(Departures.Count > 0 ? DateOnly.FromDateTime(Departures[^1].Start) : First);
+
+    protected override void OnParametersSet()
+    {
+        _byDay = Departures.ToLookup(d => DateOnly.FromDateTime(d.Start));
+        // Open on the chosen day's month, else the first month with a bookable departure.
+        if (_month == default || Selected is { } picked && Month(picked) != _month)
+            _month = Selected is { } day ? Month(day) : Month(Departures.FirstOrDefault(d => d.AvailableSpaces > 0) is { } open ? DateOnly.FromDateTime(open.Start) : First);
+    }
+
+    private static DateOnly Month(DateOnly date) => new(date.Year, date.Month, 1);
+
+    private DayState State(DateOnly day) =>
+        !_byDay.Contains(day) ? DayState.None
+        : _byDay[day].Any(d => d.AvailableSpaces > 0) ? DayState.Open
+        : DayState.SoldOut;
+
+    private string DayClass(DateOnly day, DayState state) =>
+        "departure-calendar__day"
+        + (state == DayState.Open ? " is-open" : state == DayState.SoldOut ? " is-sold-out" : "")
+        + (day == Selected ? " is-selected" : "");
+}

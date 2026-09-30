@@ -1,0 +1,20 @@
+@* OutlineInput for a date (the browser's own picker), bound to a DateTime?. *@
+
+<OutlineInput Id="@Id" Label="@Label" type="date" InputClass="active" Value="@Value?.ToString("yyyy-MM-dd")" ValueChanged="ChangedAsync"
+              min="@Min?.ToString("yyyy-MM-dd")" max="@Max?.ToString("yyyy-MM-dd")" @attributes="AdditionalAttributes" />
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public DateTime? Value { get; set; }
+    [Parameter] public EventCallback<DateTime?> ValueChanged { get; set; }
+    [Parameter] public DateTime? Min { get; set; }
+    [Parameter] public DateTime? Max { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private Task ChangedAsync(string? text)
+    {
+        Value = DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var date) ? date.Date : null;
+        return ValueChanged.InvokeAsync(Value);
+    }
+}

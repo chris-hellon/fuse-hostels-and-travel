@@ -1,0 +1,30 @@
+@* A yes/no question. Title asks it, the message says exactly what happens, and the buttons name
+   the two outcomes (never "OK" / "Yes"). Destructive confirmations are red. *@
+
+<MudDialog ContentClass="confirm-dialog__content">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body1">@Message</MudText>
+        @if (Detail is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">@Detail</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => Dialog.Cancel()">@CancelText</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Destructive ? Color.Error : Color.Primary)" OnClick="() => Dialog.Close(DialogResult.Ok(true))">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Message { get; set; } = "";
+    /// <summary>Optional second line (consequences, e.g. "Its 12 dates go too.").</summary>
+    [Parameter] public string? Detail { get; set; }
+    [Parameter, EditorRequired] public string ConfirmText { get; set; } = "";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public bool Destructive { get; set; } = true;
+}

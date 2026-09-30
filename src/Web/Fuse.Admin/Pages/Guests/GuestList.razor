@@ -1,0 +1,37 @@
+@page "/admin/guests"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Guests)]
+@using Fuse.Admin.Components.Bookings
+@inject NavigationManager Navigation
+
+<AdminPageHeader Title="Guests" Description="Manage Guests." />
+
+<EntityTable T="UserSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Guests" Resource="@FuseResource.Guests"
+             OnCreate="CreateAsync">
+    <RowButtons>
+        <RowIconButton Icon="@Icons.Material.Outlined.Person" Label="View profile" Href="@($"/admin/guests/{context.Id}/profile")" />
+    </RowButtons>
+</EntityTable>
+
+@code {
+    private static readonly IReadOnlyList<EntityField<UserSummary>> Fields =
+    [
+        new(u => u.FullName, "Name", nameof(UserSummary.FullName),
+            u => @<GuestLink GuestId="@u.Id" Name="@u.FullName" />),
+        new(u => u.DateOfBirth?.ToString("dd/MM/yyyy") ?? "-", "Date of Birth", nameof(UserSummary.DateOfBirth)),
+        new(u => Countries.DisplayName(u.Nationality), "Nationality"),
+        new(u => Genders.DisplayName(u.Gender), "Gender"),
+        new(u => u.Email, "Email", nameof(UserSummary.Email)),
+        new(u => u.PhoneNumber, "Phone Number"),
+    ];
+
+    private async Task<PagedResult<UserSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchGuests()), cancellationToken);
+
+    private async Task CreateAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<CreateGuestDialog>("Create Guest");
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string id })
+            Navigation.NavigateTo($"/admin/guests/{id}/profile");
+    }
+}

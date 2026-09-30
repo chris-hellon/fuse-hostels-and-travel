@@ -1,0 +1,77 @@
+@inject FileSaver Files
+@using Fuse.Admin.Pages.Bookings.Dialogs
+@* Who's on a departure (paid, not cancelled), with the manifest export. A reference opens its booking over this. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Departure.TourName</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+            @Departure.Start.ToString("dddd d MMMM yyyy") · @Departure.Start.ToString("HH:mm") · @(_guests is null ? "…" : _guests.Count == 1 ? "1 guest" : $"{_guests.Count} guests")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_guests is null)
+        {
+            <div class="modal-wizard__loading"><MudProgressCircular Indeterminate="true" Color="Color.Secondary" /></div>
+        }
+        else
+        {
+            <MudTable Items="_guests" Dense="true" Hover="true" Elevation="0" Class="admin-subtable" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh Style="width: 1%; white-space: nowrap">Reference</MudTh>
+                    <MudTh>Guest</MudTh>
+                    <MudTh>Pick Up</MudTh>
+                    <MudTh>Waiver Signed</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Reference" Style="white-space: nowrap">
+                        @if (_canViewBookings && context.BookingId is { } bookingId)
+                        {
+                            <MudLink Typo="Typo.body2" Color="Color.Primary" OnClick="() => BookingDetailsDialog.ShowAsync(Dialogs, bookingId, context.Reference)"
+                                     title="Open booking">@context.Reference</MudLink>
+                        }
+                        else
+                        {
+                            @context.Reference
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Guest"><GuestLink GuestId="@context.GuestId" Name="@context.GuestName" /></MudTd>
+                    <MudTd DataLabel="Pick Up">@context.PickupLocation</MudTd>
+                    <MudTd DataLabel="Waiver Signed"><YesNo Value="context.WaiverSigned" /></MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <div class="admin-empty"><MudText Typo="Typo.body2">No paid guests on this departure.</MudText></div>
+                </NoRecordsContent>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.FileDownload"
+                   Disabled="@(_guests is not { Count: > 0 } || _exporting)" OnClick="ExportAsync">@(_exporting ? "Exporting…" : "Export")</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="() => Dialog.Close()">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+    [Parameter, EditorRequired] public CalendarDeparture Departure { get; set; } = null!;
+
+    private IReadOnlyList<DepartureGuest>? _guests;
+    private bool _exporting;
+    private bool _canViewBookings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canViewBookings = (await AuthState).User.HasPermission(FuseAction.View, FuseResource.TourBookings);
+        await Snackbar.TryAsync(async () => _guests = await Api.Send(new ListDepartureGuests(Departure.TourId, Departure.Start)));
+        Dialog.StateHasChanged(); // the title (guest count) is drawn by the dialog container
+    }
+
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportDepartureGuests(Departure.TourId, Departure.Start))));
+        _exporting = false;
+    }
+}

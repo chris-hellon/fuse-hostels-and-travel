@@ -1,0 +1,23 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- An unknown component tag (missing @using / typo) silently renders nothing: fail the build instead. -->
+    <WarningsAsErrors>$(WarningsAsErrors);RZ10012</WarningsAsErrors>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!--
+      Forward slash so macOS/Linux tooling (notably dotnet-ef) doesn't produce
+      "bin\Debug/net10.0" paths it can't resolve.
+    -->
+    <BaseOutputPath>bin/</BaseOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.Guid" Alias="DefaultIdType" />
+  </ItemGroup>
+
+</Project>

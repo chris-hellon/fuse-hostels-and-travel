@@ -1,0 +1,16 @@
+@using Fuse.Contracts.Dashboard
+@* A booking's state as coloured text, as the legacy bookings table showed it: red when it needs attention
+   (unpaid, cancelled, refunded), amber when partly paid or refunded. *@
+
+<span class="@($"booking-status booking-status--{Tone}")">@BookingStates.Label(State)</span>
+
+@code {
+    [Parameter, EditorRequired] public BookingState State { get; set; }
+
+    private string Tone => State switch
+    {
+        BookingState.Paid or BookingState.CheckedIn => "ok",
+        BookingState.PartiallyPaid or BookingState.PartialRefund => "warn",
+        _ => "bad",
+    };
+}

@@ -1,0 +1,8 @@
+@* "TAILORED TOURS": a staggered two-column grid on desktop, a swipeable carousel on phones (legacy rendered both). *@
+
+<StaggeredTours Tours="Tours" Class="bg-light d-none d-lg-block" />
+<ToursCarousel Id="toursCarousel" Class="bg-light d-block d-lg-none" Title="TAILORED TOURS" Tours="Tours" />
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SiteCard> Tours { get; set; } = [];
+}

@@ -1,0 +1,121 @@
+@page "/admin/reports/staff-bookings"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Reports)]
+@using Fuse.Contracts.Locations
+@using Fuse.Contracts.Reports
+@inject FileSaver Files
+
+@* Legacy Reports › Staff Bookings: each staff member's paid tour sales booked in the period and their commission;
+   Show Details lists what they sold, tour by tour (or package / pack). Filter by location to split regions with
+   their own commission rules. *@
+
+<AdminPageHeader Title="Staff Bookings Report" Description="@($"{_range.Start:dd/MM/yyyy} - {_range.End:dd/MM/yyyy}")" />
+
+<EntityTable @ref="_table" T="StaffBookingRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Staff Bookings" Resource="@FuseResource.Reports"
+             OnExport="ExportAsync" ExpandAdvancedSearch="true" ShowMenu="_ => false">
+    <AdvancedSearchContent>
+        <MudGrid Spacing="3" Class="mt-1">
+            <MudItem xs="12" md="6">
+                <MudDateRangePicker Label="Booking Date Range" DateRange="_range" DateRangeChanged="SetRangeAsync" Clearable="false"
+                                    AutoClose="true" PickerVariant="PickerVariant.Dialog" DateFormat="dd/MM/yyyy" MaxDate="DateTime.Today.AddYears(1)" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="DefaultIdType?" Value="_locationId" ValueChanged="SetLocationAsync" Label="Location" Clearable="true"
+                           HelperText="Only include tours that visit this location" AnchorOrigin="Origin.BottomLeft">
+                    @foreach (var location in _locations)
+                    {
+                        <MudSelectItem T="DefaultIdType?" Value="location.Id">@location.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </AdvancedSearchContent>
+    <RowButtons>
+        <DetailsToggle Open="@_expanded.Contains(context.UserId)" OnToggle="() => Toggle(context)" />
+    </RowButtons>
+    <ChildRowContent>
+        @if (_expanded.Contains(context.UserId))
+        {
+            <MudTr>
+                <td colspan="@_table!.ColumnCount" class="booking-details">
+                    @* Straight under the row like a booking's details: a heading over the table, no card around them. *@
+                    <div class="booking-details__body">
+                        <MudText Typo="Typo.body1" Class="booking-details__heading">Bookings by @context.FullName</MudText>
+                        <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="booking-details__table">
+                            <thead>
+                                <tr><th>Tour / Package</th><th>Guests Booked</th><th>Guests Earning Commission</th><th>Total Bookings Revenue</th><th>Total Commission Amount</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in context.Lines)
+                                {
+                                    <tr>
+                                        <td>@line.TourName</td>
+                                        <td>@line.QuantityBooked</td>
+                                        <td>@line.EligiblePax</td>
+                                        <td>@Money(line.TotalAmount)</td>
+                                        <td>@Money(line.TotalCommissionAmount)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </div>
+                </td>
+            </MudTr>
+        }
+    </ChildRowContent>
+</EntityTable>
+
+@code {
+    private static readonly IReadOnlyList<EntityField<StaffBookingRow>> Fields =
+    [
+        new(s => s.FullName, "Staff Name", nameof(StaffBookingRow.FullName)),
+        new(s => s.BookingsMade, "Total Bookings Made", nameof(StaffBookingRow.BookingsMade)),
+        new(s => s.ItemsCount, "Total Guests Booked", nameof(StaffBookingRow.ItemsCount)),
+        new(s => Money(s.TotalBookingsAmount), "Total Bookings Revenue", nameof(StaffBookingRow.TotalBookingsAmount)),
+        new(s => Money(s.TotalCommission), "Total Commission Amount", nameof(StaffBookingRow.TotalCommission)),
+    ];
+
+    private EntityTable<StaffBookingRow>? _table;
+    private readonly HashSet<DefaultIdType> _expanded = [];
+    // As legacy: the last month to today.
+    private DateRange _range = new(DateTime.Today.AddMonths(-1), DateTime.Today);
+    private DefaultIdType? _locationId;
+    private IReadOnlyList<LocationSummary> _locations = [];
+    private string? _keyword;
+
+    private DateOnly From => DateOnly.FromDateTime(_range.Start ?? DateTime.Today);
+    private DateOnly To => DateOnly.FromDateTime(_range.End ?? _range.Start ?? DateTime.Today);
+
+    private static string Money(decimal amount) => $"$ {amount:n2}";
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () => _locations = await Api.Send(new ListLocations()));
+
+    private async Task<PagedResult<StaffBookingRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        _keyword = request.Keyword;
+        _expanded.Clear();
+        return await Api.Send(request.Apply(new SearchStaffBookings { From = From, To = To, LocationId = _locationId }), cancellationToken);
+    }
+
+    private async Task SetRangeAsync(DateRange? range)
+    {
+        if (range?.Start is null)
+            return;
+        _range = range;
+        await _table!.ReloadAsync();
+    }
+
+    private async Task SetLocationAsync(DefaultIdType? locationId)
+    {
+        _locationId = locationId;
+        await _table!.ReloadAsync();
+    }
+
+    private void Toggle(StaffBookingRow row)
+    {
+        if (!_expanded.Remove(row.UserId))
+            _expanded.Add(row.UserId);
+    }
+
+    private async Task ExportAsync() =>
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportStaffBookings(From, To, _locationId, _keyword))));
+}

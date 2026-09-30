@@ -1,0 +1,61 @@
+@* Legacy _BookNowFormPartial: hostel, check in / out, and a button to the hostel's booking page (legacy
+   OnPostSearchRoomsAsync). Over the home hero and in the banner the fields sit in a row; in the Book
+   modal they stack. The hostels are the site's bookable ones. *@
+@inject NavigationManager Navigation
+
+<form id="@(Style == BookNowStyle.Modal ? "bookNowModalForm" : "bookNowForm")" class="@FormClass" novalidate @onsubmit="Submit">
+    <div class="@FieldColumn">
+        <div class="h-100" style="min-height:47px;">
+            <FuseSelect Label="Hostel" Options="Options" Class="h-100 bg-white" @bind-Value="_hostelId" @bind-Value:after="() => _hostelError = null" />
+        </div>
+        <Validation Message="@_hostelError" />
+    </div>
+    <div class="@FieldColumn">
+        <DateRangeField Id="@($"{Style}DateRange")" Start="_checkIn" End="_checkOut" Changed="DatesChanged" />
+        <Validation Message="@_datesError" />
+    </div>
+    <div class="@(Style == BookNowStyle.Modal ? "col-lg-12" : "col-lg-4")">
+        <button class="btn btn-primary w-100 h-100" type="submit" aria-label="@ButtonText">@ButtonText</button>
+    </div>
+</form>
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    [Parameter] public BookNowStyle Style { get; set; } = BookNowStyle.Hero;
+    /// <summary>The hostel chosen to start with (e.g. on its own page).</summary>
+    [Parameter] public DefaultIdType? HostelId { get; set; }
+
+    private string? _hostelId;
+    private DateOnly? _checkIn, _checkOut;
+    private string? _hostelError, _datesError;
+
+    private IReadOnlyList<SiteLink> Hostels => Chrome?.BookableHostels ?? [];
+
+    protected override void OnInitialized() => _hostelId = HostelId?.ToString();
+
+    private string FormClass => Style == BookNowStyle.Hero ? "row bg-light py-4 px-2 rounded" : "row ";
+    private string FieldColumn => Style == BookNowStyle.Modal ? "col-lg-12 mb-3 mb-lg-3 position-relative" : "col-lg-4 mb-3 mb-lg-0 position-relative";
+    private string ButtonText => Style == BookNowStyle.Banner ? "Search For Rooms" : "Book Now";
+
+    private IReadOnlyList<FuseSelect.SelectOption> Options =>
+        [.. Hostels.Select(h => new FuseSelect.SelectOption(h.Id.ToString(), h.Name))];
+
+    private void DatesChanged((DateOnly Start, DateOnly End) range)
+    {
+        (_checkIn, _checkOut) = range;
+        _datesError = null;
+    }
+
+    private void Submit()
+    {
+        var hostel = Hostels.FirstOrDefault(h => h.Id.ToString() == _hostelId);
+        _hostelError = hostel is null ? "Please select a Hostel" : null;
+        _datesError = _checkIn is null || _checkOut is null ? "Please choose a Check In Out Date" : null;
+        if (hostel is null || _checkIn is null || _checkOut is null)
+            return;
+
+        // A server route that redirects to the hostel's Cloudbeds booking page, so a full load.
+        Navigation.NavigateTo($"/hostel-booking/{hostel.Slug}?checkin={_checkIn:yyyy-MM-dd}&checkout={_checkOut:yyyy-MM-dd}", forceLoad: true);
+    }
+}

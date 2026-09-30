@@ -1,0 +1,16 @@
+@* A section heading in the booking dialogs (legacy "add-tours-section-header"): icon and uppercase title, optional note. *@
+
+<div class="dialog-section">
+    <MudIcon Icon="@Icon" Size="Size.Small" />
+    <span>@Title</span>
+</div>
+@if (Description is not null)
+{
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">@Description</MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+}

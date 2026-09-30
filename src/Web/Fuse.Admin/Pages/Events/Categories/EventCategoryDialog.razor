@@ -1,0 +1,63 @@
+@using MudBlazor.Utilities
+
+@* Create / edit an event category: three fields, so a plain dialog rather than a wizard. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+            @(IsCreate ? "Create Event Category" : "Edit Event Category")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="3">
+                <MudItem xs="12">
+                    <MudTextField Label="Name" @bind-Value="_input.Name" Required="true" RequiredError="Name is required" MaxLength="128" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="8">
+                    <MudColorPicker Label="Colour" @bind-Text="_input.Colour" Variant="Variant.Outlined" Clearable="true" ShowAlpha="false"
+                                    ColorPickerMode="ColorPickerMode.HEX" ColorPickerView="ColorPickerView.Palette" Palette="Palette"
+                                    HelperText="For the category's events on the calendar" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int" Label="Order" @bind-Value="_input.SortOrder" Min="0" Variant="Variant.Outlined" HelperText="Lowest first" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync" StartIcon="@Icons.Material.Filled.Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public EventCategoryItem? Category { get; set; }
+
+    private static readonly IEnumerable<MudColor> Palette =
+        ["#48bb78", "#4299e1", "#ed8936", "#9f7aea", "#f56565", "#ecc94b", "#38b2ac", "#ed64a6", "#fb62f6", "#d1ac00"];
+
+    private bool IsCreate => Category is null;
+    private MudForm? _form;
+    private EventCategoryInput _input = new();
+    private bool _saving;
+
+    protected override void OnInitialized() =>
+        _input = Category is { } c ? new EventCategoryInput { Name = c.Name, Colour = c.Colour, SortOrder = c.SortOrder } : new EventCategoryInput();
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        _saving = true;
+        var ok = await Snackbar.TryAsync(async () => await Api.Send(new SaveEventCategory(Category?.Id, _input)), IsCreate ? "Category created." : "Category saved.");
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok(true));
+    }
+}

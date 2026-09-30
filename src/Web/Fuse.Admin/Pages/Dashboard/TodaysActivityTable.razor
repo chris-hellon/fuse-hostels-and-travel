@@ -1,0 +1,35 @@
+@* Tour bookings made today (legacy Today's Activity). *@
+
+<EntityTable @ref="_table" T="BookingActivityRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Bookings" Dense="true" Elevation="0">
+    <AdvancedSearchContent>
+        <TourFilter Tours="Tours" Value="_tourId" ValueChanged="FilterAsync" />
+    </AdvancedSearchContent>
+</EntityTable>
+
+@code {
+    [Parameter] public IReadOnlyList<LookupItem> Tours { get; set; } = [];
+
+    private static readonly IReadOnlyList<EntityField<BookingActivityRow>> Fields =
+    [
+        EntityField<BookingActivityRow>.Reference(b => b.Reference, nameof(BookingActivityRow.Reference)),
+        new(b => b.Description, "Description", nameof(BookingActivityRow.Description)),
+        new(b => b.GuestName, "Guest", nameof(BookingActivityRow.GuestName), b => @<GuestLink GuestId="@b.GuestId" Name="@b.GuestName" />),
+        new(b => b.BookingDate.ToString("HH:mm"), "Booked At", nameof(BookingActivityRow.BookingDate)),
+        new(b => b.TotalAmount.ToString("$#,##0.00"), "Total", nameof(BookingActivityRow.TotalAmount)),
+        new(b => b.Status, "Status", Template: b => @<BookingStatus State="b.Status" />),
+    ];
+
+    private EntityTable<BookingActivityRow>? _table;
+    private DefaultIdType? _tourId;
+
+    private async Task<PagedResult<BookingActivityRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchTodaysBookings { TourId = _tourId }), cancellationToken);
+
+    private async Task FilterAsync(DefaultIdType? tourId)
+    {
+        _tourId = tourId;
+        await _table!.ReloadAsync();
+    }
+
+    public Task ReloadAsync() => _table?.ReloadAsync() ?? Task.CompletedTask;
+}

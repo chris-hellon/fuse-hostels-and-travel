@@ -1,0 +1,73 @@
+@* Legacy #logInModal's form. Shown inside a FuseModal, which creates it on each open, so it always starts empty. *@
+
+<form id="loginModalForm" novalidate @onsubmit="SubmitAsync">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-12">
+                <OutlineInput Id="LoginModal_Email" Label="Email" Class="mb-4" @bind-Value="_email" type="email" autocomplete="username" />
+                <Validation Message="@_emailError" Style="@null" />
+            </div>
+            <div class="col-lg-12">
+                <OutlineInput Id="LoginModal_Password" Label="Password" Class="mb-4" @bind-Value="_password" type="password" autocomplete="current-password" />
+                <Validation Message="@_passwordError" Style="@null" />
+            </div>
+        </div>
+    </div>
+    @if (_error is not null)
+    {
+        <p class="small text-danger mb-3" role="alert">@_error</p>
+    }
+    <button type="submit" id="loginModalButton" class="btn btn-primary btn-block" disabled="@_busy">@(_busy ? "Signing in…" : "Sign in")</button>
+    @if (ForgotPassword.HasDelegate)
+    {
+        <button type="button" class="btn btn-link btn-block mt-2" @onclick="ForgotPassword">Forgot your password?</button>
+    }
+</form>
+
+@code {
+    [Inject] private IAuthClient Auth { get; set; } = null!;
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    /// <summary>After signing in (e.g. to close the modal).</summary>
+    [Parameter] public EventCallback SignedIn { get; set; }
+    /// <summary>"Forgot your password?" (e.g. to switch the modal to <see cref="ForgotPasswordForm"/>).</summary>
+    [Parameter] public EventCallback ForgotPassword { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")] private string? ReturnUrl { get; set; }
+
+    private string _email = "", _password = "";
+    private string? _error, _emailError, _passwordError;
+    private bool _busy;
+
+    private async Task SubmitAsync()
+    {
+        _emailError = string.IsNullOrWhiteSpace(_email) ? "The Email field is required." : null;
+        _passwordError = string.IsNullOrEmpty(_password) ? "The Password field is required." : null;
+        if (_emailError is not null || _passwordError is not null)
+            return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Auth.SignInAsync(new SignInRequest { Email = _email, Password = _password });
+            await SignedIn.InvokeAsync();
+
+            // Only follow local return URLs.
+            if (ReturnUrl is { Length: > 0 } && ReturnUrl.StartsWith('/') && !ReturnUrl.StartsWith("//"))
+                Navigation.NavigateTo(ReturnUrl);
+        }
+        catch (RequestValidationException validation)
+        {
+            _error = string.Join(" ", validation.Errors.SelectMany(e => e.Value));
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

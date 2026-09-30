@@ -1,0 +1,17 @@
+@page "/not-found"
+
+@* Any address that isn't a page (the router's not-found page, and 404s re-executed here). *@
+
+<SeoHead PageName="Page Not Found" NoIndex="true" />
+
+<LegalPage Id="notFound" Title="PAGE NOT FOUND">
+    <div class="account-empty">
+        <i class="fas fa-compass account-empty__icon" aria-hidden="true"></i>
+        <p>Sorry, we couldn't find that page. It may have moved, or the link may be out of date.</p>
+        <div class="d-flex gap-3 justify-content-center flex-wrap">
+            <a class="btn btn-primary" href="/">Home</a>
+            <a class="btn btn-outline-primary" href="/hostels">Hostels</a>
+            <a class="btn btn-outline-primary" href="/tours">Tours</a>
+        </div>
+    </div>
+</LegalPage>

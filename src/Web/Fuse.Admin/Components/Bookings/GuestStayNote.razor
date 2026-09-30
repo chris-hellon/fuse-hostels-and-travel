@@ -1,0 +1,85 @@
+@* A guest's hostel stay now or next (from Cloudbeds), or else their most recent reservation (grey, headed by its status,
+   e.g. "Checked out"). Two forms, both square-cornered like the rest of admin:
+   - a small outlined box pinned top-right of the booking modal's guest card (and the add tours / package dialogs):
+     "In house · Hoi An Old Town" over "Out Wed 30 Sep · 2 nights";
+   - with Strip, the same box the width of its panel, with the room underneath (a booking's Show Details).
+   Shows nothing when they have no reservations (or no Cloudbeds link). *@
+
+@if (_loading)
+{
+    <div class="@($"stay-pin {(Strip ? "stay-pin--wide " : "")}stay-pin--loading {Class}".TrimEnd())" role="status">
+        <div class="stay-pin__top"><MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width: 12px; height: 12px; color: inherit" /> Cloudbeds</div>
+        <div class="stay-pin__main">@(Strip ? "Fetching their stay…" : "Checking their stay…")</div>
+    </div>
+}
+else if (Shown is { } line)
+{
+    <a class="@($"stay-pin {(Strip ? "stay-pin--wide " : "")}stay-pin--{Kind} {Class}".TrimEnd())" href="@line.Url" target="_blank" rel="noopener"
+       title="@(Strip ? "Open in Cloudbeds" : $"{line.Rooms}{(line.Rooms is null ? "" : " · ")}Open in Cloudbeds")">
+        <div class="stay-pin__top">
+            <MudIcon Icon="@Icons.Material.Filled.Hotel" Style="font-size: 14px" />
+            <span>@Heading · @line.Hostel</span>
+            <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Style="@($"font-size: {(Strip ? 14 : 12)}px")" Class="@(Strip ? "stay-pin__open" : null)" />
+        </div>
+        <div class="stay-pin__main">@Dates(line)</div>
+        @if (Strip && line.Rooms is { } rooms)
+        {
+            <div class="stay-pin__room">@rooms</div>
+        }
+    </a>
+}
+
+@code {
+    [Parameter, EditorRequired] public string? GuestId { get; set; }
+    [Parameter] public string? Class { get; set; }
+    /// <summary>The box at the width of its panel, with the room (a booking's Show Details), instead of the small one.</summary>
+    [Parameter] public bool Strip { get; set; }
+    /// <summary>Once asked (null stay when they have none), e.g. to default the pick-up to their hostel or flag late departures.</summary>
+    [Parameter] public EventCallback<GuestCurrentStay> OnLoaded { get; set; }
+
+    private GuestCurrentStay? _stay;
+
+    /// <summary>Their stay now or next, or else their most recent reservation.</summary>
+    private GuestHostelStay? Shown => _stay?.Stay ?? _stay?.Last;
+
+    private string Kind => _stay?.Stay is null ? "past" : _stay.InHouse ? "in-house" : "upcoming";
+
+    /// <summary>"In house", "Staying", or for a past reservation its status ("Checked out", "Cancelled", ...).</summary>
+    private string Heading => _stay?.Stay is null ? Shown?.Status ?? "" : _stay.InHouse ? "In house" : "Staying";
+
+    private string Dates(GuestHostelStay stay)
+    {
+        if (_stay?.Stay is null || !_stay.InHouse)
+            return stay.CheckIn.Year == DateTime.Today.Year
+                ? $"{stay.CheckIn:ddd d MMM} → {stay.CheckOut:ddd d MMM}"
+                : $"{stay.CheckIn:d MMM yyyy} → {stay.CheckOut:d MMM yyyy}";
+        var left = Math.Max(0, stay.CheckOut.DayNumber - DateOnly.FromDateTime(DateTime.Today).DayNumber);
+        return $"Out {stay.CheckOut:ddd d MMM} · {(left == 0 ? "today" : left == 1 ? "1 night" : $"{left} nights")}";
+    }
+    private string? _loadedFor;
+    private bool _loading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (GuestId == _loadedFor)
+            return;
+        _loadedFor = GuestId;
+        _stay = null;
+        if (string.IsNullOrEmpty(GuestId))
+            return;
+        _loading = true;
+        try
+        {
+            _stay = await Api.Send(new GetGuestCurrentStay(GuestId));
+        }
+        catch (AppException)
+        {
+            return; // Cloudbeds or permission: just no box
+        }
+        finally
+        {
+            _loading = false;
+        }
+        await OnLoaded.InvokeAsync(_stay);
+    }
+}

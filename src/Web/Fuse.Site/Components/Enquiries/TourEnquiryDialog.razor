@@ -1,0 +1,90 @@
+@* Legacy EnquireNowComponent (Enquire Now on a tour that can't be booked online): name, email, number, the day
+   and how many, anything special, and the captcha. Emailed to the team, who reply to the visitor. The title and
+   buttons stay put; the fields scroll between them. A fresh form each time it opens. *@
+@inject IApi Api
+
+<FuseModal Open="Open" OpenChanged="OpenChanged" Title="ENQUIRE NOW" Subtitle="@TourName">
+    <ChildContent>
+        @if (_sending.Sent)
+        {
+            <div class="enquiry-sent" role="status">
+                <i class="fas fa-circle-check" aria-hidden="true"></i>
+                <p>@EnquirySending.SentMessage</p>
+            </div>
+        }
+        else
+        {
+            <form id="tourEnquiryForm" class="row g-4 text-start" novalidate @onsubmit="SendAsync">
+                <div class="col-12 position-relative">
+                    <OutlineInput Id="Enquire_Name" Label="Name" @bind-Value="_name" autocomplete="name" />
+                    <Validation Message="@_sending["Name"]" />
+                </div>
+                <div class="col-sm-6 position-relative">
+                    <OutlineInput Id="Enquire_Email" Label="Email" type="email" @bind-Value="_email" autocomplete="email" />
+                    <Validation Message="@_sending["Email"]" />
+                </div>
+                <div class="col-sm-6 position-relative">
+                    <OutlineInput Id="Enquire_Number" Label="Contact Number" type="tel" @bind-Value="_phone" autocomplete="tel" />
+                    <Validation Message="@_sending["ContactNumber"]" />
+                </div>
+                <div class="col-sm-6 position-relative">
+                    <OutlineInput Id="Enquire_Date" Label="Requested Date" type="date" InputClass="active" min="@EventDates.Now.ToString("yyyy-MM-dd")"
+                                  Value="@_date?.ToString("yyyy-MM-dd")" ValueChanged="v => _date = DateOnly.TryParse(v, out var d) ? d : null" />
+                    <Validation Message="@_sending["Date"]" />
+                </div>
+                <div class="col-sm-6 position-relative">
+                    <OutlineInput Id="Enquire_People" Label="Number of People" type="number" min="1" max="100" inputmode="numeric"
+                                  Value="@_people?.ToString()" ValueChanged="v => _people = int.TryParse(v, out var n) ? n : null" />
+                    <Validation Message="@_sending["People"]" />
+                </div>
+                <div class="col-12">
+                    <OutlineTextArea Id="Enquire_Requests" Label="Any special requests" @bind-Value="_requests" Rows="3" />
+                </div>
+                <div class="col-12 position-relative mb-3">
+                    <Captcha @ref="_captcha" Message="@_sending["Captcha"]" />
+                </div>
+                <input class="d-none" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" @bind="_sending.Website" />
+            </form>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_sending.Problem is not null && !_sending.Sent)
+        {
+            <p class="fuse-modal__problem" role="alert">@_sending.Problem</p>
+        }
+        <button type="button" class="@(_sending.Sent ? "btn btn-primary ms-auto" : "btn btn-outline-primary")" @onclick="CloseAsync">Close</button>
+        @if (!_sending.Sent)
+        {
+            @* Outside the form (the footer stays put), so it names it. *@
+            <button type="submit" form="tourEnquiryForm" class="btn btn-primary" disabled="@_sending.Busy">@(_sending.Busy ? "Sending…" : "Submit")</button>
+        }
+    </Footer>
+</FuseModal>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter, EditorRequired] public DefaultIdType TourId { get; set; }
+    [Parameter, EditorRequired] public string TourName { get; set; } = "";
+
+    private EnquirySending _sending = new();
+    private Captcha _captcha = null!;
+    private string? _name, _email, _phone, _requests;
+    private DateOnly? _date;
+    private int? _people;
+    private bool _wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        // Each opening starts afresh.
+        if (Open && !_wasOpen)
+            (_sending, _name, _email, _phone, _requests, _date, _people) = (new(), null, null, null, null, null, null);
+        _wasOpen = Open;
+    }
+
+    private Task CloseAsync() => OpenChanged.InvokeAsync(false);
+
+    private Task SendAsync() =>
+        _sending.SendAsync(_captcha, captcha => Api.Send(new SendTourEnquiry(
+            TourId, _name ?? "", _email ?? "", _phone ?? "", _date?.ToDateTime(TimeOnly.MinValue), _people, _requests, captcha, _sending.Website)));
+}

@@ -1,0 +1,72 @@
+@using Fuse.Contracts.Properties
+
+<StepToolbar Title="Rooms" Subtitle="@Summary">
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">Add room</MudButton>
+</StepToolbar>
+<SavedWithParentNote Parent="property" />
+
+@if (Draft.Rooms.Count == 0)
+{
+    <div class="admin-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.Bed" Size="Size.Large" Class="mud-text-secondary" />
+        <MudText Typo="Typo.body2">No rooms yet. Use <b>Add room</b>.</MudText>
+    </div>
+}
+else
+{
+    <MudTable T="PropertyRoomEdit" Items="Draft.Rooms" Context="room" Hover="true" Dense="true" Elevation="0" Class="admin-subtable" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh Style="width: 96px"></MudTh>
+            <MudTh>Room</MudTh>
+            <MudTh Style="width: 96px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                @if (room.ImageUrl is { } url)
+                {
+                    <img src="@url" alt="" class="room-thumb" />
+                }
+                else
+                {
+                    <div class="room-thumb room-thumb--empty"><MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Small" /></div>
+                }
+            </MudTd>
+            <MudTd DataLabel="Room">
+                <div>@room.Name</div>
+                @if (room.Id is null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">New</MudChip>
+                }
+            </MudTd>
+            <MudTd Class="admin-row-actions">
+                <MudTooltip Text="Edit"><MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => EditAsync(room)" aria-label="Edit" /></MudTooltip>
+                <MudTooltip Text="Delete"><MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(room)" aria-label="Delete" /></MudTooltip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public PropertyDraft Draft { get; set; } = null!;
+
+    private string Summary => Draft.Rooms.Count switch { 0 => "No rooms yet", 1 => "1 room", var n => $"{n} rooms" };
+
+    private async Task EditAsync(PropertyRoomEdit? room)
+    {
+        var taken = Draft.Rooms.Where(r => r != room).Select(r => r.Name).ToList();
+        var dialog = await Dialogs.ShowAsync<RoomDialog>(null, new DialogParameters<RoomDialog> { { d => d.Room, room }, { d => d.TakenNames, taken } },
+            new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, BackdropClick = false });
+        if (await dialog.Result is not { Canceled: false, Data: PropertyRoomEdit edited })
+            return;
+        if (room is null)
+            Draft.Rooms.Add(edited);
+        else
+            Draft.Rooms[Draft.Rooms.IndexOf(room)] = edited;
+    }
+
+    private async Task DeleteAsync(PropertyRoomEdit room)
+    {
+        if (await Dialogs.ConfirmAsync("Delete this room?", $"{room.Name} will be removed when you save the property.", "Delete room", "Keep room"))
+            Draft.Rooms.Remove(room);
+    }
+}

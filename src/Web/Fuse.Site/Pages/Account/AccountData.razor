@@ -1,0 +1,65 @@
+@page "/my-account/personal-data"
+@inherits AccountPage
+@using Fuse.Contracts.Identity
+
+@* Legacy Manage/PersonalData, redesigned: download everything the account holds (legacy's download left out the name,
+   passport and bookings), and how to have it deleted (the privacy policy: ask the team, since bookings must be kept
+   for tours already paid for). *@
+
+<SeoHead PageName="Your Data" />
+
+<AccountShell Title="DATA" Active="@AccountShell.Data">
+    <div class="row g-6">
+        <div class="col-lg-6">
+            <div class="account-card h-100">
+                <h4 class="tilted display-6 account-card__title">DOWNLOAD</h4>
+                <p>A copy of everything your account holds: your profile, travel documents and every booking, as a file you can keep.</p>
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="DownloadAsync">
+                    <i class="fa-solid fa-file-arrow-down me-2" aria-hidden="true"></i>@(_busy ? "Preparing…" : "Download My Data")
+                </button>
+                @if (_error is not null)
+                {
+                    <p class="text-danger small mt-3 mb-0" role="alert">@_error</p>
+                }
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="account-card h-100">
+                <h4 class="tilted display-6 account-card__title">DELETE</h4>
+                <p>Want your account and data removed? Send us a message from the contact page with your account's email address and we'll take care of it. We keep what the law requires for bookings already made.</p>
+                <a class="btn btn-outline-primary" href="/contact">Ask Us To Delete It</a>
+                <p class="small text-muted mt-3 mb-0">See our <a href="/privacy-policy">Privacy Policy</a> for how we use your data.</p>
+            </div>
+        </div>
+    </div>
+</AccountShell>
+
+@code {
+    private bool _busy;
+    private string? _error;
+
+    protected override Task LoadAsync() => Task.CompletedTask;
+
+    private async Task DownloadAsync()
+    {
+        (_busy, _error) = (true, null);
+        try
+        {
+            var data = await Api.Send(new GetMyData());
+            var json = System.Text.Json.JsonSerializer.Serialize(data, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
+            });
+            await Js.InvokeVoidAsync("downloadFile", "fuse-account-data.json", json, "application/json");
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

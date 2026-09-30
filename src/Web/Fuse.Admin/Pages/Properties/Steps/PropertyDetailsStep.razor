@@ -1,0 +1,54 @@
+@using Fuse.Contracts.Locations
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+        <MudTextField Label="Name" @bind-Value="Draft.Details.Name" Required="true" RequiredError="Name is required" MaxLength="1024" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Email address" @bind-Value="Draft.Details.EmailAddress" InputType="InputType.Email" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="2" Class="switch-cell">
+        <MudSwitch T="bool" @bind-Value="Draft.Details.PublishToSite" Color="Color.Primary" Label="On website" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Address line 1" @bind-Value="Draft.Details.AddressLine1" Required="true" RequiredError="Address is required" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Address line 2" @bind-Value="Draft.Details.AddressLine2" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudSelect T="DefaultIdType?" Label="Location" @bind-Value="Draft.Details.LocationId" Clearable="true" Variant="Variant.Outlined"
+                   HelperText="Which location is the property in?">
+            @foreach (var location in Locations)
+            {
+                <MudSelectItem T="DefaultIdType?" Value="location.Id">@location.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField Label="Telephone number" @bind-Value="Draft.Details.TelephoneNumber" Required="true" RequiredError="Telephone number is required"
+                      InputType="InputType.Telephone" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField Label="Google Maps place id" @bind-Value="Draft.Details.GoogleMapsPlaceId" Variant="Variant.Outlined" HelperText="Shows the property on a map" />
+    </MudItem>
+    <MudItem xs="12">
+        <div class="readonly-panel">
+            <MudText Typo="Typo.subtitle2">Cloudbeds</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Set up by the Cloudbeds connection; not editable here.</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4"><Readonly Label="Property id" Value="@Draft.Cloudbeds.PropertyId" /></MudItem>
+                <MudItem xs="12" md="4"><Readonly Label="Widget key" Value="@Draft.Cloudbeds.Key" /></MudItem>
+                <MudItem xs="12" md="4"><Readonly Label="API key" Value="@Mask(Draft.Cloudbeds.ApiKey)" /></MudItem>
+            </MudGrid>
+        </div>
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public PropertyDraft Draft { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<LocationSummary> Locations { get; set; } = [];
+
+    /// <summary>Show enough of a secret to recognise it, not to copy it.</summary>
+    private static string? Mask(string? secret) => string.IsNullOrEmpty(secret) ? null : secret.Length <= 4 ? "••••" : $"••••{secret[^4..]}";
+}

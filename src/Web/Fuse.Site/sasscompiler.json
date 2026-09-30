@@ -1,0 +1,11 @@
+{
+  "Source": "Styles/fuse.scss",
+  "Target": "wwwroot/css/fuse.css",
+  "Arguments": "--style=compressed --no-source-map --quiet-deps --silence-deprecation=import --silence-deprecation=global-builtin --silence-deprecation=color-functions --silence-deprecation=mixed-decls --silence-deprecation=slash-div --silence-deprecation=if-function",
+  "GenerateScopedCss": false,
+  "Configurations": {
+    "Debug": {
+      "Arguments": "--style=expanded --no-source-map --quiet-deps --silence-deprecation=import --silence-deprecation=global-builtin --silence-deprecation=color-functions --silence-deprecation=mixed-decls --silence-deprecation=slash-div --silence-deprecation=if-function"
+    }
+  }
+}

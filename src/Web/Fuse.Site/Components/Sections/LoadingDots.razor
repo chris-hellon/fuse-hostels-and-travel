@@ -1,0 +1,7 @@
+@* The site's oval dots, bouncing in turn: something is on its way. *@
+
+<span class="@($"loading-dots {Class}".TrimEnd())" aria-hidden="true"><span></span><span></span><span></span></span>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+}

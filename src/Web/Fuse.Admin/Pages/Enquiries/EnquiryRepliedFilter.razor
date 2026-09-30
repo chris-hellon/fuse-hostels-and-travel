@@ -1,0 +1,16 @@
+@* The enquiry lists' "Replied" filter: all, not replied yet, or replied. *@
+
+<MudSelect T="string" Label="Replied" Value="@Key(Value)" ValueChanged="v => ValueChanged.InvokeAsync(Parse(v))" Dense="true" AnchorOrigin="Origin.BottomLeft" Style="max-width: 240px;">
+    @foreach (var (label, value) in EnquiryPages.RepliedChoices)
+    {
+        <MudSelectItem T="string" Value="@Key(value)">@label</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter] public bool? Value { get; set; }
+    [Parameter] public EventCallback<bool?> ValueChanged { get; set; }
+
+    private static string Key(bool? value) => value switch { null => "all", true => "yes", false => "no" };
+    private static bool? Parse(string? key) => key switch { "yes" => true, "no" => false, _ => null };
+}

@@ -1,0 +1,34 @@
+@* Legacy FeaturesTableComponent: ticked items in a white box under a tilted title, dealt across four columns
+   (1st, 5th… in the first). *@
+
+<div class="container-fluid">
+    <div class="container bg-white features-container has-parallax-scroll">
+        <div class="row d-flex justify-content-center align-items-center">
+            <div class="text-center col-lg-12 mb-n5">
+                <h4 class="tilted mb-0 d-inline-block position-relative">@Title</h4>
+            </div>
+        </div>
+        <div class="p-5 p-lg-8">
+            <div class="row justify-content-lg-between">
+                @for (var column = 0; column < Columns; column++)
+                {
+                    var index = column;
+                    <div class="col-12 col-lg-auto">
+                        <div class="row flex-column text-start">
+                            @foreach (var item in Items.Where((_, i) => i % Columns == index))
+                            {
+                                <p class="mb-0 mb-lg-2"><i class="fa-solid fa-check me-2 text-mustard"></i> @item</p>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<string> Items { get; set; } = [];
+    [Parameter] public int Columns { get; set; } = 4;
+}

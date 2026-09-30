@@ -1,0 +1,10 @@
+@* The published hostels as alternating rows (legacy GetHostelsContainers), starting image-left. *@
+
+@for (var i = 0; i < Hostels.Count; i++)
+{
+    <HostelRow @key="Hostels[i].Id" Hostel="Hostels[i]" Swap="i % 2 == 0" Last="i == Hostels.Count - 1" />
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SiteCard> Hostels { get; set; } = [];
+}

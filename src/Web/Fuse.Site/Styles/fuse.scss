@@ -1,0 +1,22 @@
+// The Fuse site's stylesheet: the legacy theme, compiled at build time (AspNetCore.SassCompiler) into
+// wwwroot/css/fuse.css. Same order as legacy's two bundles: the shared styles, then the Fuse theme.
+
+// Legacy /shared/css/theme.min.css
+@import 'legacy/additional';
+@import 'legacy/owlcarousel';
+@import 'legacy/owlcarousel-theme';
+
+// Legacy /css/theme.min.css: fonts and the pre-loader, then MDB5 Pro with the Fuse customisations
+@import 'legacy/load';
+@import 'mdb/mdb.pro';
+
+// Rebuild-only: components that replace legacy jQuery / Owl / MDB JavaScript widgets
+@import 'components/components';
+@import 'components/date-range-picker';
+@import 'components/events-calendar';
+@import 'components/whats-on';
+@import 'components/tour-booking';
+@import 'components/basket';
+@import 'components/hostel-booking';
+@import 'components/travel-guides';
+@import 'components/account';

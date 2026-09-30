@@ -1,0 +1,27 @@
+@* The black tilted banner of phrases that slide sideways as the page scrolls (legacy setParallaxMarquee). *@
+
+<section id="parallaxBanner" class="bg-light pt-5 position-relative">
+    <OvalContainer Id="parallaxBannerOvals" Top="20" Left="-10" />
+    <div class="container-fluid bg-black tilted pt-lg-8 pb-lg-8 text-white">
+        @foreach (var start in RowStarts)
+        {
+            <div class="marquee">
+                @for (var i = 0; i < 18; i++)
+                {
+                    var phrase = (start + i) % Phrases.Length;
+                    <span class="@Weights[phrase % 3]">@Phrases[phrase]</span>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly string[] Phrases =
+        ["New beds", "Great locations", "Social bars", "daily events", "Safe vibes", "Staff that give a shit", "Epic tailored tours", "experiences", "Good times as standard"];
+
+    private static readonly string[] Weights = ["fw-bold", "fw-light", "fw-outline"];
+
+    /// <summary>Each row is the same phrases twice, starting further along (as legacy's markup).</summary>
+    private static readonly int[] RowStarts = [0, 3, 6];
+}

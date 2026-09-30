@@ -1,0 +1,142 @@
+// Blogs & Tips (Pages/TravelGuides): legacy travelguides.css for the guide's page, plus the list's large first guide.
+
+// ---- The list ----------------------------------------------------------------------------------------------------
+.guide-feature__image {
+  margin-left: 6px; // room for the offcut border's left edge
+
+  img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    transition: filter .2s;
+  }
+
+  &:hover img { filter: brightness(1.08); }
+}
+
+.guide-feature__title {
+  color: var(--mdb-body-color);
+
+  &:hover { color: var(--mdb-primary); }
+}
+
+// A card's or guide's date, over its name.
+.content-card__label {
+  display: block;
+  margin-bottom: .5rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: .9rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--mdb-primary);
+}
+
+// ---- A guide -----------------------------------------------------------------------------------------------------
+// The photos fill the screen (legacy #fullPageCarousel); the shade and title sit over them (the fading slides
+// stack at z-index 1). Clicks pass through to the slideshow's arrows except on the button.
+.guide-hero {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+
+  .guide-hero__mask {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, .15), rgba(0, 0, 0, .75));
+    pointer-events: none;
+  }
+
+  .guide-hero__overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    pointer-events: none;
+
+    .btn { pointer-events: auto; }
+  }
+
+  .carousel-control-prev, .carousel-control-next { z-index: 4; }
+}
+
+.full-cover-single-title-container { width: 50%; }
+
+.full-cover-single-title {
+  font-size: 5rem !important;
+  line-height: 5rem !important;
+  text-transform: uppercase !important;
+}
+
+.full-cover-single-span {
+  margin-top: 30px;
+  font-family: var(--mdb-font-carousel-span);
+  font-size: 2.5rem;
+  line-height: 3rem;
+  text-transform: uppercase;
+  text-shadow: 0 0 transparent !important;
+}
+
+@media (max-width: 991px) {
+  .full-cover-single-title-container { width: 85%; }
+  .full-cover-single-title { font-size: 3rem !important; line-height: 3rem !important; }
+  .full-cover-single-span { font-size: 1.5rem; line-height: 2rem; }
+}
+
+.guide-share--facebook { background-color: #3b5998; }
+.guide-share--twitter { background-color: #55acee; }
+
+// Under the fixed header.
+.card.sticky-top.guide-contents { top: 100px; z-index: 1; }
+
+// The guide's own text: its photos fit the column.
+.guide-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+// ---- View Gallery ------------------------------------------------------------------------------------------------
+.gallery-lightbox__frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+
+  img {
+    max-width: 100%;
+    max-height: 85vh;
+    object-fit: contain;
+  }
+}
+
+.gallery-lightbox__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3rem;
+  height: 3rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(9, 5, 17, .6);
+  color: #fff;
+  font-size: 1.25rem;
+
+  &:hover { background: var(--mdb-primary); }
+  &--prev { left: .75rem; }
+  &--next { right: .75rem; }
+}
+
+.gallery-lightbox__count {
+  position: absolute;
+  bottom: .75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: .25rem .75rem;
+  background: rgba(9, 5, 17, .6);
+  color: #fff;
+  font-size: .9rem;
+}

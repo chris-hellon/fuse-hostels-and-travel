@@ -1,0 +1,157 @@
+@* Legacy SharedRCL _Layout: header, page, footer, and the site-wide dialogs (sign in, book now, the date
+   picker, cookies), which live here so they sit above every page and survive page changes, as does the basket. *@
+@inherits LayoutComponentBase
+@implements ISiteDialogs
+@implements IAsyncDisposable
+@inject IApi Api
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<CascadingValue TValue="ISiteDialogs" Value="this" IsFixed="true">
+    <CascadingValue Value="_basket" IsFixed="true">
+    <CascadingValue Value="Chrome">
+        @if (Chrome is not null)
+        {
+            <SiteHeader Chrome="Chrome" Scrolled="_scrolled" />
+        }
+        <main role="main" class="container-fluid p-0 m-0">
+            @Body
+        </main>
+        <SiteFooter />
+
+        @* Each modal creates its form when it opens, so a form never shows a previous visit's entries or errors. *@
+        <FuseModal @bind-Open="_signInOpen" Title="@(_forgotPassword ? "FORGOT PASSWORD" : "SIGN IN")">
+            @if (_forgotPassword)
+            {
+                <ForgotPasswordForm Back="() => _forgotPassword = false" />
+            }
+            else
+            {
+                <SignInForm SignedIn="() => _signInOpen = false" ForgotPassword="() => _forgotPassword = true" />
+            }
+        </FuseModal>
+        <FuseModal @bind-Open="_bookNowOpen" Title="BOOK NOW">
+            <BookNowChoice Tours="_bookNowTours" Chosen="() => _bookNowOpen = false" />
+        </FuseModal>
+        @if (_enquiry is { } enquiry)
+        {
+            <TourEnquiryDialog @bind-Open="_enquiryOpen" TourId="enquiry.Id" TourName="@enquiry.Name" />
+        }
+        <DateRangePicker @bind-Open="_datesOpen" Start="_datesStart" End="_datesEnd" Picked="DatesPickedAsync" />
+
+        <button type="button" class="btn btn-primary btn-floating btn-lg" id="btn-back-to-top" aria-label="Back To Top"
+                style="@(_showBackToTop ? "display: block;" : null)" @onclick="BackToTopAsync">
+            <i class="fas fa-arrow-up"></i>
+        </button>
+        <CookieBanner />
+    </CascadingValue>
+    </CascadingValue>
+</CascadingValue>
+
+@code {
+    // Fetched once while prerendering and handed to the browser, so WebAssembly doesn't re-fetch.
+    [PersistentState] public SiteChrome? Chrome { get; set; }
+
+    [SupplyParameterFromQuery(Name = "signIn")] private int? OpenSignInQuery { get; set; }
+
+    // The visitor's basket, read from the browser once the page is interactive.
+    private readonly Basket _basket = new();
+    private FuseJs? _js;
+    private DotNetObjectReference<FuseLayout>? _self;
+    private bool _scrolled, _showBackToTop;
+    private bool _signInOpen, _forgotPassword, _bookNowOpen, _bookNowTours, _enquiryOpen, _datesOpen;
+    private (DefaultIdType Id, string Name)? _enquiry;
+    private DateOnly? _datesStart, _datesEnd;
+    private Func<DateOnly, DateOnly, Task>? _datesPicked;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += PageChanged;
+        Chrome ??= await Api.Send(new GetSiteChrome());
+    }
+
+    /// <summary>
+    /// A new page: pad under the header, size circles and reveal what's in view. The router has usually
+    /// rendered the page by now; the script repeats this shortly after for content that loads later.
+    /// </summary>
+    private void PageChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () =>
+        {
+            await Task.Yield();
+            if (_js is not null)
+                await _js.InvokeVoidAsync("pageChanged");
+        });
+
+    protected override void OnParametersSet()
+    {
+        if (OpenSignInQuery == 1)
+            _signInOpen = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        _js = new FuseJs(JS);
+        _self = DotNetObjectReference.Create(this);
+        await _js.InvokeVoidAsync("watchScroll", _self);
+        await _js.InvokeVoidAsync("notch");
+        await _js.InvokeVoidAsync("pageChanged");
+        await _basket.LoadAsync(_js);
+    }
+
+    [JSInvokable]
+    public void OnScrolled(bool pastHeader, bool pastTop)
+    {
+        (_scrolled, _showBackToTop) = (pastHeader, pastTop);
+        StateHasChanged();
+    }
+
+    public void OpenSignIn()
+    {
+        (_signInOpen, _forgotPassword) = (true, false);
+        StateHasChanged();
+    }
+
+    public void OpenBookNow()
+    {
+        // On a tour's pages it starts on tours.
+        _bookNowTours = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("tours", StringComparison.OrdinalIgnoreCase);
+        _bookNowOpen = true;
+        StateHasChanged();
+    }
+
+    public void OpenTourEnquiry(DefaultIdType tourId, string tourName)
+    {
+        _enquiry = (tourId, tourName);
+        _enquiryOpen = true;
+        StateHasChanged();
+    }
+
+    public void PickDates(DateOnly? start, DateOnly? end, Func<DateOnly, DateOnly, Task> picked)
+    {
+        (_datesStart, _datesEnd, _datesPicked) = (start, end, picked);
+        _datesOpen = true;
+        StateHasChanged();
+    }
+
+    private Task DatesPickedAsync((DateOnly Start, DateOnly End) range) =>
+        _datesPicked?.Invoke(range.Start, range.End) ?? Task.CompletedTask;
+
+    private async Task BackToTopAsync()
+    {
+        if (_js is not null)
+            await _js.InvokeVoidAsync("scrollToTop");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Navigation.LocationChanged -= PageChanged;
+        if (_js is not null)
+        {
+            try { await _js.InvokeVoidAsync("unwatchScroll"); } catch (JSDisconnectedException) { }
+            await _js.DisposeAsync();
+        }
+        _self?.Dispose();
+    }
+}

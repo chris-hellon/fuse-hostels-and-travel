@@ -1,0 +1,62 @@
+@using Fuse.Contracts.Properties
+
+<StepToolbar Title="Directions" Subtitle="@Summary">
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">Add directions</MudButton>
+</StepToolbar>
+<SavedWithParentNote Parent="property" />
+
+@if (Draft.Directions.Count == 0)
+{
+    <div class="admin-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.Directions" Size="Size.Large" Class="mud-text-secondary" />
+        <MudText Typo="Typo.body2">No directions yet. Use <b>Add directions</b>, e.g. "From the airport".</MudText>
+    </div>
+}
+else
+{
+    <MudTable T="PropertyDirectionEdit" Items="Draft.Directions" Context="direction" Hover="true" Dense="true" Elevation="0" Class="admin-subtable" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Title</MudTh>
+            <MudTh Style="width: 96px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Title">
+                @direction.Title
+                @if (direction.Id is null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">New</MudChip>
+                }
+            </MudTd>
+            <MudTd Class="admin-row-actions">
+                <MudTooltip Text="Edit"><MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => EditAsync(direction)" aria-label="Edit" /></MudTooltip>
+                <MudTooltip Text="Delete"><MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(direction)" aria-label="Delete" /></MudTooltip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public PropertyDraft Draft { get; set; } = null!;
+
+    private string Summary => Draft.Directions.Count switch { 0 => "Optional", 1 => "1 set of directions", var n => $"{n} sets of directions" };
+
+    private async Task EditAsync(PropertyDirectionEdit? direction)
+    {
+        var taken = Draft.Directions.Where(d => d != direction).Select(d => d.Title).ToList();
+        var dialog = await Dialogs.ShowAsync<DirectionDialog>(null,
+            new DialogParameters<DirectionDialog> { { d => d.Direction, direction }, { d => d.TakenTitles, taken } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, BackdropClick = false });
+        if (await dialog.Result is not { Canceled: false, Data: PropertyDirectionEdit edited })
+            return;
+        if (direction is null)
+            Draft.Directions.Add(edited);
+        else
+            Draft.Directions[Draft.Directions.IndexOf(direction)] = edited;
+    }
+
+    private async Task DeleteAsync(PropertyDirectionEdit direction)
+    {
+        if (await Dialogs.ConfirmAsync("Delete these directions?", $"\"{direction.Title}\" will be removed when you save the property.", "Delete directions", "Keep directions"))
+            Draft.Directions.Remove(direction);
+    }
+}

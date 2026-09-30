@@ -1,0 +1,38 @@
+@page "/admin/management/page-management/page-modals"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Pages)]
+
+<AdminPageHeader Title="Page Modals" Description="Pop-ups shown on chosen pages, optionally between two dates." />
+
+<EntityTable @ref="_table" T="PageModalSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Page Modals" Resource="@FuseResource.Pages"
+             OnCreate="() => OpenAsync(null)" OnEdit="m => OpenAsync(m.Id)" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<PageModalSummary>> Fields =
+    [
+        new(m => m.Title, "Title", nameof(PageModalSummary.Title)),
+        new(m => m.StartDate?.ToString("d MMM yyyy") ?? "Always", "From", nameof(PageModalSummary.StartDate)),
+        new(m => m.EndDate?.ToString("d MMM yyyy") ?? "—", "To", nameof(PageModalSummary.EndDate)),
+        new(m => m.Pages, "Pages", nameof(PageModalSummary.Pages)),
+    ];
+
+    private EntityTable<PageModalSummary>? _table;
+
+    private async Task<PagedResult<PageModalSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchPageModals()), cancellationToken);
+
+    private async Task OpenAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<PageModalDialog>(null, new DialogParameters<PageModalDialog> { { d => d.ModalId, id } }, ContentDialog.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(PageModalSummary modal)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this page modal?", $"\"{modal.Title}\" will be deleted straight away and stop showing on its pages.",
+                "Delete modal", "Keep modal"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeletePageModal(modal.Id)), "Page modal deleted."))
+            await _table!.ReloadAsync();
+    }
+}

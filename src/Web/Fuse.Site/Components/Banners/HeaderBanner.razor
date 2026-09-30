@@ -1,0 +1,80 @@
+@* Legacy HeaderBannerComponent: a wide photo (or a slideshow) with the page title in a black box over its
+   bottom edge. Without headings yet (the page's record is loading) the box shows a shimmer in the title's place,
+   so the photo can start loading at once. With no photo yet either (a hostel's or tour's page loading), the
+   loading message fills it. *@
+
+<div class="container-fluid p-0 header-banner">
+    <div class="header-banner-image-background d-flex justify-content-center align-items-end" style="@BackgroundStyle">
+        @if (Images is { Count: > 0 })
+        {
+            <Slideshow Images="Images" />
+        }
+        else if (string.IsNullOrEmpty(ImageUrl))
+        {
+            <LoadingMessage Class="banner-loading" Text="@LoadingText" />
+        }
+        @if (Headings is null)
+        {
+            <div class="container mb-n5">
+                <div class="row">
+                    <div class="d-flex align-items-center justify-content-center col-lg-12">
+                        <h1 class="text-white bg-black px-3 pt-2 pb-1 d-inline-block position-relative" aria-hidden="true">
+                            <span class="skeleton skeleton--dark banner-title-skeleton"></span>
+                        </h1>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(Headings.Title) || !string.IsNullOrEmpty(Headings.SubTitle))
+        {
+            <div class="container mb-n5 has-parallax-scroll">
+                <div class="row">
+                    <div class="d-flex align-items-center justify-content-center col-lg-12">
+                        <h1 class="text-white bg-black px-3 pt-2 pb-1 d-inline-block position-relative">
+                            @if (!string.IsNullOrEmpty(Headings.SubTitle))
+                            {
+                                <span class="tilted text-white px-3 py-2">@Headings.SubTitle</span>
+                            }
+                            @Headings.Title
+                        </h1>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    @if (Intro is not null)
+    {
+        <div class="@($"container-fluid position-relative {(Ovals is null ? "" : "overflow-hidden ")}has-parallax-scroll")">
+            <div class="container position-relative pt-4">
+                <div class="row d-flex justify-content-center align-items-center">
+                    <div class="col-lg-6 text-center py-5">@Intro</div>
+                    @Ovals
+                </div>
+            </div>
+        </div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    // No photo (a record's page while it loads): just the dark background, not url(''), which would fetch the page.
+    private string BackgroundStyle => Images is { Count: > 0 } ? ""
+        : string.IsNullOrEmpty(ImageUrl) ? Style ?? ""
+        : $"background-image:{CdnImages.Background(ImageUrl, 2000)}; {Style}";
+
+    /// <summary>Null while they load.</summary>
+    [Parameter, EditorRequired] public PageHeadings? Headings { get; set; }
+    [Parameter] public string? ImageUrl { get; set; }
+    /// <summary>A slideshow of photos instead of the single image (legacy SlideshowImages).</summary>
+    [Parameter] public IReadOnlyList<string>? Images { get; set; }
+    /// <summary>What the banner says while it has no photo yet.</summary>
+    [Parameter] public string LoadingText { get; set; } = "Loading…";
+    /// <summary>Extra background style (legacy smallheader.css centred the photo vertically on some pages).</summary>
+    [Parameter] public string? Style { get; set; }
+    /// <summary>A short centred introduction under the photo.</summary>
+    [Parameter] public RenderFragment? Intro { get; set; }
+    /// <summary>Oval patterns behind the introduction.</summary>
+    [Parameter] public RenderFragment? Ovals { get; set; }
+    /// <summary>Anything else under the photo (e.g. the page's nav pills).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

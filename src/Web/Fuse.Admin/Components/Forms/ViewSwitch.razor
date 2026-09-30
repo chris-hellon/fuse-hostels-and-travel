@@ -1,0 +1,25 @@
+@typeparam TView
+@* Labelled tabs for switching between views of the same data (e.g. List / Calendar). *@
+
+<div class="view-switch" role="tablist">
+    @foreach (var option in Options)
+    {
+        var selected = EqualityComparer<TView>.Default.Equals(option.Value, Value);
+        <button type="button" role="tab" aria-selected="@(selected ? "true" : "false")"
+                class="@($"view-switch__tab{(selected ? " is-selected" : "")}")" @onclick="() => SelectAsync(option.Value)">
+            <MudIcon Icon="@option.Icon" Size="Size.Small" />
+            <span>@option.Label</span>
+        </button>
+    }
+</div>
+
+@code {
+    public sealed record Option(TView Value, string Icon, string Label);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Option> Options { get; set; } = [];
+    [Parameter] public TView Value { get; set; } = default!;
+    [Parameter] public EventCallback<TView> ValueChanged { get; set; }
+
+    private Task SelectAsync(TView value) =>
+        EqualityComparer<TView>.Default.Equals(value, Value) ? Task.CompletedTask : ValueChanged.InvokeAsync(value);
+}

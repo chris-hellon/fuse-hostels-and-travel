@@ -1,0 +1,26 @@
+@page "/order-failed"
+
+@* Where Stripe goes when the visitor leaves its payment page without paying (legacy OrderFailed). Their basket is
+   kept, and checking out again replaces the unpaid booking. *@
+
+<SeoHead PageName="Order Failed" />
+
+<section class="bg-light overflow-hidden position-relative">
+    <div class="container-fluid">
+        <div class="container pt-8 pb-8">
+            <div class="row d-flex justify-content-center">
+                <div class="col-lg-8">
+                    <h1 class="display-3 mb-4 text-center">Order Failed</h1>
+                    <p class="mb-0 text-center">Unfortunately your order has not been successful.</p>
+                    <div class="card mt-5">
+                        <div class="card-body p-5">
+                            <p>Your payment wasn't completed, so nothing has been charged.</p>
+                            <p>Please attempt your order again, or <a href="/contact">contact us</a> for assistance.</p>
+                            <a class="btn btn-primary mt-2" href="/checkout">Try Again</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

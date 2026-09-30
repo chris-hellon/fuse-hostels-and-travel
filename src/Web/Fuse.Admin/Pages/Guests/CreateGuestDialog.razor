@@ -1,0 +1,36 @@
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <ProfileForm Profile="_profile" EmailRequired="EmailRequired" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    /// <summary>The primary guest on a booking needs an email (for the booking emails).</summary>
+    [Parameter] public bool EmailRequired { get; set; }
+
+    private MudForm? _form;
+    private readonly UserProfile _profile = new();
+    private bool _saving;
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+
+        _saving = true;
+        string? id = null;
+        var ok = await Snackbar.TryAsync(async () => id = await Api.Send(new CreateGuest(_profile)), "Guest created.");
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok(id));
+    }
+}

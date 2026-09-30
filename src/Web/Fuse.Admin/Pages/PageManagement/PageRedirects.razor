@@ -1,0 +1,37 @@
+@page "/admin/management/page-management/page-redirects"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Seo)]
+
+<AdminPageHeader Title="Page Redirects" Description="Send visitors from an old page address to a new one." />
+
+<EntityTable @ref="_table" T="PageRedirect" Fields="Fields" Load="LoadAsync" EntityNamePlural="Page Redirects" Resource="@FuseResource.Seo"
+             OnCreate="() => OpenAsync(null)" OnEdit="OpenAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<PageRedirect>> Fields =
+    [
+        new(r => r.Url, "From", nameof(PageRedirect.Url)),
+        new(r => r.RedirectUrl, "To", nameof(PageRedirect.RedirectUrl)),
+    ];
+
+    private EntityTable<PageRedirect>? _table;
+
+    private async Task<PagedResult<PageRedirect>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchPageRedirects()), cancellationToken);
+
+    private async Task OpenAsync(PageRedirect? redirect)
+    {
+        var dialog = await Dialogs.ShowAsync<PageRedirectDialog>(null, new DialogParameters<PageRedirectDialog> { { d => d.Redirect, redirect } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false });
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(PageRedirect redirect)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this redirect?", $"{redirect.Url} will stop redirecting to {redirect.RedirectUrl} straight away.",
+                "Delete redirect", "Keep redirect"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeletePageRedirect(redirect.Id)), "Redirect deleted."))
+            await _table!.ReloadAsync();
+    }
+}

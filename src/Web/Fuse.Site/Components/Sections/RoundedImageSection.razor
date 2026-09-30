@@ -1,0 +1,48 @@
+@* Legacy ContainerHalfImageRoundedTextComponent: tilted titles and text beside a circular image or video. With Swap the image is on the left and the diagonal background goes. *@
+
+<div class="@($"container-fluid position-relative {(Swap ? "" : "offset-background")}")" style="@BackgroundStyle">
+    <div class="container pt-8 pb-8 position-relative">
+        <div class="@($"row g-lg-10 {(Swap ? "flex-row-reverse" : "")}")">
+            <div class="col-md-12 col-lg-6 pb-5 pb-lg-0 d-flex align-items-center position-relative has-parallax-scroll">
+                <div class="mx-auto">
+                    @for (var i = 0; i < Titles.Count; i++)
+                    {
+                        <span class="@($"{TitleSpacing(i)} tilted display-5")">@Titles[i]</span>
+                    }
+                    @Body
+                    @Button
+                </div>
+            </div>
+            <div class="@($"col-md-12 col-lg-6 d-flex justify-content-center align-items-center {(Swap ? "justify-content-lg-start" : "justify-content-lg-end")} position-relative has-parallax-scroll")">
+                @if (!string.IsNullOrEmpty(VideoSrc))
+                {
+                    <CircleVideo Src="@VideoSrc" />
+                }
+                else
+                {
+                    <div class="offcut-image-border full-circle">
+                        <img loading="lazy" class="img-fluid shadow-4 h-100 object-fit-cover" width="800" height="400" src="@CdnImages.Sized(ImageUrl, 800)" alt="@($"{string.Join(' ', Titles)} image")">
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    @Ovals
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Titles { get; set; } = [];
+    /// <summary>The text beside the image.</summary>
+    [Parameter] public RenderFragment? Body { get; set; }
+    [Parameter] public RenderFragment? Button { get; set; }
+    [Parameter] public string? ImageUrl { get; set; }
+    /// <summary>A video in the circle instead of the image (legacy videoSrc).</summary>
+    [Parameter] public string? VideoSrc { get; set; }
+    [Parameter] public RenderFragment? Ovals { get; set; }
+    [Parameter] public bool Swap { get; set; }
+    /// <summary>Overrides the diagonal background (legacy restyled it on some pages).</summary>
+    [Parameter] public string? BackgroundStyle { get; set; }
+
+    /// <summary>Legacy spacing: the last title has the most room below it, the first a little more than the rest.</summary>
+    private string TitleSpacing(int i) => i == Titles.Count - 1 ? "mb-5 mt-2" : i == 0 ? "mb-4" : "mb-3";
+}

@@ -1,0 +1,49 @@
+@inject FileSaver Files
+@* Everyone departing on a day (legacy Today / Tomorrow departures), with a tour filter and export. *@
+
+@* Export needs the Bookings export permission (the table checks it). *@
+<EntityTable @ref="_table" T="DepartureRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Guests" Dense="true" Elevation="0"
+             Resource="@FuseResource.Bookings" OnExport="ExportAsync">
+    <AdvancedSearchContent>
+        <TourFilter Tours="Tours" Value="_tourId" ValueChanged="FilterAsync" />
+    </AdvancedSearchContent>
+</EntityTable>
+
+@code {
+    /// <summary>0 = today, 1 = tomorrow (business time zone, worked out on the server).</summary>
+    [Parameter] public int DaysFromToday { get; set; }
+    [Parameter] public IReadOnlyList<LookupItem> Tours { get; set; } = [];
+
+    private static readonly IReadOnlyList<EntityField<DepartureRow>> Fields =
+    [
+        EntityField<DepartureRow>.Reference(r => r.Reference, nameof(DepartureRow.Reference)),
+        new(r => r.TourName, "Tour", nameof(DepartureRow.TourName)),
+        new(r => r.GuestName, "Guest", nameof(DepartureRow.GuestName), r => @<GuestLink GuestId="@r.GuestId" Name="@r.GuestName" />),
+        new(r => r.StartDate.ToString("HH:mm"), "Start Time", nameof(DepartureRow.StartDate)),
+        new(r => r.EndDate.ToString("HH:mm"), "End Time", nameof(DepartureRow.EndDate)),
+        new(r => r.PickupLocation, "Pick Up", nameof(DepartureRow.PickupLocation)),
+        new(r => r.Status, "Status", nameof(DepartureRow.Status), r => @<BookingStatus State="r.Status" />),
+        EntityField<DepartureRow>.Bool(r => r.WaiverSigned, "Waiver Signed", nameof(DepartureRow.WaiverSigned)),
+    ];
+
+    private EntityTable<DepartureRow>? _table;
+    private DefaultIdType? _tourId;
+    private string? _keyword;
+
+    private async Task<PagedResult<DepartureRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        var query = request.Apply(new SearchDepartures { DaysFromToday = DaysFromToday, TourId = _tourId });
+        _keyword = query.Keyword;
+        return await Api.Send(query, cancellationToken);
+    }
+
+    private async Task FilterAsync(DefaultIdType? tourId)
+    {
+        _tourId = tourId;
+        await _table!.ReloadAsync();
+    }
+
+    public Task ReloadAsync() => _table?.ReloadAsync() ?? Task.CompletedTask;
+
+    private Task ExportAsync() => Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportDepartures(DaysFromToday, _tourId, _keyword))));
+}

@@ -1,0 +1,94 @@
+@* Legacy MDB modal: by default centred and light with a big title (#logInModal, #bookNowModal); the classes
+   and close button can be changed for other kinds (the room lightbox). Clicking outside closes it. With a Footer
+   (a long form), the title and footer stay put and only the body scrolls. *@
+@inherits JsComponent
+
+@if (Open)
+{
+    <div class="@($"modal fade show {ModalClass}".TrimEnd())" style="display: block;" tabindex="-1" role="dialog" aria-modal="true"
+         aria-labelledby="@(Title is null ? null : _titleId)" aria-label="@Label" @onclick="CloseAsync">
+        @if (CloseOutside)
+        {
+            <button type="button" class="text-white btn-close" aria-label="Close" @onclick="CloseAsync"><i class="fa fa-xmark"></i></button>
+        }
+        <div class="@($"modal-dialog modal-dialog-centered{(Footer is null ? "" : " modal-dialog-scrollable")} {DialogClass}".TrimEnd())" @onclick:stopPropagation="true">
+            @if (Footer is not null)
+            {
+                <div class="modal-content fuse-modal bg-light">
+                    <div class="fuse-modal__head">
+                        <button type="button" class="btn-close ms-auto" aria-label="Close" @onclick="CloseAsync"><i class="fa fa-xmark"></i></button>
+                        <h2 id="@_titleId" class="mb-0 display-5">@Title</h2>
+                        @if (Subtitle is not null)
+                        {
+                            <p class="fuse-modal__subtitle">@Subtitle</p>
+                        }
+                    </div>
+                    <div class="modal-body fuse-modal__body">@ChildContent</div>
+                    <div class="fuse-modal__foot">@Footer</div>
+                </div>
+            }
+            else
+            {
+            <div class="@($"modal-content {ContentClass}")">
+                @if (!CloseOutside)
+                {
+                    <button type="button" class="btn-close ms-auto" aria-label="Close" @onclick="CloseAsync"><i class="fa fa-xmark"></i></button>
+                }
+                <div class="@($"modal-body {BodyClass}".TrimEnd())">
+                    @if (Title is not null)
+                    {
+                        <h2 id="@_titleId" class="mb-3 display-5">@Title</h2>
+                    }
+                    @ChildContent
+                </div>
+            </div>
+            }
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    /// <summary>The big heading; none for a lightbox (then set <see cref="Label"/>).</summary>
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? ModalClass { get; set; }
+    [Parameter] public string? DialogClass { get; set; }
+    [Parameter] public string ContentClass { get; set; } = "p-5 bg-light";
+    [Parameter] public string? BodyClass { get; set; } = "p-0 text-center";
+    /// <summary>Legacy lightbox: a white close button in the corner of the page, not the dialog.</summary>
+    [Parameter] public bool CloseOutside { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>A line under the title (e.g. the tour an enquiry is about); with <see cref="Footer"/> only.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+    /// <summary>Buttons fixed along the bottom, the body scrolling between them and the title.</summary>
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    private readonly string _titleId = $"modal-{Guid.NewGuid():N}";
+    private bool _locked;
+
+    private async Task CloseAsync()
+    {
+        Open = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The page behind doesn't scroll while the modal is open.
+        if (Open == _locked)
+            return;
+        _locked = Open;
+        await Js.InvokeVoidAsync("lockScroll", Open);
+        if (Open)
+            await Js.InvokeVoidAsync("notch");
+    }
+
+    protected override async Task OnDisposeAsync()
+    {
+        if (_locked)
+            await Js.InvokeVoidAsync("lockScroll", false);
+    }
+}

@@ -1,0 +1,87 @@
+@using Fuse.Contracts.Bookings
+@* Find a guest by name or email (or create one) and pick them (legacy guest search in the booking wizard). *@
+
+<div class="guest-search">
+    <MudTextField T="string" @bind-Value="_search" Label="@Label" Variant="Variant.Outlined" Disabled="Disabled"
+                  DebounceInterval="400" OnDebounceIntervalElapsed="SearchAsync" Immediate="true"
+                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                  HelperText="Search by name or email, then choose a guest" Class="guest-search__field" />
+    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PersonAdd" Disabled="Disabled"
+               Class="guest-search__create" OnClick="CreateAsync">Create Guest</MudButton>
+    @ChildContent
+</div>
+
+@if (_searching)
+{
+    <div class="d-flex justify-center pa-3"><MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" /></div>
+}
+else if (_results.Count > 0)
+{
+    <MudPaper Outlined="true" Elevation="0" Class="guest-search__results">
+        @foreach (var guest in _results)
+        {
+            <button type="button" class="guest-search__result" @key="guest.Id" @onclick="() => PickAsync(guest)">
+                <MudText Typo="Typo.body2"><strong>@guest.FullName</strong></MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@Detail(guest).Detail</MudText>
+            </button>
+        }
+    </MudPaper>
+}
+else if (_searched && !string.IsNullOrWhiteSpace(_search))
+{
+    <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary d-block">No guests found for '@_search'.</MudText>
+}
+
+@code {
+    [Parameter] public string Label { get; set; } = "Search guest";
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>A new guest must have an email (the primary guest gets the booking emails).</summary>
+    [Parameter] public bool EmailRequired { get; set; }
+    [Parameter] public EventCallback<(string Id, GuestName Name)> OnPick { get; set; }
+    /// <summary>Extra buttons beside Create Guest.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string? _search;
+    private IReadOnlyList<UserSummary> _results = [];
+    private bool _searching, _searched;
+
+    private async Task SearchAsync(string? text)
+    {
+        _search = text;
+        _searched = false;
+        if (string.IsNullOrWhiteSpace(text) || text.Trim().Length < 3)
+        {
+            _results = [];
+            return;
+        }
+        _searching = true;
+        await Snackbar.TryAsync(async () => _results = await Api.Send(new FindGuests(text.Trim())));
+        _searching = false;
+        _searched = true;
+    }
+
+    private static GuestName Detail(UserSummary u) => GuestNames.Of(u.FullName ?? "Guest", u.DateOfBirth, u.Gender, u.Nationality, u.Email);
+
+    private async Task PickAsync(UserSummary guest)
+    {
+        _search = null;
+        _results = [];
+        _searched = false;
+        await OnPick.InvokeAsync((guest.Id, Detail(guest)));
+    }
+
+    private async Task CreateAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<Pages.Guests.CreateGuestDialog>("Create Guest",
+            new DialogParameters<Pages.Guests.CreateGuestDialog> { { d => d.EmailRequired, EmailRequired } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true, BackdropClick = false });
+        if (await dialog.Result is not { Canceled: false, Data: string id })
+            return;
+        UserDetails? guest = null;
+        if (await Snackbar.TryAsync(async () => guest = await Api.Send(new GetGuest(id))) && guest is not null)
+        {
+            var p = guest.Profile;
+            await OnPick.InvokeAsync((id, GuestNames.Of($"{p.FirstName} {p.LastName}".Trim(), p.DateOfBirth, p.Gender, p.Nationality, p.Email)));
+        }
+    }
+}

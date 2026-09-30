@@ -1,0 +1,160 @@
+@using System.Globalization
+@using Fuse.Admin.Components.Bookings
+@using Fuse.Contracts.Identity
+@* What a hostel booking row shows when expanded: the guest and their reservation in one compact panel, then every tour
+   booking the guest has with a tour during the stay (as the lead booker or a guest on a tour), each opening in the Booking Details dialog so
+   this page keeps its place. Read-only: nothing is booked or changed here. *@
+
+<MudTr>
+    <td colspan="@Columns" class="booking-details">
+        <div class="booking-details__body booking-details--compact">
+            <MudPaper Outlined="true" Square="true" Class="booking-details__section">
+                <div class="hostel-details__head">
+                    <div>
+                        <div class="booking-details__guest-name">
+                            @if (Row.GuestId is not null)
+                            {
+                                <GuestLink GuestId="@Row.GuestId" Name="@Row.GuestName" />
+                            }
+                            else
+                            {
+                                <span>@Row.GuestName</span>
+                            }
+                        </div>
+                        <div class="booking-details__guest-detail">
+                            @(Row.GuestId is null ? "Not a customer here yet: the Cloudbeds guest import brings them in." : Contact)
+                        </div>
+                    </div>
+                    @if (Row.Url is { } url)
+                    {
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@url" Target="_blank" EndIcon="@Icons.Material.Filled.OpenInNew">
+                            Cloudbeds @Row.ReservationId
+                        </MudButton>
+                    }
+                </div>
+                <div class="hostel-details__fields">
+                    <div>
+                        <div class="booking-details__label">Stay</div>
+                        <div>@Row.CheckIn.ToString("ddd dd/MM/yyyy") → @Row.CheckOut.ToString("ddd dd/MM/yyyy")</div>
+                    </div>
+                    <div>
+                        <div class="booking-details__label">Nights</div>
+                        <div>@Row.Nights</div>
+                    </div>
+                    <div class="hostel-details__wide">
+                        <div class="booking-details__label">Room</div>
+                        <div>@(Row.Rooms ?? "-")</div>
+                    </div>
+                    <div>
+                        <div class="booking-details__label">Source</div>
+                        <div>@(Row.Source ?? "-")</div>
+                    </div>
+                    <div>
+                        <div class="booking-details__label">Balance</div>
+                        <div class="@(Row.Balance > 0 ? "booking-details__owed" : null)">@(Row.Balance > 0 ? $"$ {Row.Balance:N2} due" : "Nothing due")</div>
+                    </div>
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined="true" Square="true" Class="booking-details__section">
+                <MudText Typo="Typo.body1" Class="booking-details__heading">Tour Bookings During This Stay</MudText>
+                @if (Row.GuestId is null)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">None: the guest isn't a customer here yet.</MudText>
+                }
+                else if (_tours is null)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Secondary" />
+                }
+                else if (_tours.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">No tours booked during this stay. Their other bookings are on their profile.</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Elevation="0" Class="booking-details__table">
+                        <thead>
+                            <tr>
+                                <th>Booking</th>
+                                <th>Tour</th>
+                                <th>Start Date</th>
+                                <th>Booked</th>
+                                <th>Total Price</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var booking in _tours)
+                            {
+                                var tours = booking.Tours.Count > 0 ? booking.Tours : [new GuestTourBookingItem("Tour", booking.BookingDate, false)];
+                                <tr>
+                                    <td>@booking.Reference</td>
+                                    <td>
+                                        @foreach (var tour in tours)
+                                        {
+                                            <div class="@(tour.Cancelled ? "mud-text-secondary" : null)">@Name(tour.TourName)@(tour.Cancelled ? " (cancelled)" : "")</div>
+                                        }
+                                        @if (!booking.LeadBooker)
+                                        {
+                                            <div class="booking-details__guest-detail">A guest on someone else's booking</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @foreach (var tour in tours)
+                                        {
+                                            <div>@tour.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
+                                        }
+                                    </td>
+                                    <td>@booking.BookingDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="booking-details__money">$ @booking.TotalAmount.ToString("N2")</td>
+                                    <td><BookingStatus State="booking.Status" /></td>
+                                    <td class="booking-details__actions">
+                                        <RowIconButton Icon="@Icons.Material.Outlined.Visibility" Label="View booking" OnClick="() => ViewAsync(booking)" />
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </div>
+    </td>
+</MudTr>
+
+@code {
+    [Parameter, EditorRequired] public HostelBookingRow Row { get; set; } = null!;
+    [Parameter] public int Columns { get; set; } = 7;
+
+    private IReadOnlyList<GuestTourBooking>? _tours;
+
+    private string Contact => string.Join(" · ", new[] { Row.GuestEmail, Row.GuestPhone }.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+    protected override Task OnInitializedAsync() => LoadToursAsync();
+
+    private async Task LoadToursAsync()
+    {
+        if (Row.GuestId is null)
+            return;
+        IReadOnlyList<GuestTourBooking> all = [];
+        await Snackbar.TryAsync(async () => all = await Api.Send(new ListGuestTourBookings(Row.GuestId)));
+        _tours = [.. all.Where(DuringStay)];
+    }
+
+    /// <summary>A tour on the booking starts between check-in and check-out (the profile lists all their bookings).</summary>
+    private bool DuringStay(GuestTourBooking booking) => booking.Tours.Any(t =>
+        DateOnly.FromDateTime(t.StartDate) >= Row.CheckIn && DateOnly.FromDateTime(t.StartDate) <= Row.CheckOut);
+
+    /// <summary>The booking over this page (it keeps its place); its line here refreshes if it was changed.</summary>
+    private async Task ViewAsync(GuestTourBooking booking)
+    {
+        if ((await BookingDetailsDialog.ShowAsync(Dialogs, booking.BookingId, booking.Reference)).Changed)
+            await LoadToursAsync();
+    }
+
+    /// <summary>Tour names are stored in capitals ("SUNSET RIVER CRUISE TOUR"); read as "Sunset River Cruise Tour".</summary>
+    private static string Name(string name) =>
+        name.Any(char.IsLower) ? name : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(name.ToLowerInvariant());
+
+    private static string Plural(int count, string noun) => $"{count} {noun}{(count == 1 ? "" : "s")}";
+}

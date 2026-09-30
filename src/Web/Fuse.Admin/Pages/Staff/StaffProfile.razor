@@ -1,0 +1,102 @@
+@page "/admin/staff/{Id}/profile"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Users)]
+
+<AdminPageHeader Title="@(_user?.FullName ?? "Staff")" Description="Staff profile">
+    <MudButton Href="/admin/staff" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Back to staff</MudButton>
+</AdminPageHeader>
+
+@if (_user is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <AuthorizeView Context="auth">
+        @{ var canEdit = auth.User.HasPermission(FuseAction.Update, FuseResource.Users); }
+        <MudPaper Class="pa-6" Elevation="25">
+            <div class="d-flex align-center mb-4">
+                <MudText Typo="Typo.subtitle1">Username: @_user.UserName</MudText>
+                <MudSpacer />
+                <MudSwitch T="bool" Value="_user.IsActive" ValueChanged="SetActiveAsync" Disabled="!canEdit" Color="Color.Primary"
+                           Label="@(_user.IsActive ? "Active" : "Inactive")" />
+            </div>
+            @if (canEdit || !string.IsNullOrEmpty(_user.ImageUrl))
+            {
+                <MudGrid Spacing="3" Class="mb-4">
+                    <MudItem xs="12" sm="6" md="4">
+                        <ProfilePhoto Url="@_user.ImageUrl" UrlChanged="@(url => _user = _user! with { ImageUrl = url })" ReadOnly="!canEdit"
+                                      Save="@(image => Api.Send(new SetStaffImage(Id, image)).AsTask())" />
+                    </MudItem>
+                </MudGrid>
+            }
+            <MudForm @ref="_form" ReadOnly="!canEdit">
+                <ProfileForm Profile="_user.Profile" EmailRequired="true" />
+                @if (canEdit)
+                {
+                    @* As legacy's staff profile: an administrator can set a new password (saved with the profile). *@
+                    <MudGrid Spacing="3" Class="mt-2">
+                        <MudItem xs="12" md="6">
+                            <MudTextField T="string" @bind-Value="_password" Label="New password" Variant="Variant.Outlined" AutoComplete="new-password"
+                                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                          Adornment="Adornment.End" AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                                          OnAdornmentClick="() => _showPassword = !_showPassword" AdornmentAriaLabel="Show password"
+                                          HelperText="Leave empty to keep the current password." />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField T="string" @bind-Value="_confirm" Label="Confirm new password" Variant="Variant.Outlined" AutoComplete="new-password"
+                                          InputType="InputType.Password" Validation="@(new Func<string?, string?>(ConfirmMatches))" />
+                        </MudItem>
+                    </MudGrid>
+                }
+            </MudForm>
+            @if (canEdit)
+            {
+                <div class="d-flex justify-end mt-4 gap-2">
+                    @if (auth.User.HasPermission(FuseAction.View, FuseResource.UserRoles))
+                    {
+                        <MudButton Href="@($"/admin/staff/{Id}/roles")" Variant="Variant.Outlined">Manage Roles</MudButton>
+                    }
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save</MudButton>
+                </div>
+            }
+        </MudPaper>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private UserDetails? _user;
+    private MudForm? _form;
+    private bool _saving, _showPassword;
+    private string? _password, _confirm;
+
+    protected override async Task OnParametersSetAsync() =>
+        await Snackbar.TryAsync(async () => _user = await Api.Send(new GetStaff(Id)));
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        _saving = true;
+        var ok = await Snackbar.TryAsync(async () =>
+        {
+            await Api.Send(new UpdateStaff(Id, _user!.Profile));
+            if (!string.IsNullOrEmpty(_password))
+                await Api.Send(new SetStaffPassword(Id, _password, _confirm ?? ""));
+        }, string.IsNullOrEmpty(_password) ? "Profile saved." : "Profile and password saved.");
+        if (ok)
+            (_password, _confirm) = (null, null);
+        _saving = false;
+    }
+
+    private string? ConfirmMatches(string? confirm) =>
+        string.IsNullOrEmpty(_password) || confirm == _password ? null : "Passwords do not match.";
+
+    private async Task SetActiveAsync(bool active)
+    {
+        if (await Snackbar.TryAsync(async () => await Api.Send(new SetStaffActive(Id, active)), active ? "Activated." : "Deactivated."))
+            _user = _user! with { IsActive = active };
+    }
+}

@@ -1,0 +1,7 @@
+@using Fuse.Contracts.Tours
+
+<SeoFieldsEditor Seo="Tour" SlugExample="this-tour" />
+
+@code {
+    [Parameter, EditorRequired] public TourInput Tour { get; set; } = null!;
+}

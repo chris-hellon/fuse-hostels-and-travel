@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="src/Fuse.Shared/Fuse.Shared.csproj" />
+    <Project Path="src/Fuse.Contracts/Fuse.Contracts.csproj" />
+    <Project Path="src/Fuse.Domain/Fuse.Domain.csproj" />
+    <Project Path="src/Fuse.Application/Fuse.Application.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="src/Fuse.Infrastructure/Fuse.Infrastructure.csproj" />
+    <Project Path="src/Fuse.Migrations/Fuse.Migrations.csproj" />
+  </Folder>
+  <Folder Name="/Web/">
+    <Project Path="src/Web/Fuse.Web/Fuse.Web.csproj" />
+    <Project Path="src/Web/Fuse.Web.Client/Fuse.Web.Client.csproj" />
+    <Project Path="src/Web/Fuse.Site/Fuse.Site.csproj" />
+    <Project Path="src/Web/Fuse.Admin/Fuse.Admin.csproj" />
+    <Project Path="src/Web/Fuse.UI/Fuse.UI.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/Fuse.Web.Tests/Fuse.Web.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="docs/ARCHITECTURE.md" />
+  </Folder>
+</Solution>

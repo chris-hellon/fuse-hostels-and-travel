@@ -1,0 +1,139 @@
+@page "/my-account/password"
+@page "/my-account/email"
+@inherits AccountPage
+@using Fuse.Contracts.Identity
+
+@* Legacy Manage/Email and ChangePassword / SetPassword, together: the email (changed by confirming a link sent to the
+   new address) and the password (set one, for an account made at checkout without, or change it). *@
+
+<SeoHead PageName="Email & Password" />
+
+<AccountShell Title="ACCOUNT" Active="@AccountShell.Security">
+    @if (Me is { } me)
+    {
+        <div class="row g-6">
+            <div class="col-lg-6">
+                <form class="account-card h-100" novalidate @onsubmit="ChangeEmailAsync">
+                    <h4 class="tilted display-6 account-card__title">EMAIL</h4>
+                    <p class="account-readonly mb-4"><span><i class="fa-solid fa-at me-2" aria-hidden="true"></i>@(me.Profile.Email ?? "No email address")</span></p>
+                    @if (_emailSentTo is { } sentTo)
+                    {
+                        <div class="account-done" role="status">
+                            <i class="fas fa-envelope-circle-check" aria-hidden="true"></i>
+                            <p>We've sent a link to <strong>@sentTo</strong>. Open it to confirm your new email address; until then, your email stays as it is.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="position-relative mb-5">
+                            <OutlineInput Id="Account_NewEmail" Label="New Email" type="email" @bind-Value="_newEmail" autocomplete="email" />
+                            <Validation Message="@_email["NewEmail"]" />
+                        </div>
+                        @if (_email.Problem is { } problem && _email["NewEmail"] is null)
+                        {
+                            <p class="text-danger small" role="alert">@problem</p>
+                        }
+                        <button type="submit" class="btn btn-primary" disabled="@_email.Busy">@(_email.Busy ? "Sending…" : "Change Email")</button>
+                    }
+                </form>
+            </div>
+            <div class="col-lg-6">
+                <form class="account-card h-100" novalidate @onsubmit="PasswordAsync">
+                    <h4 class="tilted display-6 account-card__title">PASSWORD</h4>
+                    @if (_passwordDone)
+                    {
+                        <div class="account-done" role="status">
+                            <i class="fas fa-circle-check" aria-hidden="true"></i>
+                            <p>@(me.HasPassword ? "Your password has been changed." : "Your password has been set. You can sign in with it from now on.")</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @if (!me.HasPassword)
+                        {
+                            <p class="text-muted">Your account was made when you booked, without a password. Set one to sign in any time.</p>
+                        }
+                        <div class="row g-5">
+                            @if (me.HasPassword)
+                            {
+                                <div class="col-12 position-relative">
+                                    <OutlineInput Id="Account_CurrentPassword" Label="Current Password" type="password" @bind-Value="_current" autocomplete="current-password" />
+                                    <Validation Message="@_password["CurrentPassword"]" />
+                                </div>
+                            }
+                            <div class="col-12 position-relative">
+                                <OutlineInput Id="Account_NewPassword" Label="New Password" type="password" @bind-Value="_new" autocomplete="new-password" />
+                                <Validation Message="@_password["NewPassword"]" />
+                            </div>
+                            <div class="col-12 position-relative">
+                                <OutlineInput Id="Account_ConfirmPassword" Label="Confirm New Password" type="password" @bind-Value="_confirm" autocomplete="new-password" />
+                                <Validation Message="@(_password["ConfirmNewPassword"])" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-5" disabled="@_password.Busy">@(_password.Busy ? "Saving…" : me.HasPassword ? "Change Password" : "Set Password")</button>
+                    }
+                </form>
+            </div>
+        </div>
+    }
+    else
+    {
+        <LoadingMessage Text="Loading your details…" />
+    }
+</AccountShell>
+
+@code {
+    [PersistentState] public UserDetails? Me { get; set; }
+
+    private readonly Sending _email = new(), _password = new();
+    private string? _newEmail, _emailSentTo, _current, _new, _confirm;
+    private bool _passwordDone;
+
+    protected override async Task LoadAsync() => Me = await Api.Send(new GetMyProfile());
+
+    private Task ChangeEmailAsync() => _email.RunAsync(async () =>
+    {
+        await Api.Send(new RequestMyEmailChange(_newEmail ?? ""));
+        _emailSentTo = _newEmail?.Trim();
+    });
+
+    private Task PasswordAsync() => _password.RunAsync(async () =>
+    {
+        if (Me!.HasPassword)
+            await Api.Send(new ChangeMyPassword(_current ?? "", _new ?? "", _confirm ?? ""));
+        else
+            await Api.Send(new SetMyPassword(_new ?? "", _confirm ?? ""));
+        _passwordDone = true;
+    });
+
+    /// <summary>A form's send: busy while it runs, then its field messages (or a problem).</summary>
+    private sealed class Sending
+    {
+        private Dictionary<string, string[]> _errors = [];
+        public bool Busy { get; private set; }
+        public string? Problem { get; private set; }
+        public string? this[string field] => _errors.TryGetValue(field, out var messages) ? messages.FirstOrDefault() : null;
+
+        public async Task RunAsync(Func<Task> send)
+        {
+            (Busy, Problem, _errors) = (true, null, []);
+            try
+            {
+                await send();
+            }
+            catch (RequestValidationException invalid)
+            {
+                _errors = invalid.Errors.ToDictionary(e => e.Key, e => e.Value);
+                Problem = invalid.Message;
+            }
+            catch (AppException failure)
+            {
+                Problem = failure.StatusCode == 429 ? "You've tried a few times already. Please wait a few minutes." : failure.Message;
+            }
+            finally
+            {
+                Busy = false;
+            }
+        }
+    }
+}

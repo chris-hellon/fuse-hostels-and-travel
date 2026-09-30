@@ -1,0 +1,195 @@
+@* Legacy BookingDetails: who booked it, the primary guest, description, payment method, source and notes. *@
+
+<MudGrid Spacing="3">
+    @if (!Draft.IsCreate)
+    {
+        <MudItem xs="12">
+            @if (E.DirectFromWebsite)
+            {
+                <MudTextField T="string" Label="Booked By" Value="@("Direct From Website")" Disabled="true" Variant="Variant.Outlined" />
+            }
+            else
+            {
+                <MudAutocomplete T="LookupItem" Label="Booked By" Value="_bookedBy" ValueChanged="SetBookedBy" SearchFunc="SearchStaffAsync"
+                                 ToStringFunc="@(s => s?.Name)" Variant="Variant.Outlined" Disabled="@(!Draft.Abilities.CanChangeSalesPerson || E.Cancelled)"
+                                 MinCharacters="2" DebounceInterval="400" ShowProgressIndicator="true" CoerceText="true"
+                                 HelperText="The staff member credited with this booking" />
+            }
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <MudText Typo="Typo.subtitle2" Class="mb-1">Primary Guest</MudText>
+        @if (E.GuestId is not null && !_changingGuest)
+        {
+            <MudPaper Outlined="true" Elevation="0" Class="pa-4">
+                <div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-2">
+                    <div>
+                        <MudText Typo="Typo.h6"><GuestLink GuestId="@E.GuestId" Name="@E.GuestName" OnSaved="GuestSavedAsync" /></MudText>
+                        @if (_guest?.Profile.Email is { Length: > 0 } email)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@email</MudText>
+                        }
+                    </div>
+                    <div class="d-flex align-center gap-3">
+                        @* Their hostel stay, pinned opposite their name. *@
+                        <GuestStayNote GuestId="@E.GuestId" />
+                        @if (Draft.CanChangeGuest)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.SwapHoriz" OnClick="() => _changingGuest = true">Change</MudButton>
+                        }
+                    </div>
+                </div>
+                @if (_guest is not null && GuestRows().ToList() is { Count: > 0 } rows)
+                {
+                    <MudDivider Class="mb-3" />
+                    <MudGrid Spacing="2">
+                        @foreach (var (label, value) in rows)
+                        {
+                            <MudItem xs="6" sm="4">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@label</MudText>
+                                <MudText Typo="Typo.body2">@value</MudText>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudPaper>
+        }
+        else if (Draft.CanChangeGuest)
+        {
+            <GuestSearchBox Label="Search Primary Guest" EmailRequired="true" OnPick="PickGuestAsync">
+                @if (E.GuestId is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Class="guest-search__create" OnClick="() => _changingGuest = false">Cancel</MudButton>
+                }
+            </GuestSearchBox>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">No primary guest selected.</MudAlert>
+        }
+        @if (_guestMissing && E.GuestId is null)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="guest-search__error">Please select a Primary Guest.</MudText>
+        }
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudTextField T="string" Label="Description" @bind-Value="E.Description" Required="true" RequiredError="Please enter a Description."
+                      MaxLength="2000" HelperText="Enter a description for the Booking" Variant="Variant.Outlined" Disabled="Draft.Locked" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudSelect T="BookingPaymentMethod" Label="Payment Method" @bind-Value="E.PaymentMethod" Variant="Variant.Outlined"
+                   Disabled="@(!Draft.CanChangePaymentMethod || E.Cancelled)"
+                   HelperText="@(Draft.IsCreate ? "Cash marks the booking paid straight away" : "Select a Payment Method")">
+            <MudSelectItem Value="BookingPaymentMethod.Stripe">Stripe</MudSelectItem>
+            <MudSelectItem Value="BookingPaymentMethod.Cash">Cash</MudSelectItem>
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12">
+        <MudSelect T="string" Label="Booking Source" @bind-Value="E.BookingSource" Required="true" RequiredError="Please select a Booking Source."
+                   Clearable="true" Variant="Variant.Outlined" HelperText="Select a Booking Source" Disabled="Draft.Locked">
+            @foreach (var source in Draft.Catalog.Sources)
+            {
+                <MudSelectItem T="string" Value="source">@source</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField T="string" Label="Additional Notes" @bind-Value="E.AdditionalNotes" Lines="3" MaxLength="2000"
+                      HelperText="Enter any Additional Notes eg. dietaries" Variant="Variant.Outlined" Disabled="Draft.Locked" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public BookingDraft Draft { get; set; } = null!;
+
+    private BookingEditor E => Draft.Editor;
+    private LookupItem? _bookedBy;
+    private UserDetails? _guest;
+    private bool _changingGuest;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (E.BookedById is { } id)
+            _bookedBy = new LookupItem(id, E.BookedByName ?? "Staff member");
+        await LoadGuestAsync();
+    }
+
+    /// <summary>Called before leaving the step.</summary>
+    private bool _guestMissing;
+
+    /// <summary>Called before leaving the step: shows the message under the guest search when none is chosen.</summary>
+    public bool Validate()
+    {
+        _guestMissing = E.GuestId is null;
+        StateHasChanged();
+        return !_guestMissing;
+    }
+
+    private async Task LoadGuestAsync()
+    {
+        _guest = null;
+        if (E.GuestId is not { } id)
+            return;
+        try
+        {
+            _guest = await Api.Send(new GetGuest(id));
+        }
+        catch (AppException)
+        {
+            // Without the Guests permission the card just shows the name.
+        }
+    }
+
+    private async Task PickGuestAsync((string Id, GuestName Name) guest)
+    {
+        E.GuestId = guest.Id;
+        E.GuestName = guest.Name.Name;
+        // The primary guest is on every tour: they can't also be an additional guest.
+        foreach (var line in E.Lines)
+            line.GuestIds.RemoveAll(g => g.Equals(guest.Id, StringComparison.OrdinalIgnoreCase));
+        Draft.Reprice();
+        _changingGuest = false;
+        await LoadGuestAsync();
+    }
+
+    private async Task GuestSavedAsync(string name)
+    {
+        E.GuestName = name;
+        await LoadGuestAsync();
+    }
+
+    private void SetBookedBy(LookupItem? staff)
+    {
+        _bookedBy = staff;
+        E.BookedById = staff?.Id;
+        E.BookedByName = staff?.Name;
+    }
+
+    private async Task<IEnumerable<LookupItem>> SearchStaffAsync(string? text, CancellationToken cancellationToken) =>
+        string.IsNullOrWhiteSpace(text) ? [] : await Api.Send(new FindBookingStaff(text), cancellationToken);
+
+    /// <summary>Every detail held for the guest, only the filled ones (legacy).</summary>
+    private IEnumerable<(string Label, string Value)> GuestRows()
+    {
+        var p = _guest!.Profile;
+        (string, string?)[] rows =
+        [
+            ("Phone Number", p.PhoneNumber),
+            ("Gender", Genders.DisplayName(p.Gender)),
+            ("Date of Birth", p.DateOfBirth?.ToString("dd/MM/yyyy")),
+            ("Nationality", Countries.DisplayName(p.Nationality)),
+            ("Address", p.Address),
+            ("City", p.City),
+            ("Zip/Postal Code", p.ZipPostalCode),
+            ("Passport Number", p.PassportNumber),
+            ("Passport Issuing Country", Countries.DisplayName(p.PassportIssuingCountry)),
+            ("Passport Issue Date", p.PassportIssueDate?.ToString("dd/MM/yyyy")),
+            ("Passport Expiry", p.PassportExpiryDate?.ToString("dd/MM/yyyy")),
+            ("Visa Issue Date", p.VisaIssueDate?.ToString("dd/MM/yyyy")),
+            ("Visa Expiry", p.VisaExpiryDate?.ToString("dd/MM/yyyy")),
+        ];
+        return rows.Where(r => !string.IsNullOrWhiteSpace(r.Item2)).Select(r => (r.Item1, r.Item2!));
+    }
+}

@@ -1,0 +1,75 @@
+@page "/admin/permissions"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Roles)]
+
+<AdminPageHeader Title="Permissions" Description="Roles and what they can do." />
+
+<AuthorizeView Context="auth">
+    @if (_roles is null)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else
+    {
+        <MudTable Items="_roles" Hover="true" Elevation="25" Class="entity-table">
+            <ToolBarContent>
+                @if (auth.User.HasPermission(FuseAction.Create, FuseResource.Roles))
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" IconColor="Color.Surface"
+                               OnClick="() => EditAsync(null)">Create</MudButton>
+                }
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh>Name</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh Style="text-align:right">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Name @if (context.IsDefault) { <MudChip T="string" Size="Size.Small" Class="ml-2">built in</MudChip> }</MudTd>
+                <MudTd>@context.Description</MudTd>
+                <MudTd Style="text-align:right">
+                    <RowMenu>
+                        @if (auth.User.HasPermission(FuseAction.View, FuseResource.RoleClaims))
+                        {
+                            <MudMenuItem Href="@($"/admin/permissions/{context.Id}")">Manage Permissions</MudMenuItem>
+                        }
+                        @if (auth.User.HasPermission(FuseAction.Update, FuseResource.Roles))
+                        {
+                            <MudMenuItem OnClick="() => AfterMenuCloses(() => EditAsync(context))">Edit</MudMenuItem>
+                        }
+                        @if (!context.IsDefault && auth.User.HasPermission(FuseAction.Delete, FuseResource.Roles))
+                        {
+                            <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => DeleteAsync(context))">Delete</MudMenuItem>
+                        }
+                    </RowMenu>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</AuthorizeView>
+
+@code {
+    private IReadOnlyList<RoleSummary>? _roles;
+
+    private Task AfterMenuCloses(Func<Task> action) => MenuActions.AfterMenuCloses(action, DispatchExceptionAsync);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => Snackbar.TryAsync(async () => _roles = await Api.Send(new ListRoles()));
+
+    private async Task EditAsync(RoleSummary? role)
+    {
+        var parameters = new DialogParameters<RoleDialog> { { d => d.Role, role } };
+        var dialog = await Dialogs.ShowAsync<RoleDialog>(role is null ? "Create role" : $"Edit {role.Name}", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small });
+        if (!(await dialog.Result)!.Canceled)
+            await LoadAsync();
+    }
+
+    private async Task DeleteAsync(RoleSummary role)
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Delete role", $"Delete the {role.Name} role?", yesText: "Delete", cancelText: "Cancel") != true)
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteRole(role.Id)), $"{role.Name} deleted."))
+            await LoadAsync();
+    }
+}

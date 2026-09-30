@@ -1,0 +1,157 @@
+@using Fuse.Contracts.Packages
+@using Fuse.Contracts.Tours
+
+<StepToolbar Title="Tours" Subtitle="@Summary">
+    <SecondaryActions>
+        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Outlined.Sell" OnClick="EditTiersAsync">Price tiers</MudButton>
+    </SecondaryActions>
+    <ChildContent>
+        @if (Draft.Tiers.Count > 0)
+        {
+            <div class="package-grid__tier">
+                <MudSelect T="DefaultIdType" Label="Editing tier" Value="Tier!.Key" ValueChanged="k => _tierKey = k" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+                    @foreach (var tier in Draft.Tiers)
+                    {
+                        <MudSelectItem T="DefaultIdType" Value="tier.Key">@tier.Title</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+        }
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddToursAsync">Add tours</MudButton>
+    </ChildContent>
+</StepToolbar>
+<SavedWithParentNote Parent="package" />
+
+@if (Draft.Items.Count == 0)
+{
+    <div class="admin-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.Tour" Size="Size.Large" Class="mud-text-secondary" />
+        <MudText Typo="Typo.body2">Use <b>Add tours</b> to build the package. It needs at least two.</MudText>
+    </div>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Elevation="0" Class="mud-table admin-subtable package-grid">
+        <thead>
+            <tr>
+                <th>Tour</th>
+                <th class="package-grid__money">@Tier!.Title price</th>
+                <th class="package-grid__qty">Qty</th>
+                @if (HasCommission)
+                {
+                    <th class="package-grid__qty">
+                        <MudTooltip Text="The package commission pays only when every tour reaches its own minimum.">Min pax</MudTooltip>
+                    </th>
+                    <th>Counted</th>
+                }
+                <th class="package-grid__money">Line total</th>
+                <th style="width: 120px"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Draft.Items)
+            {
+                var index = Draft.Items.IndexOf(item);
+                <tr @key="item">
+                    <td>
+                        <div>@item.TourName</div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Normal price @NormalPrice(item.TourId)</MudText>
+                    </td>
+                    <td class="package-grid__money">
+                        @* Keyed by tier so switching tiers swaps the field instead of reusing the old value. *@
+                        <MudNumericField @key="Tier!.Key" T="decimal" Value="@item.Prices.GetValueOrDefault(Tier.Key)" ValueChanged="v => item.Prices[Tier.Key] = Math.Max(0, v)"
+                                         Min="0" Format="N2" HideSpinButtons="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start" AdornmentText="$" aria-label="@($"{Tier.Title} price for {item.TourName}")" />
+                    </td>
+                    <td class="package-grid__qty">
+                        <MudNumericField T="int" @bind-Value="item.Quantity" Min="1" Margin="Margin.Dense" Variant="Variant.Outlined" aria-label="Quantity" />
+                    </td>
+                    @if (HasCommission)
+                    {
+                        <td class="package-grid__qty">
+                            <MudNumericField T="int?" Value="item.MinimumPax" ValueChanged="v => item.MinimumPax = v is > 0 ? v : null" Min="1" HideSpinButtons="true"
+                                             Placeholder="None" Margin="Margin.Dense" Variant="Variant.Outlined" aria-label="Minimum pax" />
+                        </td>
+                        <td>
+                            <MudSelect T="CommissionScope" Value="@(item.MinimumPaxScope ?? CommissionScope.PerDeparture)" ValueChanged="v => item.MinimumPaxScope = v"
+                                       Disabled="@(item.MinimumPax is null)" Margin="Margin.Dense" Variant="Variant.Outlined" Dense="true">
+                                <MudSelectItem T="CommissionScope" Value="CommissionScope.PerDeparture">Per departure</MudSelectItem>
+                                <MudSelectItem T="CommissionScope" Value="CommissionScope.PerDay">Per day</MudSelectItem>
+                            </MudSelect>
+                        </td>
+                    }
+                    <td class="package-grid__money"><span class="admin-amount">$@((item.Prices.GetValueOrDefault(Tier.Key) * item.Quantity).ToString("N2"))</span></td>
+                    <td class="admin-row-actions">
+                        <MudTooltip Text="Move up"><MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small" Disabled="@(index == 0)" OnClick="() => Draft.Move(item, -1)" aria-label="Move up" /></MudTooltip>
+                        <MudTooltip Text="Move down"><MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" Disabled="@(index == Draft.Items.Count - 1)" OnClick="() => Draft.Move(item, 1)" aria-label="Move down" /></MudTooltip>
+                        <MudTooltip Text="Remove"><MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => RemoveAsync(item)" aria-label="Remove" /></MudTooltip>
+                    </td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr class="package-grid__total">
+                <td>@Tier!.Title total<MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Per person</MudText></td>
+                <td colspan="@(HasCommission ? 4 : 2)"></td>
+                <td class="package-grid__money"><span class="admin-amount">$@Draft.TotalFor(Tier).ToString("N2")</span></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public PackageDraft Draft { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<PackageTourOption> TourOptions { get; set; } = [];
+
+    /// <summary>Minimum pax only affects the package's own commission, so it's shown only when there is one.</summary>
+    private DefaultIdType? _tierKey;
+
+    /// <summary>The tier whose prices the grid edits (legacy "Editing tier"); the first one until another is picked.</summary>
+    private TierDraft? Tier => Draft.Tiers.FirstOrDefault(t => t.Key == _tierKey) ?? Draft.Tiers.FirstOrDefault();
+
+    private bool HasCommission => Draft.Details.CommissionAmount is not null;
+
+    private string Summary => Draft.Items.Count switch
+    {
+        0 => "No tours yet",
+        1 => "1 tour, a package needs at least two",
+        var n => $"{n} tours · {Draft.Tiers.Count} price tier{(Draft.Tiers.Count == 1 ? "" : "s")}"
+                  + (Draft.Tiers.Count > 1 ? " · " + string.Join(", ", Draft.Tiers.Select(t => $"{t.Title} ${Draft.TotalFor(t):N2}")) : ""),
+    };
+
+    private string NormalPrice(DefaultIdType tourId) =>
+        TourOptions.FirstOrDefault(t => t.Id == tourId) is { PriceLow: { } low, PriceHigh: { } high }
+            ? low == high ? $"${low:N2}" : $"${low:N2} – ${high:N2}"
+            : "not set";
+
+    private async Task AddToursAsync()
+    {
+        var options = TourOptions.Select(t => new PickOption(t.Id, t.Name, t.PriceLow is null ? null : NormalPrice(t.Id))).ToList();
+        var chosen = await PickerDialog.ShowAsync(Dialogs, "Add tours", options, [.. Draft.Items.Select(i => i.TourId)], "Search tours", "Add tours");
+        Draft.AddTours(TourOptions.Where(t => chosen.Contains(t.Id)).Select(t => (t.Id, t.Name)));
+    }
+
+    private async Task EditTiersAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<PriceTiersDialog>(null, new DialogParameters<PriceTiersDialog> { { d => d.Tiers, Draft.Tiers } },
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, BackdropClick = false });
+        if (await dialog.Result is { Canceled: false, Data: List<TierDraft> tiers })
+            Draft.SetTiers(tiers);
+    }
+
+    private async Task RemoveAsync(ItemDraft item)
+    {
+        if (await Dialogs.ConfirmAsync("Remove this tour?", $"{item.TourName} will be removed when you save the package.", "Remove tour", "Keep tour"))
+            Draft.Items.Remove(item);
+    }
+
+    /// <summary>Checked before Save: at least two tours, as the server also requires.</summary>
+    public bool Validate()
+    {
+        if (Draft.Items.Count >= 2)
+            return true;
+        Snackbar.Add("A package needs at least two tours.", Severity.Warning);
+        return false;
+    }
+}

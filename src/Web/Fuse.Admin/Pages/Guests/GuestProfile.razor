@@ -1,0 +1,60 @@
+@page "/admin/guests/{Id}/profile"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Guests)]
+
+<AdminPageHeader Title="@(_user?.FullName ?? "Guest")" Description="Guest profile">
+    <MudButton Href="/admin/guests" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Back to guests</MudButton>
+</AdminPageHeader>
+
+@if (_user is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <AuthorizeView Context="auth">
+        @{ var canEdit = auth.User.HasPermission(FuseAction.Update, FuseResource.Guests); }
+        <MudPaper Class="pa-6" Elevation="25">
+            <MudText Typo="Typo.caption" Class="mb-4">
+                Signed up @(_user.SignUpDate?.ToString("dd/MM/yyyy") ?? "—")
+                @if (!string.IsNullOrEmpty(_user.CloudbedsGuestId))
+                {
+                    <span> · Cloudbeds guest @_user.CloudbedsGuestId</span>
+                }
+            </MudText>
+            <MudForm @ref="_form" ReadOnly="!canEdit">
+                <ProfileForm Profile="_user.Profile" />
+            </MudForm>
+            @if (canEdit)
+            {
+                <div class="d-flex justify-end mt-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save</MudButton>
+                </div>
+            }
+        </MudPaper>
+        <MudPaper Class="pa-6 mt-4" Elevation="25">
+            <MudText Typo="Typo.h6" Class="mb-2">Bookings</MudText>
+            <GuestBookings GuestId="@Id" />
+        </MudPaper>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private UserDetails? _user;
+    private MudForm? _form;
+    private bool _saving;
+
+    protected override async Task OnParametersSetAsync() =>
+        await Snackbar.TryAsync(async () => _user = await Api.Send(new GetGuest(Id)));
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        _saving = true;
+        await Snackbar.TryAsync(async () => await Api.Send(new UpdateGuest(Id, _user!.Profile)), "Guest saved.");
+        _saving = false;
+    }
+}

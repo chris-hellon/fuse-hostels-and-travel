@@ -1,0 +1,77 @@
+@* Pick several items from a searchable list (e.g. tours to add to a package). Returns the chosen ids. *@
+
+<MudDialog ContentClass="picker-dialog__content">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="_search" Placeholder="@SearchPlaceholder" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" DebounceInterval="150" Clearable="true" Class="mb-3" />
+        <div class="picker-dialog__list">
+            @if (Filtered.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary pa-4">Nothing matches your search.</MudText>
+            }
+            @foreach (var option in Filtered)
+            {
+                var chosen = _chosen.Contains(option.Id);
+                <label class="@($"picker-dialog__row{(chosen ? " is-chosen" : "")}")" @key="option.Id">
+                    <MudCheckBox T="bool" Value="chosen" ValueChanged="v => Toggle(option.Id, v)" Dense="true" />
+                    <span class="picker-dialog__name">@option.Name</span>
+                    @if (option.Detail is not null)
+                    {
+                        <span class="picker-dialog__detail">@option.Detail</span>
+                    }
+                </label>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_chosen.Count == 0)" OnClick="() => Dialog.Close(DialogResult.Ok(_chosen.ToList()))">
+            @(_chosen.Count == 0 ? ConfirmText : $"{ConfirmText} ({_chosen.Count})")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<PickOption> Options { get; set; } = [];
+    /// <summary>Ids already in use (not offered).</summary>
+    [Parameter] public IReadOnlyCollection<DefaultIdType> Excluded { get; set; } = [];
+    [Parameter] public string SearchPlaceholder { get; set; } = "Search";
+    [Parameter] public string ConfirmText { get; set; } = "Add";
+
+    private string? _search;
+    private readonly HashSet<DefaultIdType> _chosen = [];
+
+    private List<PickOption> Filtered =>
+    [
+        .. Options.Where(o => !Excluded.Contains(o.Id)
+                              && (string.IsNullOrWhiteSpace(_search) || o.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))),
+    ];
+
+    private void Toggle(DefaultIdType id, bool chosen)
+    {
+        if (chosen)
+            _chosen.Add(id);
+        else
+            _chosen.Remove(id);
+    }
+
+    /// <summary>Shows the picker; returns the chosen ids (empty when cancelled).</summary>
+    public static async Task<IReadOnlyList<DefaultIdType>> ShowAsync(IDialogService dialogs, string title, IReadOnlyList<PickOption> options,
+        IReadOnlyCollection<DefaultIdType>? excluded = null, string searchPlaceholder = "Search", string confirmText = "Add")
+    {
+        var dialog = await dialogs.ShowAsync<PickerDialog>(null, new DialogParameters<PickerDialog>
+        {
+            { d => d.Title, title },
+            { d => d.Options, options },
+            { d => d.Excluded, excluded ?? [] },
+            { d => d.SearchPlaceholder, searchPlaceholder },
+            { d => d.ConfirmText, confirmText },
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, BackdropClick = false });
+        return await dialog.Result is { Canceled: false, Data: List<DefaultIdType> ids } ? ids : [];
+    }
+}

@@ -1,0 +1,52 @@
+@* Legacy #hostelSlideshow (MDB carousel-fade): photos filling the banner, fading to the next every five
+   seconds, with previous / next arrows when there's more than one. *@
+@implements IDisposable
+
+<div class="carousel slide carousel-fade fuse-slideshow position-absolute start-0 w-100 h-100 top-0">
+    <div class="carousel-inner h-100">
+        @for (var i = 0; i < Images.Count; i++)
+        {
+            <div class="@($"carousel-item h-100{(i == _current ? " active" : "")}")" @key="Images[i]"
+                 style="@($"background-size: cover; background-repeat: no-repeat; background-position-y: 80%; background-image:{CdnImages.Background(Images[i], 1800)};")">
+            </div>
+        }
+    </div>
+    @if (Images.Count > 1)
+    {
+        <button class="carousel-control-prev" type="button" @onclick="() => Show(_current - 1)">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Previous</span>
+        </button>
+        <button class="carousel-control-next" type="button" @onclick="() => Show(_current + 1)">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Next</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Images { get; set; } = [];
+
+    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(5);
+
+    private int _current;
+    private Timer? _timer;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Only once interactive: prerendered HTML shows the first photo.
+        if (firstRender && Images.Count > 1)
+            _timer = new Timer(_ => InvokeAsync(() => Show(_current + 1, fromTimer: true)), null, Interval, Interval);
+    }
+
+    private void Show(int index, bool fromTimer = false)
+    {
+        _current = (index % Images.Count + Images.Count) % Images.Count;
+        // A click restarts the wait, so the photo just chosen stays up for the full interval.
+        if (!fromTimer)
+            _timer?.Change(Interval, Interval);
+        StateHasChanged();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

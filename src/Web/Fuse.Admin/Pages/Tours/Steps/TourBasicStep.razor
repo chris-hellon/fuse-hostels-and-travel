@@ -1,0 +1,71 @@
+@using Fuse.Contracts.Tours
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="5">
+         <MudTextField Label="Name" @bind-Value="Tour.Name" For="@(() => Tour.Name)" Required="true" HelperText="Enter a Tour name" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="5">
+        <MudSelect T="DefaultIdType?" Label="Tour Category" Clearable="true" Variant="Variant.Outlined" @bind-Value="Tour.TourCategoryId"
+                   HelperText="Does this Tour belong to a category?" AnchorOrigin="Origin.BottomLeft">
+            @foreach (var category in Lookups.Categories)
+            {
+                <MudSelectItem T="DefaultIdType?" Value="category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="2" Class="switch-cell">
+        <MudSwitch @bind-Value="Tour.PublishToSite" Color="Color.Primary" Label="Publish to website" />
+    </MudItem>
+</MudGrid>
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudSelect T="DefaultIdType" MultiSelection="true" SelectedValues="Tour.LocationIds" SelectedValuesChanged="v => Tour.LocationIds = [.. v]"
+                   Label="Location" HelperText="Select a Location" Required="true" Variant="Variant.Outlined" Clearable="true" AnchorOrigin="Origin.BottomLeft"
+                   ToStringFunc="id => Lookups.Locations.FirstOrDefault(d => d.Id == id)?.Name ?? string.Empty">
+            @foreach (var location in Lookups.Locations)
+            {
+                <MudSelectItem T="DefaultIdType" Value="location.Id">@location.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudSelect T="DefaultIdType" MultiSelection="true" SelectedValues="Tour.PickupPropertyIds" SelectedValuesChanged="v => Tour.PickupPropertyIds = [.. v]"
+                   Label="Pick Up Location(s)" HelperText="Select Pick Up Location(s)" Required="true" Variant="Variant.Outlined" Clearable="true" AnchorOrigin="Origin.BottomLeft"
+                   ToStringFunc="id => Lookups.Pickups.FirstOrDefault(p => p.Id == id.ToString())?.Name ?? string.Empty">
+            @foreach (var property in Lookups.Pickups)
+            {
+                <MudSelectItem T="DefaultIdType" Value="Guid.Parse(property.Id)">@property.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Telephone Number" InputType="InputType.Telephone" @bind-Value="Tour.TelephoneNumber" HelperText="Enter a Telephone Number" Variant="Variant.Outlined" />
+    </MudItem>
+</MudGrid>
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Day Duration" @bind-Value="Tour.DayDuration" HelperText="Enter a Day Duration eg. 3" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Night Duration" @bind-Value="Tour.NightDuration" HelperText="Enter a Night Duration eg. 2" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudTextField Label="Hour Duration" @bind-Value="Tour.HourDuration" HelperText="Enter an Hour Duration eg. 1-1.5" Variant="Variant.Outlined" />
+    </MudItem>
+</MudGrid>
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="3">
+        <MudNumericField T="int?" Label="Minimum Capacity" Required="true" @bind-Value="Tour.MinCapacity" For="@(() => Tour.MinCapacity)" HelperText="Enter a Min Pax Capacity" Variant="Variant.Outlined" HideSpinButtons="true" />
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudNumericField T="int?" Label="Maximum Capacity" @bind-Value="Tour.MaxCapacity" For="@(() => Tour.MaxCapacity)" HelperText="Enter a Max Pax Capacity" Variant="Variant.Outlined" HideSpinButtons="true" />
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField Label="Additional Information" @bind-Value="Tour.AdditionalInformation" HelperText="eg. Incl. Resort Stay & Choice of Tour/Activity" Variant="Variant.Outlined" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public TourInput Tour { get; set; } = null!;
+    [Parameter, EditorRequired] public TourLookups Lookups { get; set; } = null!;
+}

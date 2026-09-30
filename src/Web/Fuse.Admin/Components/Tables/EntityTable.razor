@@ -1,0 +1,275 @@
+@typeparam T
+
+@*
+    The legacy back-office table (same markup and classes, so admin.css styles it identically):
+    toolbar with Create / Export / Reload, search, sortable columns, per-row Actions menu, pager.
+    Data comes from Load (server paging, sorting and searching).
+*@
+
+<style>
+    .mud-table-container {
+        overflow: auto;
+    }
+</style>
+
+@* Legacy "Advanced Search": a panel above the table with the search box and extra filters. *@
+@if (AdvancedSearchContent is not null)
+{
+    <MudExpansionPanels Elevation="Elevation" Class="entity-table__advanced">
+        <MudExpansionPanel Text="Advanced Search" @bind-Expanded="ExpandAdvancedSearch" Dense="Dense">
+            @if (Searchable)
+            {
+                <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Immediate="true"
+                              Placeholder="@($"Search for {EntityNamePlural}")" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" DebounceInterval="500" />
+            }
+            @AdvancedSearchContent
+        </MudExpansionPanel>
+    </MudExpansionPanels>
+}
+
+<MudTable @ref="_table" T="T" ServerData="LoadAsync" Elevation="Elevation" Loading="_loading" LoadingProgressColor="Color.Secondary" Class="entity-table mb-0" Dense="Dense">
+    <ToolBarContent>
+        <div class="justify-center mud-text-align-center">
+            @if (ShowCreate)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="OnCreate" StartIcon="@Icons.Material.Filled.Add" IconColor="Color.Surface">
+                    @(CreateText ?? "Create")
+                </MudButton>
+            }
+            @if (ShowExport)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="OnExport" StartIcon="@Icons.Material.Filled.FileDownload"
+                           Style="margin-left: 8px;">Export</MudButton>
+            }
+            <MudButton Variant="Variant.Outlined" OnClick="ReloadAsync" StartIcon="@Icons.Material.Filled.Refresh"
+                       Color="Color.Primary" Style="margin-left: 8px;">Reload</MudButton>
+            @ToolbarContent
+        </div>
+        <MudSpacer />
+        @if (Searchable && !(AdvancedSearchContent is not null && ExpandAdvancedSearch))
+        {
+            <MudTextField T="string" Value="_search" ValueChanged="SearchAsync" Immediate="true" FullWidth="false"
+                          Placeholder="@($"Search for {EntityNamePlural}")" Adornment="Adornment.End"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0 mb-3"
+                          DebounceInterval="500" />
+        }
+    </ToolBarContent>
+
+    <HeaderContent>
+        @foreach (var field in Fields)
+        {
+            <MudTh Style="@(field.Width is null ? null : $"width: {field.Width}; min-width: 0; white-space: nowrap")">
+                @if (string.IsNullOrEmpty(field.SortLabel))
+                {
+                    @field.Title
+                }
+                else
+                {
+                    <MudTableSortLabel T="T" SortLabel="@field.SortLabel">@field.Title</MudTableSortLabel>
+                }
+            </MudTh>
+        }
+        @if (HasActions)
+        {
+            <MudTh Style="text-align:right">Actions</MudTh>
+        }
+    </HeaderContent>
+
+    <RowTemplate>
+        @foreach (var field in Fields)
+        {
+            <MudTd DataLabel="@field.Title" Style="@(field.Width is null ? null : "min-width: 0; white-space: nowrap")">
+                @if (field.IsBool)
+                {
+                    <MudCheckBox T="bool" Value="@((bool)(field.Value(context) ?? false))" ReadOnly="true" Color="Color.Secondary" />
+                }
+                else if (field.Template is not null)
+                {
+                    @field.Template(context)
+                }
+                else
+                {
+                    <MudHighlighter Text="@field.Value(context)?.ToString()" HighlightedText="@_search" />
+                }
+            </MudTd>
+        }
+        @if (HasActions)
+        {
+            <MudTd DataLabel="Actions" Style="text-align: right;">
+                <div class="entity-table__row-actions">
+                @RowButtons?.Invoke(context)
+                @if (HasMenu(context) && SingleAction(context) is { } only)
+                {
+                    @* One action only: an icon button (with its name as the tooltip) rather than a menu of one. *@
+                    <RowIconButton Icon="@only.Icon" Label="@only.Label" Danger="@only.Danger" OnClick="() => only.Run.InvokeAsync(context)" />
+                }
+                else if (HasMenu(context))
+                {
+                <RowMenu>
+                    @if (ShowEdit && (CanEdit?.Invoke(context) ?? true))
+                    {
+                        <MudMenuItem OnClick="() => AfterMenuCloses(OnEdit, context)">@EditText</MudMenuItem>
+                    }
+                    @if (ShowDelete && (CanDelete?.Invoke(context) ?? true))
+                    {
+                        <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(OnDelete, context)">Delete</MudMenuItem>
+                    }
+                    @ExtraActions?.Invoke(context)
+                </RowMenu>
+                }
+                </div>
+            </MudTd>
+        }
+    </RowTemplate>
+
+    <ChildRowContent>
+        @if (ChildRowContent is not null)
+        {
+            @ChildRowContent(context)
+        }
+    </ChildRowContent>
+
+    <NoRecordsContent>
+        <MudText>No matching records found</MudText>
+    </NoRecordsContent>
+
+    <PagerContent>
+        <MudTablePager RowsPerPageString="Rows Per Page" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    /// <summary>Edit/Delete open dialogs, so they run after the actions menu has closed (see <see cref="MenuActions"/>).</summary>
+    private Task AfterMenuCloses(EventCallback<T> action, T item) =>
+        MenuActions.AfterMenuCloses(() => action.InvokeAsync(item), DispatchExceptionAsync);
+
+    [Parameter, EditorRequired] public IReadOnlyList<EntityField<T>> Fields { get; set; } = [];
+    [Parameter, EditorRequired] public Func<GridRequest, CancellationToken, Task<PagedResult<T>>> Load { get; set; } = null!;
+    [Parameter] public string EntityNamePlural { get; set; } = "records";
+    [Parameter] public bool Searchable { get; set; } = true;
+    [Parameter] public bool Dense { get; set; }
+    /// <summary>25 on a page (legacy); 0 when the table sits inside a card.</summary>
+    [Parameter] public int Elevation { get; set; } = 25;
+    [Parameter] public string? CreateText { get; set; }
+    [Parameter] public string EditText { get; set; } = "Edit";
+
+    /// <summary>
+    /// The permission resource (e.g. FuseResource.Tours). When set, Create / Edit / Delete only show
+    /// for users with the Create / Update / Delete permission on it, as the legacy table did.
+    /// </summary>
+    [Parameter] public string? Resource { get; set; }
+
+    [Parameter] public EventCallback OnCreate { get; set; }
+    [Parameter] public EventCallback OnExport { get; set; }
+    [Parameter] public EventCallback<T> OnEdit { get; set; }
+    [Parameter] public EventCallback<T> OnDelete { get; set; }
+    [Parameter] public Func<T, bool>? CanDelete { get; set; }
+    [Parameter] public Func<T, bool>? CanEdit { get; set; }
+    [Parameter] public RenderFragment<T>? ExtraActions { get; set; }
+    /// <summary>Buttons beside a row's Actions menu (legacy ActionsContent, e.g. "Show Details").</summary>
+    [Parameter] public RenderFragment<T>? RowButtons { get; set; }
+    /// <summary>Content under a row (legacy ChildRowContent): render a full-width <c>MudTr</c>, or nothing.</summary>
+    [Parameter] public RenderFragment<T>? ChildRowContent { get; set; }
+    /// <summary>
+    /// Whether a row's Actions menu has anything in it; when set and false the menu is hidden (the row's
+    /// own buttons still show). Rows without a rule always get the menu.
+    /// </summary>
+    [Parameter] public Func<T, bool>? ShowMenu { get; set; }
+    [Parameter] public RenderFragment? ToolbarContent { get; set; }
+    /// <summary>Extra filters in the legacy "Advanced Search" panel above the table (the search box moves there while it's open).</summary>
+    [Parameter] public RenderFragment? AdvancedSearchContent { get; set; }
+    /// <summary>Whether the Advanced Search panel starts open (legacy ExpandAdvancedSearch).</summary>
+    [Parameter] public bool ExpandAdvancedSearch { get; set; }
+    /// <summary>What the search box starts with (e.g. a booking number from a link).</summary>
+    [Parameter] public string? InitialSearch { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationState { get; set; }
+    private ClaimsPrincipal? _user;
+
+    private bool ShowCreate => OnCreate.HasDelegate && Can(FuseAction.Create);
+    private bool ShowEdit => OnEdit.HasDelegate && Can(FuseAction.Update);
+    private bool ShowDelete => OnDelete.HasDelegate && Can(FuseAction.Delete);
+    private bool ShowExport => OnExport.HasDelegate && Can(FuseAction.Export);
+    private bool HasActions => ShowEdit || ShowDelete || ExtraActions is not null || RowButtons is not null;
+
+    private sealed record RowAction(string Label, string Icon, bool Danger, EventCallback<T> Run);
+
+    /// <summary>The row's only action when there are no extra ones and just one of Edit / Delete applies; else null.</summary>
+    private RowAction? SingleAction(T row)
+    {
+        if (ExtraActions is not null)
+            return null;
+        var edit = ShowEdit && (CanEdit?.Invoke(row) ?? true);
+        var delete = ShowDelete && (CanDelete?.Invoke(row) ?? true);
+        return (edit, delete) switch
+        {
+            (true, false) => new(EditText, EditText == "View" ? Icons.Material.Outlined.Visibility : Icons.Material.Outlined.Edit, false, OnEdit),
+            (false, true) => new("Delete", Icons.Material.Outlined.Delete, true, OnDelete),
+            _ => null,
+        };
+    }
+
+    private bool HasMenu(T row) => (ShowEdit || ShowDelete || ExtraActions is not null) && (ShowMenu?.Invoke(row) ?? true);
+
+    /// <summary>The number of columns, for a child row spanning the table.</summary>
+    public int ColumnCount => Fields.Count + (HasActions ? 1 : 0);
+
+    private bool Can(string action) => Resource is null || _user?.HasPermission(action, Resource) == true;
+
+    private string? _appliedSearch;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthenticationState is not null)
+            _user = (await AuthenticationState).User;
+        // A new link to the same page (e.g. another booking's) searches again.
+        if (InitialSearch != _appliedSearch)
+        {
+            _search = _appliedSearch = InitialSearch;
+            if (_table is not null)
+                await ReloadAsync();
+        }
+    }
+
+    private MudTable<T>? _table;
+    private string? _search;
+    private bool _loading;
+
+    public Task ReloadAsync() => _table?.ReloadServerData() ?? Task.CompletedTask;
+
+    private async Task SearchAsync(string? search)
+    {
+        _search = search;
+        await ReloadAsync();
+    }
+
+    private async Task<TableData<T>> LoadAsync(TableState state, CancellationToken cancellationToken)
+    {
+        _loading = true;
+        try
+        {
+            var page = await Load(new GridRequest(
+                state.Page + 1,
+                state.PageSize,
+                string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                string.IsNullOrEmpty(state.SortLabel) || state.SortDirection == SortDirection.None
+                    ? null
+                    : [$"{state.SortLabel}{(state.SortDirection == SortDirection.Descending ? " desc" : "")}"]), cancellationToken);
+            return new TableData<T> { Items = page.Items, TotalItems = page.TotalCount };
+        }
+        catch (OperationCanceledException)
+        {
+            return new TableData<T> { Items = [], TotalItems = 0 };
+        }
+        catch (AppException failure)
+        {
+            Snackbar.Add(failure.Message, Severity.Error);
+            return new TableData<T> { Items = [], TotalItems = 0 };
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

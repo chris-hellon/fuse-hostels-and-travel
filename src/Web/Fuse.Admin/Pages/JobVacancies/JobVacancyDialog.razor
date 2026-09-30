@@ -1,0 +1,49 @@
+@using System.Text.Json
+@using Fuse.Contracts.JobVacancies
+
+@* Create / edit a job vacancy: its details and description in the Content sidebar, saved together. *@
+
+<ContentDialog Title="@(IsCreate ? "Create Job Vacancy" : "Edit Job Vacancy")" IsCreate="IsCreate" Loading="_input is null" Sections="_sections"
+               Noun="job vacancy" Save="SaveAsync" HasChanges="HasChanges" />
+
+@code {
+    [Parameter] public DefaultIdType? VacancyId { get; set; }
+
+    private bool IsCreate => VacancyId is null;
+    private JobVacancyInput? _input;
+    private string _original = "";
+    private IReadOnlyList<ContentSection> _sections = [];
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var input = IsCreate ? new JobVacancyInput() : await Api.Send(new GetJobVacancy(VacancyId!.Value));
+        _sections =
+        [
+            ContentSection.Fields("Details", "Title, location and how to apply", DetailsForm(input),
+                () => !string.IsNullOrWhiteSpace(input.JobTitle) && !string.IsNullOrWhiteSpace(input.Location), required: true),
+            new("Description", "The job itself", () => input.Description, v => input.Description = v),
+        ];
+        _original = JsonSerializer.Serialize(input);
+        _input = input;
+    });
+
+    private RenderFragment DetailsForm(JobVacancyInput input) =>
+        @<MudGrid Spacing="3">
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Job title" @bind-Value="input.JobTitle" Required="true" RequiredError="Job title is required" MaxLength="256" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Location" @bind-Value="input.Location" Required="true" RequiredError="Location is required" MaxLength="256" Variant="Variant.Outlined"
+                              HelperText="e.g. Hoi An" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField Label="Call to action" @bind-Value="input.CallToAction" MaxLength="1024" Variant="Variant.Outlined"
+                              HelperText="Where to apply: a job application website or an email address" />
+            </MudItem>
+        </MudGrid>;
+
+    private bool HasChanges() => _input is not null && JsonSerializer.Serialize(_input) != _original;
+
+    private async Task<bool> SaveAsync() =>
+        await Snackbar.TryAsync(async () => await Api.Send(new SaveJobVacancy(VacancyId, _input!)), IsCreate ? "Job vacancy created." : "Job vacancy saved.");
+}

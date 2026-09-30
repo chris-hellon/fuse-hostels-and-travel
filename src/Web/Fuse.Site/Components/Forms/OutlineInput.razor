@@ -1,0 +1,31 @@
+@* The MDB outline input legacy used (data-mdb-input-init): the field, its floating label and the notch
+   the script added. Extra attributes (type, readonly, placeholder, onclick…) go on the <input>. *@
+
+<div class="@($"form-outline {Class}".TrimEnd())" style="@Style">
+    @Icon
+    <input id="@Id" class="@($"form-control {InputClass}{(string.IsNullOrEmpty(Value) ? "" : " active")}")" style="@InputStyle" value="@Value"
+           @oninput="InputAsync" @attributes="AdditionalAttributes" />
+    <label class="form-label" for="@Id" style="margin-left: 0px;">@Label</label>
+    <FormNotch />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    /// <summary>Classes on the outline (e.g. "mb-4").</summary>
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public string? InputClass { get; set; }
+    [Parameter] public string? InputStyle { get; set; }
+    /// <summary>A trailing icon (e.g. the calendar).</summary>
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private Task InputAsync(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString();
+        return ValueChanged.InvokeAsync(Value ?? "");
+    }
+}

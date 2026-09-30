@@ -1,0 +1,84 @@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+@* Rich text (HTML) field. Stores the same Quill HTML the legacy editors produced. *@
+
+@if (Label is not null)
+{
+    <MudText Typo="Typo.caption" Class="mb-1">@Label</MudText>
+}
+<div class="@($"admin-richtext{(Fill ? " admin-richtext--fill" : "")}")">
+    <div @ref="_element" style="@(Fill ? null : $"min-height: {Height}px")"></div>
+</div>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public int Height { get; set; } = 40;
+    [Parameter] public bool ReadOnly { get; set; }
+    /// <summary>Fill the parent's height: the toolbar stays put and the text scrolls beneath it.</summary>
+    [Parameter] public bool Fill { get; set; }
+    /// <summary>Stores a picture from the image button and returns its URL. Without it, Quill inlines pictures as base64.</summary>
+    [Parameter] public Func<FileUpload, Task<string>>? UploadImage { get; set; }
+
+    private ElementReference _element;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<RichText>? _self;
+    private string? _lastSent;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _self = DotNetObjectReference.Create(this);
+            _module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Fuse.Admin/richtext.js");
+            await _module.InvokeVoidAsync("create", _element, Value, _self, ReadOnly, UploadImage is not null);
+            _lastSent = Value;
+        }
+        else if (_module is not null && Value != _lastSent)
+        {
+            _lastSent = Value;
+            await _module.InvokeVoidAsync("setHtml", _element, Value);
+        }
+    }
+
+    [JSInvokable]
+    public async Task Changed(string html)
+    {
+        var value = html is "<p></p>" or "<p><br></p>" ? "" : html;
+        _lastSent = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+
+    [JSInvokable("UploadImage")]
+    public async Task<string?> UploadPickedImageAsync(string name, string contentType, string base64)
+    {
+        string? url = null;
+        if (UploadImage is { } upload)
+            await Snackbar.TryAsync(async () => url = await upload(new FileUpload(name, contentType, Convert.FromBase64String(base64))), "Image added.");
+        return url;
+    }
+
+    /// <summary>Sends any change still waiting for the typing pause.</summary>
+    public async Task FlushAsync()
+    {
+        if (_module is not null)
+            await _module.InvokeVoidAsync("flush", _element);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                // Don't lose the last keystrokes when the editor closes (switching section, leaving a step).
+                await _module.InvokeVoidAsync("flush", _element);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
+        _self?.Dispose();
+    }
+}

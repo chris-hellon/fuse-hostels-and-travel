@@ -1,0 +1,165 @@
+@page "/my-account/bookings/{Id:guid}"
+@inherits AccountPage
+@using Fuse.Contracts.Identity
+@inject NavigationManager Navigation
+
+@* Legacy Manage/Bookings with a booking chosen, redesigned: its state and what's paid and owed (with Pay Now), each
+   tour as a ticket (date, time, who's going, pick-up, price), the payments made, and help. *@
+
+<SeoHead PageName="@(Booking is null ? "My Booking" : $"Booking #{Booking.Reference}")" />
+
+<AccountShell Title="BOOKINGS" Active="@AccountShell.Bookings">
+    <a class="account__back" href="@AccountShell.Bookings"><i class="fas fa-arrow-left-long me-2" aria-hidden="true"></i>ALL BOOKINGS</a>
+    @if (_missing)
+    {
+        <div class="account-empty">
+            <h2 class="display-6">BOOKING NOT FOUND</h2>
+            <p>We couldn't find this booking on your account.</p>
+        </div>
+    }
+    else if (Booking is { } booking)
+    {
+        <div class="booking-head">
+            <div>
+                <h2 class="display-5 mb-1">BOOKING #@booking.Reference</h2>
+                <p class="text-muted mb-0">Booked on @booking.BookedOn.ToString("d MMMM yyyy")</p>
+            </div>
+            <BookingStatusBadge Status="booking.Status" />
+        </div>
+
+        <div class="booking-sums">
+            <div class="booking-sum"><span>TOTAL</span><strong>@Money.Usd(booking.Total)</strong></div>
+            <div class="booking-sum"><span>PAID</span><strong>@Money.Usd(booking.Paid)</strong></div>
+            <div class="@($"booking-sum{(booking.Outstanding > 0 ? " booking-sum--due" : "")}")"><span>TO PAY</span><strong>@Money.Usd(booking.Outstanding)</strong></div>
+            @if (booking.Status == MyBookingStatus.Due)
+            {
+                <div class="booking-sums__pay">
+                    <button type="button" class="btn btn-primary" disabled="@_paying" @onclick="PayAsync">@(_paying ? "Opening…" : $"Pay {Money.Usd(booking.Outstanding)} Now")</button>
+                    @if (_payError is not null)
+                    {
+                        <p class="text-danger small mt-2 mb-0" role="alert">@_payError</p>
+                    }
+                </div>
+            }
+        </div>
+        @if (booking.Status == MyBookingStatus.AwaitingPayment)
+        {
+            <p class="booking-note"><i class="fas fa-clock me-2" aria-hidden="true"></i>We're waiting for your card payment to go through. If you left the payment page, check out again from your basket.</p>
+        }
+
+        <h4 class="tilted display-6 mt-7 mb-5">YOUR TOURS</h4>
+        @foreach (var tour in booking.Tours)
+        {
+            <article class="@($"tour-ticket{(tour.Cancelled ? " is-cancelled" : "")}")">
+                <div class="tour-ticket__date" aria-hidden="true">
+                    <span>@tour.Start.ToString("ddd").ToUpperInvariant()</span>
+                    <strong>@tour.Start.Day</strong>
+                    <span>@tour.Start.ToString("MMM yyyy").ToUpperInvariant()</span>
+                </div>
+                <div class="tour-ticket__photo" style="@(string.IsNullOrEmpty(tour.ImagePath) ? "" : $"background-image:{CdnImages.Background(tour.ImagePath, 500)};")"></div>
+                <div class="tour-ticket__body">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <h3 class="tour-ticket__name">
+                            @if (tour.Slug is { } slug)
+                            {
+                                <a href="@($"/tours/{slug}")">@tour.Name</a>
+                            }
+                            else
+                            {
+                                @tour.Name
+                            }
+                        </h3>
+                        @if (tour.Cancelled)
+                        {
+                            <span class="booking-status booking-status--cancelled">CANCELLED</span>
+                        }
+                    </div>
+                    <ul class="tour-ticket__facts">
+                        <li><i class="fa-solid fa-clock" aria-hidden="true"></i>@tour.Start.ToString("dddd d MMMM yyyy, h:mm tt")@(tour.End is { } end && end > tour.Start ? $" – {(end.Date == tour.Start.Date ? end.ToString("h:mm tt") : end.ToString("d MMM, h:mm tt"))}" : "")</li>
+                        @if (!string.IsNullOrEmpty(tour.Pickup))
+                        {
+                            <li><i class="fa-solid fa-location-dot" aria-hidden="true"></i>Pick-up from @tour.Pickup</li>
+                        }
+                        <li><i class="fa-solid fa-user-group" aria-hidden="true"></i>@string.Join(", ", tour.GuestNames)</li>
+                    </ul>
+                    <div class="tour-ticket__price">
+                        <span>@tour.Guests × @Money.Usd(tour.Price)</span>
+                        <strong>@Money.Usd(tour.Total)</strong>
+                    </div>
+                </div>
+            </article>
+        }
+
+        @if (booking.Payments.Count > 0)
+        {
+            <h4 class="tilted display-6 mt-7 mb-5">PAYMENTS</h4>
+            <ul class="booking-payments">
+                @foreach (var payment in booking.Payments)
+                {
+                    <li>
+                        <span><i class="fa-solid fa-circle-check text-success me-2" aria-hidden="true"></i>@payment.PaidOn.ToString("d MMMM yyyy")@(payment.Method is "Cash" ? " (cash)" : payment.Method is "Stripe" ? " (card)" : "")</span>
+                        <strong>@Money.Usd(payment.Amount)</strong>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(booking.Notes))
+        {
+            <h4 class="tilted display-6 mt-7 mb-4">YOUR NOTES</h4>
+            <p class="booking-notes">@booking.Notes</p>
+        }
+
+        <div class="booking-help">
+            <p class="mb-0"><strong>Need to change something?</strong> Get in touch with booking #@booking.Reference and we'll sort it out.</p>
+            <a class="btn btn-outline-primary" href="/contact">Contact Us</a>
+        </div>
+    }
+    else
+    {
+        <LoadingMessage Text="Loading your booking…" />
+    }
+</AccountShell>
+
+@code {
+    [Parameter] public DefaultIdType Id { get; set; }
+
+    [PersistentState] public MyBooking? Booking { get; set; }
+
+    private bool _missing, _paying;
+    private string? _payError;
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (Booking?.Id != Id)
+            Reload = true;
+        return base.OnParametersSetAsync();
+    }
+
+    protected override async Task LoadAsync()
+    {
+        _missing = false;
+        try
+        {
+            Booking = await Api.Send(new GetMyBooking(Id));
+        }
+        catch (NotFoundException)
+        {
+            (Booking, _missing) = (null, true);
+        }
+    }
+
+    private async Task PayAsync()
+    {
+        (_paying, _payError) = (true, null);
+        try
+        {
+            // Stripe's page (outside the site).
+            Navigation.NavigateTo(await Api.Send(new PayMyBooking(Id)), forceLoad: true);
+        }
+        catch (AppException failure)
+        {
+            (_paying, _payError) = (false, failure.Message);
+        }
+    }
+}

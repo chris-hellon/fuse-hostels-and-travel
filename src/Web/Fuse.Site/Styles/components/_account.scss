@@ -1,0 +1,345 @@
+// My Account (Pages/Account): legacy's plain Identity pages redesigned in the site's style: tilted headings, offcut
+// borders, the purple date blocks of the events line-up, and the oval dots.
+
+.account {
+  --ink: #090511;
+}
+
+// ---- The tabs --------------------------------------------------------------------------------------------------
+.account__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .75rem;
+  margin: -1rem 0 3.5rem;
+}
+
+.account__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .7rem 1.25rem;
+  border: 2px solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  letter-spacing: .06em;
+  box-shadow: 4px 4px 0 var(--ink);
+  transition: transform .15s, box-shadow .15s, background .15s;
+
+  i { color: var(--mdb-primary); }
+
+  &:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); color: var(--ink); }
+
+  &.is-active {
+    background: var(--mdb-primary);
+    color: #fff;
+    i { color: #fff; }
+  }
+}
+
+.account__group { display: inline-block; }
+
+.account__back {
+  display: inline-block;
+  margin-bottom: 2rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  letter-spacing: .06em;
+}
+
+// ---- Empty / signed-out / done states -------------------------------------------------------------------------
+.account-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem 0;
+  text-align: center;
+
+  p { margin: 0; }
+}
+
+.account-empty__small { font-size: .85rem; color: rgba(9, 5, 17, .6); }
+.account-empty__icon { font-size: 3rem; color: var(--mdb-primary); }
+
+// The site's oval dots.
+.account-empty__dots {
+  display: flex;
+  gap: .6rem;
+
+  span {
+    width: 1.4rem;
+    height: .95rem;
+    border-radius: 50%;
+    background: var(--mdb-primary);
+    &:nth-child(2) { opacity: .6; }
+    &:nth-child(3) { opacity: .3; }
+  }
+}
+
+.account-done {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  background: rgba(171, 61, 255, .08);
+
+  i { font-size: 1.75rem; color: var(--mdb-primary); }
+  p { margin: 0; }
+}
+
+// ---- Cards for forms --------------------------------------------------------------------------------------------
+.account-card {
+  position: relative;
+  padding: 3rem 2rem 2rem;
+  margin-top: 1.5rem;
+  margin-bottom: 2.5rem;
+  background: #fff;
+  box-shadow: 8px 8px 0 rgba(171, 61, 255, .18);
+
+  @media (min-width: 992px) { padding: 3.5rem 3rem 2.5rem; }
+}
+
+.account-card__title {
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  transform: translateY(-50%) rotate(-2deg);
+  margin: 0;
+}
+
+.account-readonly {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: .75rem 1rem;
+  background: var(--mdb-light, #f6f6f6);
+  word-break: break-all;
+
+  a { font-family: var(--mdb-font-din-2014-narrow-bold); letter-spacing: .05em; text-transform: uppercase; word-break: normal; }
+}
+
+.account-save {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+// ---- Booking states -------------------------------------------------------------------------------------------
+.booking-status {
+  display: inline-block;
+  padding: .3rem .7rem;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  font-size: .8rem;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  background: #e9e9ee;
+  color: var(--ink, #090511);
+
+  &--paid { background: #d5f5e3; color: #146c43; }
+  &--due { background: #ffe066; }
+  &--awaitingpayment { background: rgba(171, 61, 255, .15); color: var(--mdb-primary); }
+}
+
+// ---- The bookings list ----------------------------------------------------------------------------------------
+.booking-card {
+  display: flex;
+  height: 100%;
+  margin-left: 6px; // room for the offcut border
+  background: #fff;
+  color: inherit;
+  transition: transform .15s;
+
+  &:hover { transform: translateY(-3px); color: inherit; }
+
+  @media (max-width: 575px) { flex-direction: column; }
+}
+
+.booking-card__photo {
+  position: relative;
+  flex: 0 0 38%;
+  min-height: 190px;
+  background: var(--mdb-primary) center / cover no-repeat;
+}
+
+.booking-card__date,
+.tour-ticket__date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--mdb-primary);
+  color: #fff;
+  font-family: var(--mdb-font-din-2014-narrow-bold);
+  line-height: 1;
+  letter-spacing: .05em;
+
+  strong { font-size: 2.25rem; margin: .2rem 0; }
+  span { font-size: .8rem; }
+}
+
+.booking-card__date {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  width: 4.25rem;
+  height: 4.75rem;
+  box-shadow: 4px 4px 0 #090511;
+}
+
+.booking-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 1.5rem;
+}
+
+.booking-card__ref { font-family: var(--mdb-font-din-2014-narrow-bold); color: rgba(9, 5, 17, .55); letter-spacing: .05em; }
+.booking-card__title { font-size: 1.6rem; margin: 0 0 .25rem; }
+.booking-card__more { margin: 0 0 .25rem; color: var(--mdb-primary); font-family: var(--mdb-font-din-2014-narrow-bold); }
+.booking-card__meta { margin: 0 0 1rem; color: rgba(9, 5, 17, .7); font-size: .95rem; }
+
+.booking-card__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px dashed rgba(9, 5, 17, .2);
+}
+
+.booking-card__view { font-family: var(--mdb-font-din-2014-narrow-bold); letter-spacing: .06em; color: var(--mdb-primary); }
+
+// ---- A booking --------------------------------------------------------------------------------------------------
+.booking-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.booking-sums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.booking-sum {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+  border-left: 6px solid var(--mdb-primary);
+
+  span { font-family: var(--mdb-font-din-2014-narrow-bold); font-size: .85rem; letter-spacing: .08em; color: rgba(9, 5, 17, .6); }
+  strong { font-size: 1.75rem; font-family: var(--mdb-font-din-2014-narrow-bold); }
+
+  &--due { background: #ffe066; border-left-color: #090511; }
+}
+
+.booking-sums__pay {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.booking-note {
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem;
+  background: rgba(171, 61, 255, .08);
+}
+
+.tour-ticket {
+  display: grid;
+  grid-template-columns: 6rem 12rem 1fr;
+  margin: 0 0 1.5rem 6px;
+  background: #fff;
+  box-shadow: 8px 8px 0 rgba(9, 5, 17, .08);
+
+  &.is-cancelled { opacity: .55; }
+
+  @media (max-width: 767px) {
+    grid-template-columns: 5rem 1fr;
+    .tour-ticket__photo { display: none; }
+  }
+}
+
+.tour-ticket__date { padding: 1rem .5rem; }
+
+.tour-ticket__photo { background: var(--mdb-light, #eee) center / cover no-repeat; }
+
+.tour-ticket__body {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  // The ticket's tear-off edge.
+  border-left: 2px dashed rgba(9, 5, 17, .15);
+}
+
+.tour-ticket__name { font-size: 1.6rem; margin: 0 0 .75rem; a { color: inherit; &:hover { color: var(--mdb-primary); } } }
+
+.tour-ticket__facts {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+
+  li { display: flex; gap: .75rem; margin-bottom: .4rem; }
+  i { width: 1rem; margin-top: .25rem; color: var(--mdb-primary); }
+}
+
+.tour-ticket__price {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: .75rem;
+  border-top: 1px dashed rgba(9, 5, 17, .2);
+
+  span { color: rgba(9, 5, 17, .65); }
+  strong { font-family: var(--mdb-font-din-2014-narrow-bold); font-size: 1.25rem; }
+}
+
+.booking-payments {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: #fff;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    & + li { border-top: 1px solid rgba(9, 5, 17, .08); }
+  }
+}
+
+.booking-notes { white-space: pre-wrap; background: #fff; padding: 1.25rem 1.5rem; }
+
+.booking-help {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 3.5rem;
+  padding: 1.5rem;
+  border: 2px solid #090511;
+  background: #fff;
+}
+
+// A short banner (legacy's account banner was 240px high).
+.account-banner .header-banner-image-background {
+  height: 300px;
+  min-height: 0;
+}
+
+// The emailed reset link's form, in an .account-empty column.
+.reset-password { width: 100%; max-width: 26rem; }

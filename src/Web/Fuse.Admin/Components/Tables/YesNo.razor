@@ -1,0 +1,14 @@
+@* A yes/no table cell: a green tick for yes, a muted dash for no (with text for screen readers). *@
+
+@if (Value)
+{
+    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" aria-label="Yes" />
+}
+else
+{
+    <span class="mud-text-disabled" aria-label="No">—</span>
+}
+
+@code {
+    [Parameter] public bool Value { get; set; }
+}

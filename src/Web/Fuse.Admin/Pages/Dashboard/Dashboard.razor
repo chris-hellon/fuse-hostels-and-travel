@@ -1,0 +1,207 @@
+@page "/admin"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Dashboard)]
+
+@* Legacy dashboard: today's figures, totals for a chosen range, departures (today / tomorrow) and
+   today's tour bookings. Revenue is for administrators; suppliers only see departures. *@
+
+<AdminPageHeader Title="Dashboard">
+    @if (!_isSupplier)
+    {
+        <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <ActivatorContent Context="menu">
+                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.CalendarMonth" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                           Class="dashboard-range" OnClick="@(e => menu.ToggleAsync(e))">@RangeLabel</MudButton>
+            </ActivatorContent>
+            <ChildContent>
+                @foreach (var range in Ranges)
+                {
+                    <MudMenuItem OnClick="() => SelectRangeAsync(range)">@Label(range)</MudMenuItem>
+                }
+                <MudDivider />
+                <MudMenuItem OnClick="() => MenuActions.AfterMenuCloses(PickCustomRangeAsync, DispatchExceptionAsync)">Custom range…</MudMenuItem>
+            </ChildContent>
+        </MudMenu>
+    }
+    <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Refresh" IconColor="Color.Surface" OnClick="ReloadAsync">Reload</MudButton>
+</AdminPageHeader>
+
+<MudGrid Spacing="3">
+    @if (!_isSupplier)
+    {
+        <MudItem xs="12" sm="@(_isAdmin ? 4 : 6)">
+            <StatCard Icon="@Icons.Material.Filled.BookOnline" Label="Today's Tour Bookings" Value="@_stats?.TodaysBookings.ToString()" />
+        </MudItem>
+        <MudItem xs="12" sm="@(_isAdmin ? 4 : 6)">
+            <StatCard Icon="@Icons.Material.Filled.PunchClock" Label="Today's Tour Departures" Value="@_stats?.TodaysDepartures.ToString()" />
+        </MudItem>
+        @if (_isAdmin)
+        {
+            <MudItem xs="12" sm="4">
+                <StatCard Icon="@Icons.Material.Filled.MonetizationOn" Label="Today's Tour Bookings Revenue" Value="@Money(_stats?.TodaysRevenue)" />
+            </MudItem>
+        }
+
+        <MudItem xs="12">
+            <StatStrip Label="Totals" Period="@RangeLabel" Items="Totals" />
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <MudPaper Elevation="25" Class="dashboard-card">
+            <div class="dashboard-card__head">
+                <MudText Typo="Typo.h4">Departures</MudText>
+                <ViewSwitch TView="bool" Options="DayOptions" @bind-Value="_tomorrow" />
+            </div>
+            <div class="dashboard-card__body">
+                @* Both mounted, so switching days doesn't reload or flicker. *@
+                <div style="@(_tomorrow ? "display:none" : null)">
+                    <DeparturesTable @ref="_today" DaysFromToday="0" Tours="_tours" />
+                </div>
+                <div style="@(_tomorrow ? null : "display:none")">
+                    <DeparturesTable @ref="_tomorrowTable" DaysFromToday="1" Tours="_tours" />
+                </div>
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    @if (!_isSupplier)
+    {
+        <MudItem xs="12">
+            <MudPaper Elevation="25" Class="dashboard-card">
+                <div class="dashboard-card__head">
+                    <MudText Typo="Typo.h4">Today's Activity</MudText>
+                </div>
+                <div class="dashboard-card__body">
+                    <TodaysActivityTable @ref="_activity" Tours="_tours" />
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    private enum Range { Today, Last7Days, Last30Days, ThisMonth, Last3Months, ThisYear, AllTime, Custom }
+
+    private static readonly Range[] Ranges = [Range.Today, Range.Last7Days, Range.Last30Days, Range.ThisMonth, Range.Last3Months, Range.ThisYear, Range.AllTime];
+
+    private static readonly IReadOnlyList<ViewSwitch<bool>.Option> DayOptions =
+    [
+        new(false, Icons.Material.Filled.Today, "Today"),
+        new(true, Icons.Material.Filled.Event, "Tomorrow"),
+    ];
+
+    private bool _isAdmin, _isSupplier, _tomorrow;
+    private Range _range = Range.Last30Days;
+    private DateRange _custom = new(DateTime.Today.AddDays(-30), DateTime.Today);
+    private DashboardStats? _stats;   // today's figures
+    private DashboardStats? _totals;  // the range totals (reloaded on their own when the range changes)
+    private IReadOnlyList<LookupItem> _tours = [];
+    private DeparturesTable? _today, _tomorrowTable;
+    private TodaysActivityTable? _activity;
+
+    private string RangeLabel => _range == Range.Custom ? $"{_custom.Start:d MMM yyyy} – {_custom.End:d MMM yyyy}" : Label(_range);
+
+    private static string Label(Range range) => range switch
+    {
+        Range.Today => "Today",
+        Range.Last7Days => "Last 7 days",
+        Range.Last30Days => "Last 30 days",
+        Range.ThisMonth => "This month",
+        Range.Last3Months => "Last 3 months",
+        Range.ThisYear => "This year",
+        Range.AllTime => "All time",
+        _ => "Custom range",
+    };
+
+    private (DateTime From, DateTime To) Window()
+    {
+        var today = DateTime.Today;
+        return _range switch
+        {
+            Range.Today => (today, today),
+            Range.Last7Days => (today.AddDays(-6), today),
+            Range.ThisMonth => (new DateTime(today.Year, today.Month, 1), today),
+            Range.Last3Months => (today.AddMonths(-3), today),
+            Range.ThisYear => (new DateTime(today.Year, 1, 1), today),
+            Range.AllTime => (new DateTime(2000, 1, 1), today),
+            Range.Custom => (_custom.Start ?? today.AddDays(-30), _custom.End ?? today),
+            _ => (today.AddDays(-30), today),
+        };
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        _isAdmin = user.IsInRole(FuseRoles.Admin);
+        _isSupplier = user.IsInRole(FuseRoles.Supplier) && !_isAdmin;
+        var tours = Api.Send(new ListDashboardTours()).AsTask();
+        await Task.WhenAll(LoadStatsAsync(), tours);
+        _tours = tours.Result;
+    }
+
+    private Task LoadStatsAsync() => _isSupplier ? Task.CompletedTask : Snackbar.TryAsync(async () =>
+    {
+        var (from, to) = Window();
+        _stats = _totals = await Api.Send(new GetDashboardStats(from, to));
+    });
+
+    private async Task SelectRangeAsync(Range range)
+    {
+        _range = range;
+        await ReloadTotalsAsync();
+    }
+
+    private async Task PickCustomRangeAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<DateRangeDialog>(null, new DialogParameters<DateRangeDialog> { { d => d.Range, _custom } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, CloseOnEscapeKey = true });
+        if (await dialog.Result is { Canceled: false, Data: DateRange { Start: not null, End: not null } range })
+        {
+            _custom = range;
+            _range = Range.Custom;
+            await ReloadTotalsAsync();
+        }
+    }
+
+    /// <summary>Only the totals depend on the range; today's cards keep showing meanwhile.</summary>
+    private async Task ReloadTotalsAsync()
+    {
+        _totals = null;
+        StateHasChanged();
+        await Snackbar.TryAsync(async () =>
+        {
+            var (from, to) = Window();
+            _totals = await Api.Send(new GetDashboardStats(from, to));
+        });
+    }
+
+    private async Task ReloadAsync()
+    {
+        _stats = _totals = null;
+        StateHasChanged();
+        await Task.WhenAll(LoadStatsAsync(), _today?.ReloadAsync() ?? Task.CompletedTask,
+            _tomorrowTable?.ReloadAsync() ?? Task.CompletedTask, _activity?.ReloadAsync() ?? Task.CompletedTask);
+    }
+
+    private static string? Money(decimal? value) => value is { } v ? $"$ {v:N2}" : null;
+
+    private static string? Count(int? value) => value?.ToString("N0");
+
+    /// <summary>The range's totals: bookings and (for administrators) revenue, then cancellations and refunds, each with
+    /// their value for administrators.</summary>
+    private IReadOnlyList<StatStrip.Item> Totals
+    {
+        get
+        {
+            var t = _totals;
+            var items = new List<StatStrip.Item> { new("Tour Bookings", Count(t?.TotalBookings)) };
+            if (_isAdmin)
+                items.Add(new("Revenue", Money(t?.TotalRevenue)));
+            items.Add(new("Cancelled", Count(t?.TotalCancelled), _isAdmin ? Money(t?.TotalCancelledValue) : null, t?.TotalCancelled == 0));
+            items.Add(new("Refunded", Count(t?.TotalRefunded), _isAdmin ? Money(t?.TotalRefundedValue) : null, t?.TotalRefunded == 0));
+            return items;
+        }
+    }
+}

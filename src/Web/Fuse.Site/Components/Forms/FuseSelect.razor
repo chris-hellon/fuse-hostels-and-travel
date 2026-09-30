@@ -1,0 +1,97 @@
+@* The MDB select legacy used (data-mdb-select-init), rendered as the markup its script produced, so the
+   theme's select styles apply unchanged. *@
+
+@inherits JsComponent
+
+<div class="@($"select-wrapper position-relative{(_open ? " is-open" : "")}")" @ref="_wrapper">
+    <div class="form-outline">
+        <input class="@InputClass" type="text" role="combobox" aria-haspopup="listbox" aria-expanded="@(_open ? "true" : "false")"
+               aria-label="@Label" readonly="true" value="@SelectedText" @onclick="Toggle" @onkeydown="KeyDown" />
+        <label class="form-label select-label @(_open || HasValue ? "active" : "")" style="margin-left: 0px;">@Label</label>
+        <span class="select-arrow"></span>
+        <FormNotch />
+        <div class="form-label select-fake-value">@SelectedText</div>
+    </div>
+    @if (_open)
+    {
+        <div class="select-dropdown-container fuse-select__dropdown">
+            <div tabindex="0" class="select-dropdown open">
+                <div class="select-options-wrapper" style="max-height: 190px;">
+                    <div class="select-options-list" role="listbox">
+                        @foreach (var option in Options)
+                        {
+                            var selected = option.Value == Value;
+                            <div class="select-option @(selected ? "selected active" : "")" role="option" aria-selected="@(selected ? "true" : "false")"
+                                 style="height: 38px;" @key="option.Value" @onclick="() => ChooseAsync(option.Value)">
+                                <span class="select-option-text">@option.Text</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<SelectOption> Options { get; set; } = [];
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private bool _open, _watching;
+    private ElementReference _wrapper;
+    private DotNetObjectReference<FuseSelect>? _self;
+
+    private bool HasValue => !string.IsNullOrEmpty(Value);
+    private string? SelectedText => Options.FirstOrDefault(o => o.Value == Value)?.Text;
+    private string InputClass => $"form-control select-input {Class} {(_open ? "focused" : "")} {(HasValue ? "active" : "")}";
+
+    private void Toggle() => _open = !_open;
+
+    private void Close() => _open = false;
+
+    /// <summary>A click anywhere else closes the list.</summary>
+    [JSInvokable]
+    public void OnClickOutside()
+    {
+        _open = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_open == _watching)
+            return;
+        _watching = _open;
+        if (_open)
+            await Js.InvokeVoidAsync("watchClickOutside", _wrapper, _self ??= DotNetObjectReference.Create(this));
+        else
+            await Js.InvokeVoidAsync("unwatchClickOutside", _wrapper);
+    }
+
+    protected override async Task OnDisposeAsync()
+    {
+        if (_watching)
+            await Js.InvokeVoidAsync("unwatchClickOutside", _wrapper);
+        _self?.Dispose();
+    }
+
+    private void KeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " " or "ArrowDown")
+            _open = true;
+        else if (e.Key is "Escape" or "Tab")
+            _open = false;
+    }
+
+    private async Task ChooseAsync(string value)
+    {
+        _open = false;
+        Value = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+
+    public sealed record SelectOption(string Value, string Text);
+}

@@ -1,0 +1,174 @@
+@using System.Text.Json
+@using Fuse.Contracts.PackIncentives
+@using Fuse.Contracts.Tours
+
+@* Create / edit a pack incentive: details, then eligible tours and sale prices. Saved together on Save. *@
+
+<ModalWizard TModel="Model" Model="_model!" Loading="_model is null" OnSave="SaveAsync" OnCancel="CancelAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Pack Incentive" : "Edit Pack Incentive")
+    </TitleContent>
+    <ChildContent>
+        @if (_model is not null)
+        {
+            <WizardStep TModel="Model" Title="Details" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["Details.Name", "Details.MinimumProductCount", "Details.CommissionAmount"])">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="6">
+                        <MudTextField Label="Name" @bind-Value="_model.Details.Name" Required="true" RequiredError="Name is required" MaxLength="200"
+                                      HelperText="e.g. Pack 3 — FUSE PACKAGE" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudNumericField T="int" Label="Minimum products" @bind-Value="_model.Details.MinimumProductCount" Min="1" Variant="Variant.Outlined"
+                                         HelperText="Distinct eligible tours a booking needs" />
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudNumericField T="decimal" Label="Commission (per guest)" @bind-Value="_model.Details.CommissionAmount" Min="0" Format="N2"
+                                         Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSwitch T="bool" @bind-Value="_model.Details.IgnoresMinimumPax" Color="Color.Primary" Label="Pay even if tours miss their minimum pax" />
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudSwitch T="bool" @bind-Value="_model.Details.IsActive" Color="Color.Primary" Label="Active" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField Label="Notes" @bind-Value="_model.Details.Notes" Lines="3" Variant="Variant.Outlined" HelperText="Staff only" />
+                    </MudItem>
+                </MudGrid>
+            </WizardStep>
+            <WizardStep TModel="Model" Title="Tours and prices" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["TourIds", "Tiers"])" OnLeaveAsync="_ => Task.FromResult(Validate())">
+                <StepToolbar Title="Eligible tours" Subtitle="@ToursSummary" Sticky="false">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="AddToursAsync">Add tours</MudButton>
+                </StepToolbar>
+                @if (_model.Tours.Count == 0)
+                {
+                    <div class="admin-empty"><MudText Typo="Typo.body2">No eligible tours yet. Use <b>Add tours</b>.</MudText></div>
+                }
+                else
+                {
+                    <div class="chip-list">
+                        @foreach (var tour in _model.Tours)
+                        {
+                            <MudChip T="string" Size="Size.Medium" Variant="Variant.Outlined" OnClose="() => _model.Tours.Remove(tour)" @key="tour.Id">@tour.Name</MudChip>
+                        }
+                    </div>
+                }
+
+                <StepToolbar Title="Sale prices" Subtitle="The pack's total price per tier, e.g. Adult and Child" Sticky="false">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="() => _model.Tiers.Add(new TierModel())">Add tier</MudButton>
+                </StepToolbar>
+                @if (_model.Tiers.Count == 0)
+                {
+                    <div class="admin-empty"><MudText Typo="Typo.body2">No sale prices yet.</MudText></div>
+                }
+                else
+                {
+                    <MudStack Spacing="2" Class="mt-2">
+                        @foreach (var tier in _model.Tiers)
+                        {
+                            <div class="tier-row" @key="tier">
+                                <MudTextField T="string" @bind-Value="tier.Title" Label="Tier" Placeholder="e.g. Adult" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudNumericField T="decimal" @bind-Value="tier.Price" Label="Price" Min="0" Format="N2" Adornment="Adornment.Start" AdornmentText="$"
+                                                 HideSpinButtons="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                <MudTooltip Text="Remove tier">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small" OnClick="() => _model.Tiers.Remove(tier)" aria-label="Remove tier" />
+                                </MudTooltip>
+                            </div>
+                        }
+                    </MudStack>
+                }
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Large, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? IncentiveId { get; set; }
+
+    private bool IsCreate => IncentiveId is null;
+    private Model? _model;
+    /// <summary>The save's rules, checked step by step (each step lists the ones it edits).</summary>
+    private static readonly SavePackIncentiveValidator Rules = new();
+    private object Command() => new SavePackIncentive(IncentiveId, _model!.Details, [.. _model.Tours.Select(t => t.Id)],
+        [.. _model.Tiers.Select(t => new PackIncentiveTierEdit { Id = t.Id, Title = t.Title, Price = t.Price })]);
+    private string _original = "";
+    private IReadOnlyList<LookupItem> _tourOptions = [];
+
+    private string ToursSummary => _model!.Tours.Count == 0 ? $"A booking needs {_model.Details.MinimumProductCount} of these to qualify"
+        : $"{_model.Tours.Count} tour{(_model.Tours.Count == 1 ? "" : "s")} · a booking needs {_model.Details.MinimumProductCount} of them to qualify";
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var options = Api.Send(new ListPackIncentiveTourOptions()).AsTask();
+        var editor = IsCreate ? Task.FromResult<PackIncentiveEditor?>(null) : Api.Send(new GetPackIncentiveEditor(IncentiveId!.Value)).AsTask()!;
+        await Task.WhenAll(options, editor);
+        _tourOptions = options.Result;
+        var model = editor.Result is { } e
+            ? new Model
+            {
+                Details = e.Details,
+                Tours = [.. e.Tours.Select(t => new TourModel(Guid.Parse(t.Id), t.Name))],
+                Tiers = [.. e.Tiers.Select(t => new TierModel { Id = t.Id, Title = t.Title, Price = t.Price })],
+            }
+            : new Model();
+        _original = Serialize(model);
+        _model = model;
+    });
+
+    private async Task AddToursAsync()
+    {
+        var options = _tourOptions.Select(t => new PickOption(Guid.Parse(t.Id), t.Name)).ToList();
+        var chosen = await PickerDialog.ShowAsync(Dialogs, "Add eligible tours", options, [.. _model!.Tours.Select(t => t.Id)], "Search tours", "Add tours");
+        _model.Tours.AddRange(options.Where(o => chosen.Contains(o.Id)).Select(o => new TourModel(o.Id, o.Name)));
+        _model.Tours.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Checked before Save, as the server also does.</summary>
+    private bool Validate()
+    {
+        var needed = _model!.Details.MinimumProductCount;
+        if (_model.Tours.Count < needed)
+        {
+            Snackbar.Add($"Choose at least {needed} eligible tour{(needed == 1 ? "" : "s")} to match the minimum.", Severity.Warning);
+            return false;
+        }
+        if (_model.Tiers.Any(t => string.IsNullOrWhiteSpace(t.Title)))
+        {
+            Snackbar.Add("Each price tier needs a name.", Severity.Warning);
+            return false;
+        }
+        return true;
+    }
+
+    private async Task<bool> SaveAsync(Model model) =>
+        await Snackbar.TryAsync(async () => await Api.Send(new SavePackIncentive(IncentiveId, model.Details, [.. model.Tours.Select(t => t.Id)],
+                [.. model.Tiers.Select(t => new PackIncentiveTierEdit { Id = t.Id, Title = t.Title, Price = t.Price })])),
+            IsCreate ? "Pack incentive created." : "Pack incentive saved.");
+
+    private async Task<bool> CancelAsync() =>
+        _model is null || Serialize(_model) == _original
+        || await Dialogs.ConfirmAsync("Discard your changes?", "You've changed this pack incentive but haven't saved it. If you close now, those changes are lost.",
+            "Discard changes", "Keep editing");
+
+    private static string Serialize(Model model) => JsonSerializer.Serialize(model);
+
+    public sealed class Model
+    {
+        public PackIncentiveInput Details { get; set; } = new();
+        public List<TourModel> Tours { get; set; } = [];
+        public List<TierModel> Tiers { get; set; } = [];
+    }
+
+    public sealed record TourModel(DefaultIdType Id, string Name);
+
+    public sealed class TierModel
+    {
+        public DefaultIdType? Id { get; set; }
+        public string Title { get; set; } = "";
+        public decimal Price { get; set; }
+    }
+}

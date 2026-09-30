@@ -1,0 +1,41 @@
+@page "/hostels"
+@inherits SitePage
+
+<SeoHead Page="Page" PageName="Hostels" Keywords="budget hostels, cheap hostels, backpackers hostels, Vietnam travel" />
+
+<section id="headerBanner" class="bg-light">
+    <HeaderBanner Headings="BannerHeadings()" Style="background-position-y: 0%;"
+                  ImageUrl="https://images.unsplash.com/photo-1466378284817-a6b7fd50cc68?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2880&q=80">
+        <Intro>Looking for good people, great times, and gorgeous scenery? Check out our Vietnam hostels!</Intro>
+        <Ovals><OvalContainer Id="hostelPageHeaderBannerOvals1" Top="-160" Left="-45" /></Ovals>
+    </HeaderBanner>
+</section>
+@if (Page is not null)
+{
+    <section id="hostels" class="bg-light overflow-hidden">
+        <HostelRows Hostels="@(Cards ?? [])" />
+    </section>
+    <WhatsOn Events="@(Events ?? [])" />
+    <section id="bookBanner" class="bg-gray px-3 px-lg-0 py-5">
+        <BookNowBanner />
+    </section>
+}
+else
+{
+    @* Arriving from another page: its content is loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [PersistentState] public IReadOnlyList<SiteCard>? Cards { get; set; }
+    [PersistentState] public IReadOnlyList<SiteEvent>? Events { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.Hostels;
+
+    protected override async Task LoadAsync()
+    {
+        var hostels = Api.Send(new ListSiteHostels()).AsTask();
+        var events = Api.Send(new ListSiteEvents()).AsTask();
+        (Cards, Events) = (await hostels, await events);
+    }
+}

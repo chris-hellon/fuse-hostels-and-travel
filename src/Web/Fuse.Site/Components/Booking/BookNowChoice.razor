@@ -1,0 +1,68 @@
+@* The Book modal: a hostel stay (legacy's form: hostel and dates, on to Cloudbeds) or a tour (choose one, on to its
+   page to pick a departure). The pills switch between them. *@
+@inject NavigationManager Navigation
+
+<ul class="nav nav-pills justify-content-center mb-4 book-now-choice" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button type="button" role="tab" class="@Pill(!_tours)" aria-selected="@(!_tours ? "true" : "false")" @onclick="() => _tours = false">
+            <i class="fas fa-bed me-2" aria-hidden="true"></i>HOSTELS
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button type="button" role="tab" class="@Pill(_tours)" aria-selected="@(_tours ? "true" : "false")" @onclick="() => _tours = true">
+            <i class="fas fa-route me-2" aria-hidden="true"></i>TOURS
+        </button>
+    </li>
+</ul>
+
+<div class="container-fluid booking-banner" role="tabpanel">
+    @if (_tours)
+    {
+        <form class="row" novalidate @onsubmit="ShowTour">
+            <div class="col-lg-12 mb-3 position-relative">
+                <div style="min-height:47px;">
+                    <FuseSelect Label="Tour" Options="TourOptions" Class="h-100 bg-white" @bind-Value="_tour" @bind-Value:after="() => _tourError = null" />
+                </div>
+                <Validation Message="@_tourError" />
+            </div>
+            <div class="col-lg-12">
+                <button class="btn btn-primary w-100" type="submit">See Dates &amp; Book</button>
+            </div>
+        </form>
+        <a class="book-now-choice__all" href="/tours" @onclick="Chosen">Browse all tours <i class="fas fa-arrow-right-long ms-1" aria-hidden="true"></i></a>
+    }
+    else
+    {
+        <BookNowForm Style="BookNowStyle.Modal" />
+    }
+</div>
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    /// <summary>Start on tours (e.g. opened from a tour's page).</summary>
+    [Parameter] public bool Tours { get; set; }
+    /// <summary>A tour was chosen (the modal closes; its page opens).</summary>
+    [Parameter] public EventCallback Chosen { get; set; }
+
+    private bool _tours;
+    private string? _tour, _tourError;
+
+    protected override void OnInitialized() => _tours = Tours;
+
+    private IReadOnlyList<FuseSelect.SelectOption> TourOptions =>
+        [.. (Chrome?.Tours ?? []).Select(t => new FuseSelect.SelectOption(t.Slug, t.Name))];
+
+    private static string Pill(bool active) => $"nav-link mb-0{(active ? " active" : "")}";
+
+    private async Task ShowTour()
+    {
+        if (string.IsNullOrEmpty(_tour))
+        {
+            _tourError = "Please select a Tour";
+            return;
+        }
+        await Chosen.InvokeAsync();
+        Navigation.NavigateTo($"/tours/{_tour}");
+    }
+}

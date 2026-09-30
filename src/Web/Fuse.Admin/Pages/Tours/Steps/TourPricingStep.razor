@@ -1,0 +1,122 @@
+@using Fuse.Contracts.Tours
+
+<StepToolbar Subtitle="@Summary">
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">Add price</MudButton>
+</StepToolbar>
+<SavedWithParentNote Parent="tour" />
+
+@if (Draft.Prices.Count == 0)
+{
+    <div class="admin-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.Sell" Size="Size.Large" Class="mud-text-secondary" />
+        <MudText Typo="Typo.body2">No prices yet. Use <b>Add price</b>; dates need at least one.</MudText>
+    </div>
+}
+else
+{
+    <MudTable T="PriceDraft" Items="Draft.Prices" Context="price" Hover="true" Dense="true" Elevation="0" Class="admin-subtable" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh Style="width: 110px">Price</MudTh>
+            <MudTh>Title</MudTh>
+            <MudTh>Duration</MudTh>
+            <MudTh>Season</MudTh>
+            <MudTh>Commission</MudTh>
+            <MudTh Style="text-align: center">On website</MudTh>
+            <MudTh Style="text-align: center">In house only</MudTh>
+            <MudTh>Dates</MudTh>
+            <MudTh Style="width: 96px"></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Price">
+                <span class="admin-amount">$@price.Details.Price.ToString("N2")</span>
+                @if (price.IsNew)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">New</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Title">
+                <div>@price.Details.Title</div>
+                @if (!string.IsNullOrWhiteSpace(price.Details.Description))
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@price.Details.Description</MudText>
+                }
+            </MudTd>
+            <MudTd DataLabel="Duration">@Duration(price.Details)</MudTd>
+            <MudTd DataLabel="Season">@Season(price.Details)</MudTd>
+            <MudTd DataLabel="Commission">
+                @if (price.Details.CommissionAmount is > 0)
+                {
+                    <div>$@price.Details.CommissionAmount.Value.ToString("N2")</div>
+                    @if (price.Details.CommissionMinimumPax.HasValue)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            min @price.Details.CommissionMinimumPax pax @(price.Details.CommissionScope == CommissionScope.PerDay ? "per day" : "per departure")
+                        </MudText>
+                    }
+                }
+                else
+                {
+                    <span class="mud-text-secondary">—</span>
+                }
+            </MudTd>
+            <MudTd DataLabel="On website" Style="text-align: center"><YesNo Value="price.Details.PublishToWebsite" /></MudTd>
+            <MudTd DataLabel="In house only" Style="text-align: center"><YesNo Value="price.Details.InHouseOnly" /></MudTd>
+            <MudTd DataLabel="Dates">@Draft.DatesFor(price).Count</MudTd>
+            <MudTd Class="admin-row-actions">
+                <MudTooltip Text="Edit"><MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" OnClick="() => EditAsync(price)" aria-label="Edit" /></MudTooltip>
+                <MudTooltip Text="Delete"><MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Color="Color.Error" OnClick="() => DeleteAsync(price)" aria-label="Delete" /></MudTooltip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public TourDraft Draft { get; set; } = null!;
+
+    private string Summary => Draft.Prices.Count switch
+    {
+        0 => "No prices yet",
+        1 => "1 price",
+        var n => $"{n} prices",
+    };
+
+    private async Task EditAsync(PriceDraft? price)
+    {
+        var dialog = await Dialogs.ShowAsync<TourPriceDialog>(null,
+            new DialogParameters<TourPriceDialog> { { d => d.Price, price?.Details } },
+            new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false });
+        if (await dialog.Result is { Canceled: false, Data: TourPriceInput details })
+            Draft.SavePrice(price?.Key, details);
+    }
+
+    private async Task DeleteAsync(PriceDraft price)
+    {
+        var dates = Draft.DatesFor(price);
+        if (dates.Any(d => d.Booked))
+        {
+            Snackbar.Add("This price has dates with bookings, so it can't be deleted.", Severity.Warning);
+            return;
+        }
+        var name = $"{price.Details.Title} (${price.Details.Price:N2})";
+        var detail = dates.Count == 0 ? null
+            : $"Its {dates.Count:N0} upcoming date{(dates.Count == 1 ? "" : "s")} will be removed too.";
+        if (await Dialogs.ConfirmAsync("Delete this price?", $"{name} will be removed when you save the tour.",
+                "Delete price", "Keep price", detail))
+            Draft.RemovePrice(price);
+    }
+
+    private static string Duration(TourPriceInput p)
+    {
+        string? Part(decimal? value, string unit) => value is > 0 ? $"{value.Value:0.##} {unit}{(value == 1 ? "" : "s")}" : null;
+        var parts = new[] { Part(p.DayDuration, "day"), Part(p.NightDuration, "night"), Part(p.HourDuration, "hour") }.OfType<string>().ToList();
+        return parts.Count == 0 ? "—" : string.Join(", ", parts);
+    }
+
+    private static string Season(TourPriceInput p) => (p.MonthFrom, p.MonthTo) switch
+    {
+        (null or "", null or "") => "All year",
+        var (from, to) when from == to || string.IsNullOrEmpty(to) => from!,
+        (null or "", var to) => $"Until {to}",
+        var (from, to) => $"{from} – {to}",
+    };
+}

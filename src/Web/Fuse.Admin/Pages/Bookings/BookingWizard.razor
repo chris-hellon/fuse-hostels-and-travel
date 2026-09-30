@@ -1,0 +1,77 @@
+@* Create / edit a tour booking (legacy Booking Details + Tours + summary). Everything is held in the
+   draft and saved together on Save. *@
+
+<ModalWizard TModel="BookingDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" CanSave="@(_draft?.Editor.Cancelled != true)"
+             CancelText="@(_draft?.Editor.Cancelled == true ? "Close" : "Cancel")">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Booking" : $"Edit Booking {_draft?.Editor.Reference}")
+        @if (_draft?.Editor.Cancelled == true)
+        {
+            <span class="status-pill status-pill--bad ml-2">Cancelled</span>
+        }
+    </TitleContent>
+    <ChildContent>
+        @if (_draft is not null)
+        {
+            <WizardStep TModel="BookingDraft" Title="Booking Details" Validate="() => _details?.Validate() ?? true">
+                <BookingDetailsStep @ref="_details" Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="BookingDraft" Title="Tours" OnLeaveAsync="_ => Task.FromResult(_tours?.Validate() ?? true)">
+                <BookingToursStep @ref="_tours" Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="BookingDraft" Title="Summary">
+                <BookingSummaryStep Draft="_draft" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Large, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? BookingId { get; set; }
+
+    private bool IsCreate => BookingId is null;
+    private BookingDraft? _draft;
+    private BookingDetailsStep? _details;
+    private BookingToursStep? _tours;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var catalog = Api.Send(new GetBookingCatalog()).AsTask();
+        var abilities = Api.Send(new GetBookingAbilities()).AsTask();
+        var editor = BookingId is { } id ? Api.Send(new GetBookingEditor(id)).AsTask() : Task.FromResult(new BookingEditor());
+        await Task.WhenAll(catalog, abilities, editor);
+        var draft = new BookingDraft(editor.Result, catalog.Result, abilities.Result);
+        draft.Reprice();
+        _draft = draft;
+    });
+
+    private async Task<bool> SaveAsync(BookingDraft draft)
+    {
+        var editor = draft.Editor;
+        var change = PaidTotalChange.None;
+        var refund = 0m;
+        if (!draft.IsCreate && editor.IsPaid && editor.Total != editor.SavedTotal)
+        {
+            var dialog = await Dialogs.ShowAsync<PaidTotalDialog>(null, new DialogParameters<PaidTotalDialog>
+            {
+                { d => d.From, editor.SavedTotal },
+                { d => d.To, editor.Total },
+            }, PaidTotalDialog.Options);
+            if (await dialog.Result is not { Canceled: false, Data: PaidTotalDialog.Choice choice })
+                return false;
+            (change, refund) = (choice.Change, choice.RefundAmount);
+        }
+
+        DefaultIdType id = Guid.Empty;
+        if (!await Snackbar.TryAsync(async () => id = await Api.Send(new SaveBooking(editor, change, refund)), draft.IsCreate ? "Booking created." : "Booking saved."))
+            return false;
+
+        // As legacy: a new card booking goes straight to its payment QR code.
+        if (draft.IsCreate && editor.PaymentMethod == BookingPaymentMethod.Stripe)
+            await PaymentQrDialog.ShowAsync(Api, Dialogs, Snackbar, id);
+        return true;
+    }
+}

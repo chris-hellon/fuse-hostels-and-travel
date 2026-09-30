@@ -1,0 +1,63 @@
+@using System.Reflection
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Services
+@inject LazyAssemblyLoader AssemblyLoader
+@inject NavigationManager Navigation
+
+@* The back office isn't prerendered: on the server it's only a loading screen, and the page renders once, in the
+   browser. (Prerendering it meant every admin page rendered twice, loading its data twice, and flashed when the
+   browser's copy replaced the server's. The public site keeps prerendering, for search engines.) *@
+@* Only while prerendering (AssignedRenderMode set, not yet interactive): server-only pages, like the error page for an
+   admin address, always render in full. *@
+@if (AssignedRenderMode is not null && !RendererInfo.IsInteractive && IsAdminPath(CurrentPath))
+{
+    <div class="admin-boot" role="status" aria-live="polite">
+        <img src="https://travaloud.azureedge.net/fuse/assets/images/Fuse-primary-logo.svg" alt="Fuse Hostels & Travel" width="72" height="72" />
+        <div class="admin-boot__spinner" aria-hidden="true"></div>
+        <span>Loading…</span>
+    </div>
+}
+else
+{
+    <Router AppAssembly="typeof(Fuse.Site._Imports).Assembly"
+            AdditionalAssemblies="_additionalAssemblies"
+            OnNavigateAsync="OnNavigateAsync"
+            NotFoundPage="typeof(Fuse.Site.Pages.NotFound)">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Fuse.Site.Layout.FuseLayout)">
+                <NotAuthorized>
+                    <Fuse.UI.Auth.RedirectToSignIn />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+        </Found>
+    </Router>
+}
+
+@code {
+    private const string AdminAssembly = "Fuse.Admin";
+
+    // The back office is lazy-loaded in the browser. On the server (prerendering) every assembly is
+    // already present, so it is always routable. Never name an Admin type in this project: the
+    // browser would try to load the assembly at startup, before it has been downloaded.
+    private readonly List<Assembly> _additionalAssemblies = OperatingSystem.IsBrowser()
+        ? []
+        : [Assembly.Load(AdminAssembly)];
+
+    private bool _adminLoaded = !OperatingSystem.IsBrowser();
+
+    private async Task OnNavigateAsync(NavigationContext context)
+    {
+        if (_adminLoaded || !IsAdminPath(context.Path))
+            return;
+
+        var assemblies = await AssemblyLoader.LoadAssembliesAsync([$"{AdminAssembly}.wasm", "Heron.MudCalendar.wasm"]);
+        _additionalAssemblies.AddRange(assemblies.Where(a => a.GetName().Name == AdminAssembly));
+        _adminLoaded = true;
+    }
+
+    /// <summary>The current path, relative to the base and without its query ("admin/bookings/tour-bookings").</summary>
+    private string CurrentPath => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+
+    private static bool IsAdminPath(string path) =>
+        path.Equals("admin", StringComparison.OrdinalIgnoreCase) || path.StartsWith("admin/", StringComparison.OrdinalIgnoreCase);
+}

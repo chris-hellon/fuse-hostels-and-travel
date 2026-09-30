@@ -1,0 +1,31 @@
+@* Legacy BookingConfirmation: sent to the guest once a booking is paid. *@
+<EmailFrame Brand="Brand" Title="Thank You For Your Order!" Preheader="@($"{Brand.TenantName} Order Confirmation")" ShowTick="true"
+            ActionIntro="If you have any questions, you can reach out to us below." ActionText="Contact Us" ActionUrl="@Brand.ContactUrl">
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
+            <p style="@EmailStyles.Paragraph">Congratulations! Your booking with @Brand.TenantName is confirmed and your payment has been successfully processed. Get ready for an unforgettable backpacking adventure!</p>
+        </td>
+    </tr>
+    <BookingItemsTable Booking="Booking" TotalLabel="TOTAL" Total="Booking.TotalAmount" />
+    @if (Booking.Items.Any(i => !string.IsNullOrWhiteSpace(i.ConfirmationDetails)))
+    {
+        <tr>
+            <td align="left" style="padding-top: 20px;">
+                <table cellspacing="0" cellpadding="0" border="0" width="100%">
+                    <tr><td align="left" bgcolor="#eeeeee" style="@EmailStyles.HeaderCell">Tour Details</td></tr>
+                    @foreach (var item in Booking.Items.Where(i => !string.IsNullOrWhiteSpace(i.ConfirmationDetails)).DistinctBy(i => i.TourName))
+                    {
+                        <tr><td style="@(EmailStyles.ItemCell) border-top: 3px solid #eeeeee;">@item.TourName</td></tr>
+                        <tr><td style="@(EmailStyles.ItemCell) border-bottom: 3px solid #eeeeee;">@((MarkupString)item.ConfirmationDetails!)</td></tr>
+                    }
+                </table>
+            </td>
+        </tr>
+    }
+    <SignOff />
+</EmailFrame>
+
+@code {
+    [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
+    [Parameter, EditorRequired] public BookingEmail Booking { get; set; } = null!;
+}

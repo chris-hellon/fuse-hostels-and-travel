@@ -1,0 +1,20 @@
+@* Legacy's "Today's Tour Manifests": sent to each hostel in a departure's location 1 hour before it leaves, with the
+   manifest spreadsheet attached. Worded exactly as legacy's (its time as "08:00:00", and "guests" however many). *@
+<EmailFrame Brand="Brand" Title="@($"{Manifest.TourName} manifest")" Preheader="@($"{Manifest.TourName} manifest")">
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
+            <p style="@EmailStyles.Paragraph">Please find attached Today's Tour Manifest for @Manifest.TourName - @Manifest.StartDate.TimeOfDay.</p>
+        </td>
+    </tr>
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
+            <p style="@EmailStyles.Paragraph">There are a total of @Manifest.Guests guests in attendance. @Manifest.PaidGuests guests have paid &amp; @Manifest.UnpaidGuests guests have yet to pay.</p>
+        </td>
+    </tr>
+    @* No guest-facing sign-off: legacy's manifest went to the hostels without one. *@
+</EmailFrame>
+
+@code {
+    [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
+    [Parameter, EditorRequired] public TourManifest Manifest { get; set; } = null!;
+}

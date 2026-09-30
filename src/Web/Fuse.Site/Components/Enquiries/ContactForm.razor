@@ -1,0 +1,71 @@
+@* Legacy ContactComponent ("HOW CAN WE HELP?" on the contact page): name, email, number, the hostel and tour it's
+   about (optional), the message and the captcha. Emailed to the team, who reply to the visitor. *@
+@inject IApi Api
+
+@if (_sending.Sent)
+{
+    <div class="enquiry-sent" role="status">
+        <i class="fas fa-circle-check" aria-hidden="true"></i>
+        <p>@EnquirySending.SentMessage</p>
+    </div>
+}
+else
+{
+    <form class="row g-4 text-start mt-1" novalidate @onsubmit="SendAsync">
+        <div class="col-12 position-relative">
+            <OutlineInput Id="Contact_Name" Label="Name" @bind-Value="_name" autocomplete="name" />
+            <Validation Message="@_sending["Name"]" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineInput Id="Contact_Email" Label="Email" type="email" @bind-Value="_email" autocomplete="email" />
+            <Validation Message="@_sending["Email"]" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineInput Id="Contact_Number" Label="Contact Number" type="tel" @bind-Value="_phone" autocomplete="tel" />
+            <Validation Message="@_sending["ContactNumber"]" />
+        </div>
+        <div class="col-12" style="min-height:47px;">
+            <FuseSelect Label="Related Hostel" Options="Hostels" Class="bg-white" @bind-Value="_hostel" />
+        </div>
+        <div class="col-12" style="min-height:47px;">
+            <FuseSelect Label="Related Tour" Options="Tours" Class="bg-white" @bind-Value="_tour" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineTextArea Id="Contact_Message" Label="Message" @bind-Value="_message" Rows="5" />
+            <Validation Message="@_sending["Message"]" />
+        </div>
+        <div class="col-12 position-relative mb-2">
+            <Captcha @ref="_captcha" Message="@_sending["Captcha"]" />
+        </div>
+        <input class="d-none" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" @bind="_sending.Website" />
+        @if (_sending.Problem is not null)
+        {
+            <p class="col-12 text-danger mb-0" role="alert">@_sending.Problem</p>
+        }
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary d-block w-100" disabled="@_sending.Busy">
+                @(_sending.Busy ? "Sending…" : "Send Message")
+            </button>
+        </div>
+    </form>
+}
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    /// <summary>The tour it's about to start with (e.g. from a tour's page).</summary>
+    [Parameter] public string? Tour { get; set; }
+
+    private readonly EnquirySending _sending = new();
+    private Captcha _captcha = null!;
+    private string? _name, _email, _phone, _hostel, _tour, _message;
+
+    private IReadOnlyList<FuseSelect.SelectOption> Hostels => [.. (Chrome?.Hostels ?? []).Select(h => new FuseSelect.SelectOption(h.Name, h.Name))];
+    private IReadOnlyList<FuseSelect.SelectOption> Tours => [.. (Chrome?.Tours ?? []).Select(t => new FuseSelect.SelectOption(t.Name, t.Name))];
+
+    protected override void OnInitialized() => _tour = Tour;
+
+    private Task SendAsync() =>
+        _sending.SendAsync(_captcha, captcha => Api.Send(new SendEnquiry(
+            _name ?? "", _email ?? "", _phone ?? "", _message ?? "", _hostel, _tour, captcha, _sending.Website)));
+}

@@ -1,0 +1,13 @@
+@* A row's other actions behind a "⋯" icon (the menu's items as ChildContent). *@
+
+<MudTooltip Text="@Label">
+    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Class="row-icon-menu" AriaLabel="@Label"
+             AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+        @ChildContent
+    </MudMenu>
+</MudTooltip>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Label { get; set; } = "More actions";
+}

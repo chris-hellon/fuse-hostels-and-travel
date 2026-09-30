@@ -1,0 +1,57 @@
+@* Legacy #cookiesModal: a bottom banner shown two seconds after arriving, until "I Like Cookies". *@
+@inherits JsComponent
+
+@if (_open)
+{
+    <div class="modal bottom fade show" id="cookiesModal" style="display: block;" tabindex="-1" aria-modal="true" role="dialog" aria-label="Cookies" @onclick="Dismiss">
+        <div class="modal-dialog modal-frame modal-bottom" @onclick:stopPropagation="true">
+            <div class="modal-content rounded-0">
+                <div class="modal-body py-1">
+                    <div class="container-fluid">
+                        <div class="container">
+                            <div class="row my-3">
+                                <div class="col-lg-6 mb-4 mb-lg-0">
+                                    <p class="small">
+                                        We use cookies to improve your website experience.<br />
+                                        By continuing to browse the site, you are agreeing to our use of cookies.
+                                    </p>
+                                </div>
+                                <div class="col-lg-6 d-flex justify-content-center justify-content-lg-end align-items-center">
+                                    <a class="small text-primary me-3" style="font-size: .75rem; letter-spacing: 1px; " href="/cookie-policy">COOKIE POLICY</a>
+                                    <button type="button" class="btn btn-primary btn-sm ms-2" @onclick="AcceptAsync">I Like Cookies</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private const string CookieName = "fuse-hostels-and-travel";
+
+    private bool _open;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (await Js.InvokeAsync<bool>("getCookie", CookieName))
+            return;
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        _open = true;
+        StateHasChanged();
+    }
+
+    private async Task AcceptAsync()
+    {
+        _open = false;
+        await Js.InvokeVoidAsync("setCookie", CookieName, 365);
+    }
+
+    /// <summary>Clicking away closes it for now; it comes back on the next visit.</summary>
+    private void Dismiss() => _open = false;
+}

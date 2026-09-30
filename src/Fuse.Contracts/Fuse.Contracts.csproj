@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Fuse.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Ships to the browser: no server-side dependencies allowed here. -->
+  <ItemGroup>
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="FluentValidation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fuse.Shared\Fuse.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

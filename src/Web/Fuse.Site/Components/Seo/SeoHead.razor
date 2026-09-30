@@ -1,0 +1,98 @@
+@* Legacy _Layout <head>: title, description, keywords, canonical, Open Graph / Twitter cards and the
+   structured data kept in the database. A page's own values win over the site defaults. *@
+@inject NavigationManager Navigation
+
+<PageTitle>@Title</PageTitle>
+
+@if (Chrome?.Seo is { } site)
+{
+    <HeadContent>
+        <link href="@site.WebsiteUrl" rel="home" />
+        <link rel="canonical" href="@Canonical(site)" />
+        <meta name="description" content="@Description(site)" />
+        <meta name="keywords" content="@(Page?.MetaKeywords ?? Keywords ?? site.MetaKeywords)" />
+        <meta property="og:site_name" content="@site.WebsiteUrl.Replace("https://", "")">
+        <meta property="og:description" content="@Description(site)">
+        <meta property="og:title" content="@Title">
+        <meta property="og:url" content="@Canonical(site)">
+        <meta property="og:image" content="@(ImageUrl ?? site.MetaImageUrl)">
+        <meta property="og:type" content="website">
+        <meta property="twitter:url" content="@Canonical(site)">
+        <meta property="twitter:title" content="@Title">
+        <meta property="twitter:card" content="summary_large_image">
+        <meta property="twitter:image" content="@(ImageUrl ?? site.MetaImageUrl)">
+        @if (IsHome && !string.IsNullOrEmpty(site.GoogleSiteVerification))
+        {
+            <meta name="google-site-verification" content="@site.GoogleSiteVerification" />
+        }
+        @if (!site.Indexable || NoIndex)
+        {
+            <meta name="robots" content="noindex, nofollow" />
+        }
+        @((MarkupString)(site.Breadcrumbs ?? ""))
+        @((MarkupString)(site.SearchAction ?? ""))
+        @((MarkupString)(Page?.CustomSeoScripts ?? ""))
+        @if (PageName is not null)
+        {
+            @((MarkupString)Breadcrumbs(site))
+        }
+        @ChildContent
+    </HeadContent>
+}
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    /// <summary>The page's CMS record, when it has one.</summary>
+    [Parameter] public PageSeo? Page { get; set; }
+    /// <summary>
+    /// The page's name: the title reads "{name} - Fuse Hostels &amp; Travel" (unless the record has an SEO
+    /// title), and a Home › name breadcrumb is added. Null on the home page, which is titled with the site name.
+    /// </summary>
+    [Parameter] public string? PageName { get; set; }
+    /// <summary>A crumb between Home and this page (e.g. Hostels, "/hostels").</summary>
+    [Parameter] public (string Name, string Path)? Parent { get; set; }
+    /// <summary>The share image (Open Graph / Twitter), when not the site's.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
+    /// <summary>Keywords when the record has none (legacy's page-level fallback), before the site's.</summary>
+    [Parameter] public string? Keywords { get; set; }
+    /// <summary>A description when the record has none (e.g. an event's), before the site's.</summary>
+    [Parameter] public string? MetaDescription { get; set; }
+    /// <summary>Keep this page out of search results (e.g. a tour that's only bookable through an event).</summary>
+    [Parameter] public bool NoIndex { get; set; }
+    /// <summary>The page's own structured data (e.g. a travel guide's BlogPosting).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string SiteName => Chrome?.Seo.SiteName ?? "";
+
+    private string Title =>
+        Page?.Title is { Length: > 0 } title ? title : PageName is null ? SiteName : $"{PageName} - {SiteName}";
+
+    private bool IsHome => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Length == 0;
+
+    private string? Description(SiteSeo site) =>
+        Page?.MetaDescription is { Length: > 0 } own ? own : !string.IsNullOrWhiteSpace(MetaDescription) ? MetaDescription : site.MetaDescription;
+
+    /// <summary>Legacy's per-page BreadcrumbList (JSON-LD).</summary>
+    private string Breadcrumbs(SiteSeo site) =>
+        "<script type=\"application/ld+json\">" + System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "BreadcrumbList",
+            ["itemListElement"] = Crumbs(site)
+                .Select((crumb, i) => new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = i + 1, ["name"] = crumb.Name, ["item"] = crumb.Url })
+                .ToArray(),
+        }) + "</script>";
+
+    private IEnumerable<(string Name, string Url)> Crumbs(SiteSeo site)
+    {
+        yield return ("Home", site.WebsiteUrl);
+        if (Parent is { } parent)
+            yield return (parent.Name, site.WebsiteUrl + parent.Path);
+        yield return (PageName!, Canonical(site));
+    }
+
+    /// <summary>Lower case, so /Hostels and /hostels count as one page (legacy echoed the address as typed).</summary>
+    private string Canonical(SiteSeo site) =>
+        $"{site.WebsiteUrl}/{Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].ToLowerInvariant()}";
+}

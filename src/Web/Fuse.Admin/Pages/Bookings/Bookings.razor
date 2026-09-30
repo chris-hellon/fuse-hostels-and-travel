@@ -1,0 +1,271 @@
+@page "/admin/bookings/tour-bookings"
+@attribute [RequirePermission(FuseAction.View, FuseResource.TourBookings)]
+@inject FileSaver Files
+@implements IDisposable
+
+@* Legacy Tour Bookings: search with Advanced Search filters, a row's details on demand, payments,
+   refunds and cancellations from the row's menu. *@
+
+<AdminPageHeader Title="Tour Bookings" Description="Manage Tour Bookings." />
+
+<EntityTable @ref="_table" T="BookingRow" Fields="_fields" Load="LoadAsync" InitialSearch="@Reference?.ToString()" EntityNamePlural="Bookings" Resource="@FuseResource.Bookings"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnExport="ExportAsync" OnDelete="DeleteAsync" CanDelete="CanDelete">
+    <AdvancedSearchContent>
+        <MudGrid Spacing="3" Class="mt-1">
+            <MudItem xs="12" md="6">
+                <MudDateRangePicker Label="Filter by Booking Date Range" DateRange="_booked" DateRangeChanged="SetBookedAsync" Clearable="true"
+                                    AutoClose="true" PickerVariant="PickerVariant.Dialog" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudDateRangePicker Label="Filter by Tour Departure Date Range" DateRange="_departs" DateRangeChanged="SetDepartsAsync" Clearable="true"
+                                    AutoClose="true" PickerVariant="PickerVariant.Dialog" DateFormat="dd/MM/yyyy" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <TourFilter Tours="_tours" Value="_tourId" ValueChanged="SetTourAsync" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" Value="_source" ValueChanged="SetSourceAsync" Label="Filter by Booking Source" Clearable="true" AnchorOrigin="Origin.BottomLeft">
+                    @foreach (var source in _sources)
+                    {
+                        <MudSelectItem T="string" Value="source">@source</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </AdvancedSearchContent>
+    <RowButtons>
+        <DetailsToggle Open="@_expanded.Contains(context.Id)" OnToggle="() => ToggleDetails(context)" />
+    </RowButtons>
+    <ExtraActions>
+        @if (context.Payable)
+        {
+            @if (CanUpdate)
+            {
+                <MudMenuItem OnClick="() => AfterMenuCloses(() => AddPaymentAsync(context))">Add Payment</MudMenuItem>
+                <MudMenuItem OnClick="() => AfterMenuCloses(() => PaymentQrDialog.ShowAsync(Api, Dialogs, Snackbar, context.Id))">Generate Payment QR</MudMenuItem>
+                <MudMenuItem OnClick="() => AfterMenuCloses(() => SendPaymentEmailAsync(context))">Send Payment Email</MudMenuItem>
+            }
+            @if (_abilities.CanFlagAsPaid)
+            {
+                <MudMenuItem OnClick="() => AfterMenuCloses(() => FlagAsPaidAsync(context))">Flag as Paid</MudMenuItem>
+            }
+        }
+        else if (context.IsPaid && !context.Cancelled && _abilities.CanRefund)
+        {
+            <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => RefundAsync(context))">Refund</MudMenuItem>
+            <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => CancelAsync(context))">Cancel</MudMenuItem>
+        }
+    </ExtraActions>
+    <ChildRowContent>
+        @if (_expanded.Contains(context.Id))
+        {
+            <BookingDetailsRow @key="context.Id" BookingId="context.Id" Version="_loads" Columns="_table!.ColumnCount" CanRefund="_abilities.CanRefund" OnChanged="ReloadAsync" />
+        }
+    </ChildRowContent>
+</EntityTable>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    private EntityTable<BookingRow>? _table;
+    private BookingAbilities _abilities = new();
+    private bool CanUpdate { get; set; }
+    private IReadOnlyList<LookupItem> _tours = [];
+    private IReadOnlyList<string> _sources = [];
+    private readonly HashSet<DefaultIdType> _expanded = [];
+
+    private DateRange? _booked, _departs;
+    private DefaultIdType? _tourId;
+    private string? _source;
+    private string? _keyword;
+
+    private IReadOnlyList<EntityField<BookingRow>> _fields = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _fields =
+        [
+            new(b => b.Reference, "Reference", nameof(BookingRow.Reference), b => @<span class="booking-ref">
+                @if (b.ContainsPackage)
+                {
+                    <MudTooltip Text="Contains a package"><span class="booking-flag booking-flag--package"><MudIcon Icon="@Icons.Material.Filled.Inventory2" /></span></MudTooltip>
+                }
+                @if (b.HasPackIncentive)
+                {
+                    <MudTooltip Text="Pack incentive booking"><span class="booking-flag booking-flag--pack"><MudIcon Icon="@Icons.Material.Filled.Loyalty" /></span></MudTooltip>
+                }
+                <span>@b.Reference</span>
+            </span>) { Width = "1%" },
+            new(b => b.Description, "Description", nameof(BookingRow.Description)),
+            new(b => b.GuestName, "Guest", nameof(BookingRow.GuestName), b => @<GuestLink GuestId="@b.GuestId" Name="@b.GuestName" />),
+            new(b => b.BookingDate.ToString("dd/MM/yyyy HH:mm"), "Booking Date", nameof(BookingRow.BookingDate)),
+            new(b => $"$ {b.TotalAmount:N2}", "Total Amount", nameof(BookingRow.TotalAmount)),
+            new(b => b.Status, "Status", Template: b => @<BookingStatusText State="b.Status" />),
+        ];
+
+        var user = (await AuthState).User;
+        CanUpdate = user.HasPermission(FuseAction.Update, FuseResource.Bookings);
+        await Snackbar.TryAsync(async () =>
+        {
+            var abilities = Api.Send(new GetBookingAbilities()).AsTask();
+            var tours = Api.Send(new ListBookingTours()).AsTask();
+            var sources = Api.Send(new ListBookingSources()).AsTask();
+            await Task.WhenAll(abilities, tours, sources);
+            (_abilities, _tours, _sources) = (abilities.Result, tours.Result, sources.Result);
+        });
+    }
+
+    private SearchBookings Filters => new()
+    {
+        TourId = _tourId,
+        BookedFrom = _booked?.Start,
+        BookedTo = _booked?.End,
+        DepartsFrom = _departs?.Start,
+        DepartsTo = _departs?.End,
+        Source = _source,
+    };
+
+    /// <summary>Counts table loads, so expanded details refresh with the table (e.g. after Reload or a payment).</summary>
+    private int _loads;
+
+    private async Task<PagedResult<BookingRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
+    {
+        _keyword = request.Keyword;
+        _loads++;
+        var page = await Api.Send(request.Apply(Filters), cancellationToken);
+        // Opened from a link to one booking (e.g. a guest's bookings): its details open straight away, once.
+        if (Reference is { } reference && page.Items.FirstOrDefault(b => b.Reference == reference) is { } linked && _openedReference != reference)
+        {
+            _openedReference = reference;
+            _expanded.Add(linked.Id);
+        }
+        return page;
+    }
+
+    /// <summary>/admin/bookings/tour-bookings?reference=42378: searched for, with its details open.</summary>
+    [SupplyParameterFromQuery(Name = "reference")] private int? Reference { get; set; }
+    private int? _openedReference;
+
+    /// <summary>A booking made from the app bar's New booking while this page is open: shown in the list.</summary>
+    [CascadingParameter] private BookingsChanged? BookingsChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (BookingsChanged is not null)
+        {
+            BookingsChanged.Changed -= ReloadAsync;
+            BookingsChanged.Changed += ReloadAsync;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (BookingsChanged is not null)
+            BookingsChanged.Changed -= ReloadAsync;
+    }
+
+    private Task ReloadAsync() => _table!.ReloadAsync();
+
+    private Task SetBookedAsync(DateRange? range) { _booked = range; return ReloadAsync(); }
+    private Task SetDepartsAsync(DateRange? range) { _departs = range; return ReloadAsync(); }
+    private Task SetTourAsync(DefaultIdType? tourId) { _tourId = tourId; return ReloadAsync(); }
+    private Task SetSourceAsync(string? source) { _source = source; return ReloadAsync(); }
+
+    private void ToggleDetails(BookingRow booking)
+    {
+        if (!_expanded.Remove(booking.Id))
+            _expanded.Add(booking.Id);
+    }
+
+    /// <summary>As legacy: unpaid bookings, or cancelled ones for staff who can flag bookings paid.</summary>
+    private bool CanDelete(BookingRow b) => !b.IsPaid || (b.Cancelled && _abilities.CanFlagAsPaid);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(BookingRow booking) => OpenWizardAsync(booking.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<BookingWizard>(null, new DialogParameters<BookingWizard> { { w => w.BookingId, id } }, BookingWizard.Options);
+        if (await dialog.Result is { Canceled: false })
+            await ReloadAsync();
+    }
+
+    private Task AfterMenuCloses(Func<Task> action) => MenuActions.AfterMenuCloses(action, DispatchExceptionAsync);
+
+    private async Task ExportAsync()
+    {
+        var (export, notes) = ExportWindow.Normalize(new ExportBookings
+        {
+            Keyword = _keyword,
+            TourId = _tourId,
+            BookedFrom = _booked?.Start,
+            BookedTo = _booked?.End,
+            DepartsFrom = _departs?.Start,
+            DepartsTo = _departs?.End,
+        }, DateTime.Today);
+        foreach (var note in notes)
+            Snackbar.Add(note, Severity.Info);
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(export)));
+    }
+
+    private async Task DeleteAsync(BookingRow booking)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this booking?", $"Booking {booking.Reference} for {booking.GuestName} will be deleted and its spaces freed.",
+                "Delete booking", "Keep booking"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteBooking(booking.Id)), "Booking deleted."))
+            await ReloadAsync();
+    }
+
+    private async Task AddPaymentAsync(BookingRow booking)
+    {
+        var dialog = await Dialogs.ShowAsync<AddPaymentDialog>(null, new DialogParameters<AddPaymentDialog>
+        {
+            { d => d.BookingId, booking.Id },
+            { d => d.Outstanding, booking.Outstanding },
+        }, AddPaymentDialog.Options);
+        if (await dialog.Result is { Canceled: false })
+            await ReloadAsync();
+    }
+
+    private async Task SendPaymentEmailAsync(BookingRow booking)
+    {
+        if (!await Dialogs.ConfirmAsync("Send a payment email?", $"{booking.GuestName} will be emailed a link to pay {booking.Outstanding:$#,##0.00} for booking {booking.Reference}.",
+                "Send email", "Cancel", destructive: false))
+            return;
+        string? message = null;
+        if (await Snackbar.TryAsync(async () => message = await Api.Send(new SendPaymentEmail(booking.Id))))
+            Snackbar.Add(message, Severity.Success);
+    }
+
+    private async Task FlagAsPaidAsync(BookingRow booking)
+    {
+        if (!await Dialogs.ConfirmAsync("Flag as paid?", $"Booking {booking.Reference} will be marked paid in full without recording a payment.",
+                "Flag as paid", "Cancel"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new FlagBookingAsPaid(booking.Id)), "Booking flagged as paid."))
+            await ReloadAsync();
+    }
+
+    private Task RefundAsync(BookingRow booking) => ShowRefundAsync(booking, cancelling: false);
+
+    private Task CancelAsync(BookingRow booking) => ShowRefundAsync(booking, cancelling: true);
+
+    private async Task ShowRefundAsync(BookingRow booking, bool cancelling)
+    {
+        var dialog = await Dialogs.ShowAsync<RefundDialog>(null, new DialogParameters<RefundDialog>
+        {
+            { d => d.Title, cancelling ? "Cancel Booking" : "Refund Booking" },
+            { d => d.Cancelling, cancelling },
+            { d => d.MaxAmount, booking.TotalAmount },
+            {
+                d => d.Submit, async amount => cancelling
+                    ? await Api.Send(new CancelBooking(booking.Id, amount))
+                    : await Api.Send(new RefundBooking(booking.Id, amount))
+            },
+        }, RefundDialog.Options);
+        if (await dialog.Result is { Canceled: false })
+            await ReloadAsync();
+    }
+}

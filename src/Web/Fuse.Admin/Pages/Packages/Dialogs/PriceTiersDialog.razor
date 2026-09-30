@@ -1,0 +1,48 @@
+@* Name the tiers a package is sold at (Adult, Child...). Edits a copy; Done returns it. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.Sell" Class="mr-3 mb-n1" />Price tiers</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">Each tier gets its own price for every tour, e.g. Adult and Child.</MudText>
+        <MudStack Spacing="2">
+            @foreach (var tier in _tiers)
+            {
+                <div class="field-row" @key="tier.Key">
+                    <MudTextField T="string" @bind-Value="tier.Title" Placeholder="Tier name" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                                  Error="@string.IsNullOrWhiteSpace(tier.Title)" />
+                    <MudTooltip Text="@(_tiers.Count == 1 ? "A package needs at least one tier" : "Remove tier")">
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Color="Color.Error" Size="Size.Small" Disabled="@(_tiers.Count == 1)"
+                                       OnClick="() => _tiers.Remove(tier)" aria-label="Remove tier" />
+                    </MudTooltip>
+                </div>
+            }
+        </MudStack>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-2"
+                   OnClick="() => _tiers.Add(new Editable(Guid.NewGuid(), string.Empty))">Add tier</MudButton>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!IsValid)" OnClick="Done">Done</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<TierDraft> Tiers { get; set; } = [];
+
+    private List<Editable> _tiers = [];
+
+    private bool IsValid => _tiers.Count > 0 && _tiers.All(t => !string.IsNullOrWhiteSpace(t.Title));
+
+    protected override void OnInitialized() => _tiers = [.. Tiers.Select(t => new Editable(t.Key, t.Title))];
+
+    private void Done() => Dialog.Close(DialogResult.Ok(_tiers.Select(t => new TierDraft(t.Key, t.Title.Trim())).ToList()));
+
+    private sealed class Editable(DefaultIdType key, string title)
+    {
+        public DefaultIdType Key { get; } = key;
+        public string Title { get; set; } = title;
+    }
+}

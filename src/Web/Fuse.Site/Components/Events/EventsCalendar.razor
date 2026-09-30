@@ -1,0 +1,108 @@
+@* Legacy's hostel events calendar (FullCalendar): published events (a hostel's, or all), month or list view; an event
+   opens in a card with View event and Share. Shown in What's On's
+   View calendar dialog. *@
+@inherits JsComponent
+@inject IApi Api
+@inject NavigationManager Navigation
+
+<div class="events-calendar">
+    <div class="calendar-wrap">
+        <div id="calendar" @ref="_calendar"></div>
+    </div>
+</div>
+
+<div class="@($"ev-backdrop{(_shown is null ? "" : " open")}")" @onclick="Close"></div>
+<div class="@($"ev-card{(_shown is null ? "" : " open")}")" role="dialog" aria-modal="true" aria-label="@_shown?.Name" @onkeydown="KeyDown">
+    <button type="button" class="ev-card__close" aria-label="Close" @onclick="Close">&times;</button>
+    @if (_shown is { } shown)
+    {
+        @if (!string.IsNullOrEmpty(shown.ImagePath))
+        {
+            <img class="ev-card__img" alt="" src="@CdnImages.Sized(shown.ImagePath, 700)" />
+        }
+        <div class="ev-card__body">
+            @if (!string.IsNullOrEmpty(shown.CategoryName))
+            {
+                <span class="ev-card__badge">@shown.CategoryName</span>
+            }
+            @if (EventDates.PriceText(shown.Booking, shown.Date) is { } price)
+            {
+                <span class="ev-card__badge ev-card__badge--price">@price</span>
+            }
+            <h4 class="mt-2 mb-1">@shown.Name</h4>
+            <p class="text-muted mb-2">@When(shown)</p>
+            <div>@((MarkupString)(shown.ShortDescription ?? ""))</div>
+            <div class="mt-3 d-flex gap-2">
+                <EventBook Booking="shown.Booking" Date="shown.Date" Class="btn btn-primary btn-sm"><i class="fas fa-ticket me-1"></i>Book</EventBook>
+                <a class="@(shown.Booking is null ? "btn btn-primary btn-sm" : "btn btn-outline-primary btn-sm")" href="@shown.Url"><i class="fas fa-circle-info me-1"></i>View event</a>
+                <ShareButton Title="@shown.Name" Url="@shown.Url" Class="btn btn-outline-primary btn-sm" />
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Only this hostel's events (and those at every hostel); all of them without.</summary>
+    [Parameter] public DefaultIdType? HostelId { get; set; }
+
+    private ElementReference _calendar;
+    private DotNetObjectReference<EventsCalendar>? _self;
+    /// <summary>Everything the calendar has shown, by the key it was handed (it asks again for each range).</summary>
+    private readonly List<SiteEventOccurrence> _loaded = [];
+    private SiteEventOccurrence? _shown;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        _self = DotNetObjectReference.Create(this);
+        await Js.InvokeVoidAsync("mountCalendar", _calendar, _self);
+    }
+
+    /// <summary>FullCalendar's feed: the events in the range it's showing.</summary>
+    [JSInvokable]
+    public async Task<object[]> LoadEvents(string start, string end)
+    {
+        var occurrences = await Api.Send(new ListSiteEventOccurrences(
+            DateTimeOffset.Parse(start).DateTime, DateTimeOffset.Parse(end).DateTime, HostelId));
+        return [.. occurrences.Select(o =>
+        {
+            _loaded.Add(o);
+            return (object)new
+            {
+                // Its price beside the name, for an event booked as a tour ("Bar Hop · $6.50").
+                title = EventDates.PriceText(o.Booking, o.Date) is { } price ? $"{o.Name} · {price}" : o.Name,
+                start = o.Start.ToString("s"),
+                end = o.End > o.Start ? o.End.ToString("s") : null,
+                allDay = o.AllDay,
+                color = o.Colour,
+                extendedProps = new { key = _loaded.Count - 1 },
+            };
+        })];
+    }
+
+    [JSInvokable]
+    public void ShowEvent(int key)
+    {
+        _shown = key >= 0 && key < _loaded.Count ? _loaded[key] : null;
+        StateHasChanged();
+    }
+
+    private void Close() => _shown = null;
+
+    private void KeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            Close();
+    }
+
+    /// <summary>Legacy formatWhen: the day in full, with the time unless it's all day.</summary>
+    private static string When(SiteEventOccurrence o) =>
+        o.AllDay ? o.Start.ToString("dddd d MMMM yyyy") : o.Start.ToString("dddd d MMMM yyyy 'at' HH:mm");
+
+    protected override async Task OnDisposeAsync()
+    {
+        await Js.InvokeVoidAsync("unmountCalendar", _calendar);
+        _self?.Dispose();
+    }
+}

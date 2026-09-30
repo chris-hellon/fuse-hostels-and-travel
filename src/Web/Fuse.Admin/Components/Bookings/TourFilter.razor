@@ -1,0 +1,15 @@
+@using Fuse.Contracts.Tours
+@* "Filter by Tour" for a table's Advanced Search panel. *@
+
+<MudSelect T="DefaultIdType?" Value="Value" ValueChanged="ValueChanged" Label="Filter by Tour" Clearable="true" AnchorOrigin="Origin.BottomLeft">
+    @foreach (var tour in Tours)
+    {
+        <MudSelectItem T="DefaultIdType?" Value="@DefaultIdType.Parse(tour.Id)">@tour.Name</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter] public IReadOnlyList<LookupItem> Tours { get; set; } = [];
+    [Parameter] public DefaultIdType? Value { get; set; }
+    [Parameter] public EventCallback<DefaultIdType?> ValueChanged { get; set; }
+}

@@ -1,0 +1,9 @@
+@* A row's Show / Hide details: a chevron that's highlighted while the details are open. *@
+
+<RowIconButton Icon="@(Open ? Icons.Material.Filled.KeyboardArrowUp : Icons.Material.Filled.KeyboardArrowDown)"
+               Label="@(Open ? "Hide details" : "Show details")" Active="Open" OnClick="OnToggle" />
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnToggle { get; set; }
+}

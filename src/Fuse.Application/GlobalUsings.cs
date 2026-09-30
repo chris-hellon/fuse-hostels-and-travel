@@ -1,0 +1,11 @@
+global using FluentValidation;
+global using Mediator;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.Logging;
+global using Fuse.Application.Common.Persistence;
+global using Fuse.Application.Common.Security;
+global using Fuse.Contracts.Api;
+global using Fuse.Contracts.Common;
+global using Fuse.Domain.Common.Contracts;
+global using Fuse.Shared.Authorization;
+global using Fuse.Shared.Enums;

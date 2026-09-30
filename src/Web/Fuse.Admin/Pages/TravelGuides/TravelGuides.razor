@@ -1,0 +1,38 @@
+@page "/admin/management/travel-guides"
+@attribute [RequirePermission(FuseAction.View, FuseResource.TravelGuides)]
+
+<AdminPageHeader Title="Travel Guides" Description="Manage Travel Guides." />
+
+<EntityTable @ref="_table" T="TravelGuideSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Travel Guides" Resource="@FuseResource.TravelGuides"
+             OnCreate="() => OpenWizardAsync(null)" OnEdit="g => OpenWizardAsync(g.Id)" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<TravelGuideSummary>> Fields =
+    [
+        new(g => g.Title, "Title", nameof(TravelGuideSummary.Title)),
+        new(g => g.UrlSlug, "URL Slug", nameof(TravelGuideSummary.UrlSlug)),
+        new(g => g.CreatedOn.ToString("d MMM yyyy"), "Created On", nameof(TravelGuideSummary.CreatedOn)),
+        new(g => g.LastModifiedOn?.ToString("d MMM yyyy"), "Last Updated", nameof(TravelGuideSummary.LastModifiedOn)),
+    ];
+
+    private EntityTable<TravelGuideSummary>? _table;
+
+    private async Task<PagedResult<TravelGuideSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchTravelGuides()), cancellationToken);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<TravelGuideWizard>(null, new DialogParameters<TravelGuideWizard> { { w => w.TravelGuideId, id } }, TravelGuideWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(TravelGuideSummary guide)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this travel guide?", $"\"{guide.Title}\" will be deleted straight away and taken off the website.",
+                "Delete guide", "Keep guide"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteTravelGuide(guide.Id)), "Travel guide deleted."))
+            await _table!.ReloadAsync();
+    }
+}

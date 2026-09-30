@@ -1,0 +1,18 @@
+@* A page's content while it loads (arriving from another page): a heading, a couple of lines and a row of cards,
+   shimmering, a window high so the footer stays below until the page shows. *@
+
+<div class="container page-skeleton" role="status" aria-label="Loading">
+    <div class="page-skeleton__intro">
+        <span class="skeleton page-skeleton__heading"></span>
+        <span class="skeleton page-skeleton__line"></span>
+        <span class="skeleton page-skeleton__line page-skeleton__line--short"></span>
+    </div>
+    <div class="row g-4">
+        @for (var i = 0; i < 3; i++)
+        {
+            <div class="@(i == 0 ? "col-12 col-md-4" : "col-md-4 d-none d-md-block")">
+                <span class="skeleton page-skeleton__card"></span>
+            </div>
+        }
+    </div>
+</div>

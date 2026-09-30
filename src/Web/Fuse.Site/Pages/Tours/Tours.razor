@@ -1,0 +1,32 @@
+@page "/tours"
+@inherits SitePage
+
+<SeoHead Page="Page" PageName="Tours" Keywords="Vietnam tours, budget tours, adventure tours, group tours, Vietnam travel" />
+
+<section id="headerBanner" class="bg-light">
+    @* Legacy passed an empty introduction, which still takes its padded (empty) column and the ovals. *@
+    <HeaderBanner Headings="BannerHeadings()" ImageUrl="https://travaloudcdn.azureedge.net/fuse/assets/images/146f0d66-95b1-42fb-9902-d5466890e60d.jpg">
+        <Intro></Intro>
+        <Ovals><OvalContainer Id="hostelPageHeaderBannerOvals1" Top="-160" Left="-45" /></Ovals>
+    </HeaderBanner>
+</section>
+@if (Page is not null)
+{
+    <StaggeredTours Tours="@(Cards ?? [])" Class="bg-light mt-n8" />
+    <CallToActionStrip Id="contactUs" Title="GET IN TOUCH" ButtonText="Contact Us" Href="/contact">
+        <p class="text-white">Looking for good people, great times, and gorgeous scenery? Get in touch today!</p>
+    </CallToActionStrip>
+}
+else
+{
+    @* Arriving from another page: its content is loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [PersistentState] public IReadOnlyList<SiteCard>? Cards { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.Tours;
+
+    protected override async Task LoadAsync() => Cards = await Api.Send(new ListSiteTours());
+}

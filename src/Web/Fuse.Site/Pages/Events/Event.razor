@@ -1,0 +1,144 @@
+@page "/events/{Slug}"
+@using System.Text.RegularExpressions
+@inject IApi Api
+@inject NavigationManager Navigation
+
+@* An event's own page (legacy Events/Detail), where View event goes: when it's next on, how often and where, what
+   it is, its next days, the hostels it's at and what else is on. In What's On's look, in the event's colour. An event
+   booked as a tour has Book (its next date) and a Book on each day, to that day's departure. *@
+
+@if (Details is { Event: var ev })
+{
+    var next = EventDates.Next(ev);
+    <SeoHead PageName="@ev.Name" Parent="@(("Events", "/events"))" ImageUrl="@ev.ImagePath" MetaDescription="@PlainText(ev.ShortDescription ?? Details.Description)" />
+
+    <section id="headerBanner">
+        <HeaderBanner Headings="new PageHeadings(ev.Name, ev.CategoryName, null)" ImageUrl="@(ev.ImagePath ?? DefaultBanner)" />
+    </section>
+    <section id="event" class="event-page pt-8 pb-8" style="@(ev.Colour is { } colour ? $"--accent: {colour}" : null)">
+        <div class="container">
+            <div class="row gx-lg-8 gy-6">
+                <div class="col-lg-7">
+                    @if (next is not null)
+                    {
+                        <span class="tilted event-page__when">@EventDates.Describe(ev, next)</span>
+                    }
+                    <p class="event-page__meta">@Meta(ev)</p>
+                    @if (ev.Times.Count > 1 && next is not null)
+                    {
+                        <p class="event-page__times">@EventDates.Times(ev, next).ToUpperInvariant()</p>
+                    }
+                    <div class="event-page__text">@((MarkupString)(string.IsNullOrWhiteSpace(Details.Description) ? ev.ShortDescription ?? "" : Details.Description))</div>
+                    <div class="event-page__actions">
+                        <EventBook Booking="ev.Booking" Date="next" Class="btn btn-primary"><i class="fas fa-ticket me-2"></i>@EventDates.BookLabel(ev.Booking, next)</EventBook>
+                        @* target: a server route (the iCal feed), so the browser loads it rather than Blazor's router. *@
+                        <a class="@(ev.Booking is null ? "btn btn-primary" : "btn btn-outline-primary")" href="@($"/events/calendar.ics?eventId={ev.Id}")" target="_top"><i class="far fa-calendar-plus me-2"></i>Add to calendar</a>
+                        <ShareButton Title="@ev.Name" />
+                        @if (ExternalUrl(ev) is { } link)
+                        {
+                            <a class="btn btn-outline-primary" href="@link" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square me-2"></i>More info</a>
+                        }
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <h4 class="tilted whats-on__lineup-title">UPCOMING DATES</h4>
+                    @if (Days(ev) is { Count: > 0 } days)
+                    {
+                        <ul class="whats-on__lineup">
+                            @foreach (var day in days)
+                            {
+                                <li class="whats-on__act event-page__day" @key="day.Date">
+                                    <span class="whats-on__date" aria-hidden="true">
+                                        <span class="whats-on__weekday">@EventDates.Day(day.Date).ToUpperInvariant()</span>
+                                        <span class="whats-on__day">@day.Date.Day</span>
+                                    </span>
+                                    <span class="whats-on__act-body">
+                                        <span class="whats-on__act-name">@day.Date.ToString("dddd d MMMM")</span>
+                                        <span class="whats-on__act-meta">@day.Times@(EventDates.PriceText(ev.Booking, day.First) is { } price ? $"  ·  {price}" : "")</span>
+                                    </span>
+                                    @if (ev.Booking is not null)
+                                    {
+                                        @if (day.First.SoldOut)
+                                        {
+                                            <span class="event-page__book is-full">SOLD OUT</span>
+                                        }
+                                        else
+                                        {
+                                            <EventBook Booking="ev.Booking" Date="day.First" Class="event-page__book">BOOK <i class="fas fa-arrow-right-long ms-1" aria-hidden="true"></i></EventBook>
+                                        }
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="event-page__none">Nothing coming up just now. Check back soon!</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+    <HostelDetails Title="WHERE" Hostels="@At(ev)" />
+    <WhatsOn Events="@([.. (Others ?? []).Where(e => e.Id != ev.Id)])" Title="MORE EVENTS" />
+}
+else
+{
+    @* Arriving from another page: the banner (its photo is the event's) and content while they load. *@
+    <section id="headerBanner">
+        <HeaderBanner Headings="null" LoadingText="Loading the event…" />
+    </section>
+    <PageSkeleton />
+}
+
+@code {
+    private const string DefaultBanner = "https://travaloudcdn.azureedge.net/fuse/assets/images/26885dcf-2138-4b69-8540-5203a35e65dd.jpg";
+
+    [Parameter] public string Slug { get; set; } = "";
+
+    // Fetched once while prerendering and handed to the browser, so WebAssembly doesn't re-fetch.
+    [PersistentState] public SiteEventDetails? Details { get; set; }
+    [PersistentState] public IReadOnlyList<SiteHostelContact>? Hostels { get; set; }
+    [PersistentState] public IReadOnlyList<SiteEvent>? Others { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Details?.Event.Slug.Equals(Slug, StringComparison.OrdinalIgnoreCase) == true)
+            return;
+        Details = null; // from another event's page: loading, not the last event
+        try
+        {
+            var details = Api.Send(new GetSiteEvent(Slug)).AsTask();
+            var hostels = Api.Send(new ListSiteHostelContacts()).AsTask();
+            var others = Api.Send(new ListSiteEvents()).AsTask();
+            (Details, Hostels, Others) = (await details, await hostels, await others);
+        }
+        catch (NotFoundException)
+        {
+            // As legacy: an event that's gone (or never was) goes to all events.
+            Navigation.NavigateTo("/events", replace: true);
+        }
+    }
+
+    /// <summary>"EVERY DAY · HOI AN OLD TOWN".</summary>
+    private static string Meta(SiteEvent ev) =>
+        string.Join("  ·  ", new[] { ev.Repeats ?? "One night only", ev.AllHostels ? "All hostels" : string.Join(", ", ev.Hostels.Select(h => h.Name)) }
+            .Where(t => t.Length > 0)).ToUpperInvariant();
+
+    /// <summary>The next six days and their times ("12pm – 1pm, 5pm – 6pm"; "All day").</summary>
+    private static List<(DateTime Date, string Times, SiteEventDate First)> Days(SiteEvent ev) =>
+        [.. ev.Upcoming.GroupBy(d => d.Start.Date).Take(6).Select(day =>
+            (day.Key, ev.AllDay ? "All day" : string.Join(", ", day.Select(d => EventDates.Time(ev, d))), day.First()))];
+
+    /// <summary>The hostels it's on at (all of them for an event at every hostel).</summary>
+    private IReadOnlyList<SiteHostelContact> At(SiteEvent ev) =>
+        [.. (Hostels ?? []).Where(h => ev.AllHostels || ev.Hostels.Any(l => l.Id == h.Id))];
+
+    /// <summary>As legacy: a link saved without its scheme gets https://.</summary>
+    private static string? ExternalUrl(SiteEvent ev) =>
+        string.IsNullOrWhiteSpace(ev.ExternalUrl) ? null
+        : ev.ExternalUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? ev.ExternalUrl : $"https://{ev.ExternalUrl}";
+
+    private static string? PlainText(string? html) =>
+        string.IsNullOrWhiteSpace(html) ? null : Regex.Replace(System.Net.WebUtility.HtmlDecode(Regex.Replace(html, "<.*?>", " ")), @"\s+", " ").Trim();
+}

@@ -1,0 +1,17 @@
+@* Legacy TourBookingItemsTable: what a booking row shows when expanded (BookingDetails). *@
+
+<MudTr>
+    <td colspan="@Columns" class="booking-details">
+        <BookingDetails BookingId="BookingId" Version="Version" CanRefund="CanRefund" OnChanged="OnChanged" />
+    </td>
+</MudTr>
+
+@code {
+    [Parameter, EditorRequired] public DefaultIdType BookingId { get; set; }
+    [Parameter] public int Columns { get; set; } = 7;
+    [Parameter] public bool CanRefund { get; set; }
+    /// <summary>Changes whenever the table reloads: the details load again with it.</summary>
+    [Parameter] public int Version { get; set; }
+    /// <summary>A tour was refunded or cancelled, or the guest renamed: the row above may need reloading.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+}

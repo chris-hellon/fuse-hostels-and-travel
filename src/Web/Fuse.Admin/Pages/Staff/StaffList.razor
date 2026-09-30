@@ -1,0 +1,48 @@
+@page "/admin/staff"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Users)]
+@inject NavigationManager Navigation
+
+<AdminPageHeader Title="Staff" Description="Manage Staff." />
+
+<AuthorizeView Context="auth">
+    <EntityTable T="UserSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Staff" Resource="@FuseResource.Users"
+                 OnCreate="CreateAsync">
+        <ExtraActions>
+            <MudMenuItem Href="@($"/admin/staff/{context.Id}/profile")">Manage User</MudMenuItem>
+            @if (auth.User.HasPermission(FuseAction.View, FuseResource.UserRoles))
+            {
+                <MudMenuItem Href="@($"/admin/staff/{context.Id}/roles")">Manage Roles</MudMenuItem>
+            }
+            <MudMenuItem OnClick="@(() => SendResetLinkAsync(context))">Send Password Reset Link</MudMenuItem>
+        </ExtraActions>
+    </EntityTable>
+</AuthorizeView>
+
+@code {
+    private static readonly IReadOnlyList<EntityField<UserSummary>> Fields =
+    [
+        new(u => u.FullName, "Name", nameof(UserSummary.FullName)),
+        new(u => u.Email, "Email", nameof(UserSummary.Email)),
+        new(u => u.PhoneNumber, "Phone Number", nameof(UserSummary.PhoneNumber)),
+        EntityField<UserSummary>.Bool(u => u.IsActive, "Active"),
+    ];
+
+    private async Task<PagedResult<UserSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchStaff()), cancellationToken);
+
+    private Task SendResetLinkAsync(UserSummary user) =>
+        Snackbar.TryAsync(async () => await Api.Send(new SendStaffPasswordReset(user.Id)), "Password reset link sent.");
+
+    private async Task CreateAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<CreateAccountDialog>("Create Staff", new DialogParameters<CreateAccountDialog>
+        {
+            { d => d.Create, (profile, password, confirm) => Api.Send(new CreateStaff(profile, password, confirm)).AsTask() },
+            { d => d.SuccessText, "Staff member created." },
+            { d => d.Note, "New staff start with the Basic role; add more on the Roles screen." },
+        });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string id })
+            Navigation.NavigateTo($"/admin/staff/{id}/profile");
+    }
+}

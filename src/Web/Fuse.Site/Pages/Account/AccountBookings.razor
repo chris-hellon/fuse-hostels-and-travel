@@ -1,0 +1,100 @@
+@page "/my-account/bookings"
+@inherits AccountPage
+@using Fuse.Contracts.Identity
+
+@* Legacy Manage/Bookings (a bare table of references), redesigned: coming up first, then everything before, each
+   booking a card with its first tour's photo and date, its state, and what's still to pay. *@
+
+<SeoHead PageName="My Bookings" />
+
+<AccountShell Title="BOOKINGS" Active="@AccountShell.Bookings">
+    @if (Bookings is null)
+    {
+        <LoadingMessage Text="Loading your bookings…" />
+    }
+    else if (Bookings.Count == 0)
+    {
+        <div class="account-empty">
+            <span class="account-empty__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <h2 class="display-6">NO BOOKINGS YET</h2>
+            <p>When you book a tour with us, it'll be right here: dates, guests, pick-up and payments.</p>
+            <a class="btn btn-primary" href="/tours">Browse Tours</a>
+        </div>
+    }
+    else
+    {
+        @foreach (var (heading, group) in Groups)
+        {
+            <h4 class="tilted display-6 mb-5 account__group">@heading</h4>
+            <div class="row g-6 mb-8">
+                @foreach (var booking in group)
+                {
+                    <div class="col-lg-6" @key="booking.Id">
+                        <a class="booking-card offcut-image-border" href="@($"/my-account/bookings/{booking.Id}")">
+                            <div class="booking-card__photo" style="@Photo(booking)">
+                                @if (booking.Starts is { } starts)
+                                {
+                                    <span class="booking-card__date">
+                                        <span>@starts.ToString("ddd").ToUpperInvariant()</span>
+                                        <strong>@starts.Day</strong>
+                                        <span>@starts.ToString("MMM").ToUpperInvariant()</span>
+                                    </span>
+                                }
+                            </div>
+                            <div class="booking-card__body">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <span class="booking-card__ref">#@booking.Reference</span>
+                                    <BookingStatusBadge Status="booking.Status" />
+                                </div>
+                                <h3 class="booking-card__title">@booking.Title</h3>
+                                @if (booking.MoreTours > 0)
+                                {
+                                    <p class="booking-card__more">+ @booking.MoreTours more tour@(booking.MoreTours == 1 ? "" : "s")</p>
+                                }
+                                <p class="booking-card__meta">
+                                    @(booking.Starts is { } start ? start.ToString("dddd d MMMM yyyy, h:mm tt") : $"Booked {booking.BookedOn:d MMMM yyyy}")
+                                </p>
+                                <div class="booking-card__foot">
+                                    <span>
+                                        @if (booking.Status == MyBookingStatus.Due)
+                                        {
+                                            <strong class="text-primary">@Money.Usd(booking.Outstanding) to pay</strong>
+                                        }
+                                        else
+                                        {
+                                            <strong>@Money.Usd(booking.Total)</strong>
+                                        }
+                                    </span>
+                                    <span class="booking-card__view">VIEW <i class="fas fa-arrow-right-long ms-1" aria-hidden="true"></i></span>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                }
+            </div>
+        }
+    }
+</AccountShell>
+
+@code {
+    [PersistentState] public IReadOnlyList<MyBookingSummary>? Bookings { get; set; }
+
+    protected override async Task LoadAsync() => Bookings = await Api.Send(new ListMyBookings());
+
+    /// <summary>Coming up (soonest first), then the rest (latest first).</summary>
+    private IEnumerable<(string Heading, IReadOnlyList<MyBookingSummary> Bookings)> Groups
+    {
+        get
+        {
+            var upcoming = Bookings!.Where(b => b.Upcoming).OrderBy(b => b.Starts).ToList();
+            var past = Bookings!.Where(b => !b.Upcoming).ToList();
+            if (upcoming.Count > 0)
+                yield return ("COMING UP", upcoming);
+            if (past.Count > 0)
+                yield return (upcoming.Count > 0 ? "PAST & CANCELLED" : "YOUR BOOKINGS", past);
+        }
+    }
+
+    private static string Photo(MyBookingSummary booking) =>
+        string.IsNullOrEmpty(booking.ImagePath) ? "" : $"background-image:{CdnImages.Background(booking.ImagePath, 700)};";
+}

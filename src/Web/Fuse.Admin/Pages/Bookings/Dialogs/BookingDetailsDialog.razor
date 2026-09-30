@@ -1,0 +1,75 @@
+@inject NavigationManager Navigation
+@* A tour booking's details over the page you're on (e.g. from Hostel Bookings), as its Tour Bookings row shows them,
+   with refunds and cancellations as there. Edit opens the booking wizard on top; Open in Tour Bookings goes to its row. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Booking @Reference</MudText>
+    </TitleContent>
+    <DialogContent>
+        <BookingDetails BookingId="BookingId" Version="_version" CanRefund="_abilities.CanRefund" OnChanged="Changed" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton StartIcon="@Icons.Material.Filled.OpenInBrowser" OnClick="OpenInTourBookings">Open in Tour Bookings</MudButton>
+        @if (_canUpdate)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Edit" OnClick="EditAsync">Edit Booking</MudButton>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="() => Dialog.Close(DialogResult.Ok(new Outcome(_changed, false)))">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, CloseButton = true };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+    [Parameter, EditorRequired] public DefaultIdType BookingId { get; set; }
+    [Parameter, EditorRequired] public int Reference { get; set; }
+
+    private BookingAbilities _abilities = new();
+    private bool _canUpdate;
+    private int _version;
+
+    /// <param name="Changed">It was edited, refunded or cancelled while open.</param>
+    /// <param name="Left">Open in Tour Bookings was chosen (the page is changing).</param>
+    public sealed record Outcome(bool Changed, bool Left);
+
+    /// <summary>Shows the booking over the current page.</summary>
+    public static async Task<Outcome> ShowAsync(IDialogService dialogs, DefaultIdType bookingId, int reference)
+    {
+        var dialog = await dialogs.ShowAsync<BookingDetailsDialog>(null, new DialogParameters<BookingDetailsDialog>
+        {
+            { d => d.BookingId, bookingId },
+            { d => d.Reference, reference },
+        }, Options);
+        return await dialog.Result is { Canceled: false, Data: Outcome outcome } ? outcome : new(false, false);
+    }
+
+    private bool _changed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _canUpdate = (await AuthState).User.HasPermission(FuseAction.Update, FuseResource.Bookings);
+        await Snackbar.TryAsync(async () => _abilities = await Api.Send(new GetBookingAbilities()));
+    }
+
+    private void Changed()
+    {
+        _changed = true;
+        _version++;
+    }
+
+    private async Task EditAsync()
+    {
+        var wizard = await Dialogs.ShowAsync<BookingWizard>(null, new DialogParameters<BookingWizard> { { w => w.BookingId, BookingId } }, BookingWizard.Options);
+        if (await wizard.Result is { Canceled: false })
+            Changed();
+    }
+
+    private void OpenInTourBookings()
+    {
+        Dialog.Close(DialogResult.Ok(new Outcome(_changed, true)));
+        Navigation.NavigateTo($"/admin/bookings/tour-bookings?reference={Reference}");
+    }
+}

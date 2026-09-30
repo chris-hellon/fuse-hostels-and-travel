@@ -1,0 +1,58 @@
+@* A guest's name. Staff who can see guests click it to open Edit Guest (legacy GuestNameLink); the new
+   name shows straight away after a save. *@
+
+@if (!string.IsNullOrEmpty(GuestId) && _canView)
+{
+    <MudTooltip Text="@(_canEdit ? "View / edit guest" : "View guest")">
+        <span class="guest-name-link" role="button" tabindex="0" @onclick="OpenAsync" @onclick:stopPropagation="true"
+              @onkeydown="OnKeyDownAsync">@(_name ?? "Guest")</span>
+    </MudTooltip>
+}
+else
+{
+    <span>@_name</span>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [Parameter] public string? GuestId { get; set; }
+    [Parameter] public string? Name { get; set; }
+    /// <summary>After a save, with the guest's new name.</summary>
+    [Parameter] public EventCallback<string> OnSaved { get; set; }
+
+    private string? _name;
+    private string? _shownFor;
+    private bool _canView, _canEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is null)
+            return;
+        var user = (await AuthState).User;
+        _canView = user.HasPermission(FuseAction.View, FuseResource.Guests);
+        _canEdit = user.HasPermission(FuseAction.Update, FuseResource.Guests);
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Rows are reused as the table pages: follow the parameter unless it's the row we just renamed.
+        if (_shownFor != GuestId || _name is null)
+            _name = Name;
+        _shownFor = GuestId;
+    }
+
+    private async Task OpenAsync()
+    {
+        // Titled with just who it is: "Jamie Rowe".
+        var who = string.IsNullOrWhiteSpace(_name) ? "Guest" : _name.Trim();
+        var dialog = await Dialogs.ShowAsync<GuestDialog>(who,
+            new DialogParameters<GuestDialog> { { d => d.GuestId, GuestId! }, { d => d.CanEdit, _canEdit } }, GuestDialog.Options);
+        if (await dialog.Result is { Canceled: false, Data: string name })
+        {
+            _name = name;
+            await OnSaved.InvokeAsync(name);
+        }
+    }
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) => e.Key is "Enter" or " " ? OpenAsync() : Task.CompletedTask;
+}

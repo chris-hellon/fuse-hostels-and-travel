@@ -1,0 +1,82 @@
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+@* The wizard's step list for the dialog's title row. Shrinks to fit (see wizard-steps.js): full titles,
+   then only the current title, then "Step 3 of 7 · Pricing" with a progress bar on its own line. *@
+
+<div class="wizard-steps" @ref="_element">
+    <ol class="wizard-steps__list">
+        @for (var i = 0; i < Titles.Count; i++)
+        {
+            var index = i;
+            var isActive = i == ActiveIndex;
+            var isDone = !isActive && i <= Math.Max(Reached, ActiveIndex - 1);
+            var canJump = isDone && Select.HasDelegate;
+            <li class="@($"travaloud-wizard__step {(isActive ? "is-active" : isDone ? "is-done" : null)}{(canJump ? " is-link" : null)}")" aria-current="@(isActive ? "step" : null)"
+                role="@(canJump ? "button" : null)" tabindex="@(canJump ? "0" : null)" title="@(canJump ? $"Go to {Titles[i]}" : null)"
+                @onclick="() => JumpAsync(canJump, index)" @onkeydown="e => KeyAsync(e, canJump, index)">
+                <span class="travaloud-wizard__index">@(i + 1)</span>
+                <span class="travaloud-wizard__title">@Titles[i]</span>
+                @if (i + 1 < Titles.Count)
+                {
+                    <span class="travaloud-wizard__divider"></span>
+                }
+            </li>
+        }
+    </ol>
+    @if (Titles.Count > 0)
+    {
+        <div class="wizard-steps__summary">
+            <span class="wizard-steps__count">Step @(ActiveIndex + 1) of @Titles.Count</span>
+            <span class="wizard-steps__current">@Titles[Math.Clamp(ActiveIndex, 0, Titles.Count - 1)]</span>
+            <span class="wizard-steps__bar"><span style="width: @((ActiveIndex + 1) * 100 / Titles.Count)%"></span></span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Titles { get; set; } = [];
+    [Parameter] public int ActiveIndex { get; set; }
+    /// <summary>The furthest step reached: steps up to it (other than the current one) can be clicked.</summary>
+    [Parameter] public int Reached { get; set; }
+    /// <summary>A reached step was clicked (its index).</summary>
+    [Parameter] public EventCallback<int> Select { get; set; }
+
+    private Task JumpAsync(bool canJump, int index) => canJump ? Select.InvokeAsync(index) : Task.CompletedTask;
+
+    private Task KeyAsync(KeyboardEventArgs e, bool canJump, int index) =>
+        e.Key is "Enter" or " " ? JumpAsync(canJump, index) : Task.CompletedTask;
+
+    private ElementReference _element;
+    private IJSObjectReference? _module;
+    private string _fitted = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Fuse.Admin/wizard-steps.js");
+            await _module.InvokeVoidAsync("watch", _element);
+        }
+
+        // Titles differ in length, so re-fit when the step (or the step list) changes.
+        var state = $"{ActiveIndex}|{string.Join('|', Titles)}";
+        if (_module is not null && state != _fitted)
+        {
+            _fitted = state;
+            await _module.InvokeVoidAsync("refit", _element);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+            return;
+        try
+        {
+            await _module.InvokeVoidAsync("unwatch", _element);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

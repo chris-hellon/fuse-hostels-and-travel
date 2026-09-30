@@ -1,0 +1,31 @@
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="Name" Required="true" Disabled="Role?.IsDefault == true"
+                      HelperText="@(Role?.IsDefault == true ? "Built-in roles can't be renamed." : null)" />
+        <MudTextField @bind-Value="_description" Label="Description" Lines="2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled" OnClick="SaveAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public RoleSummary? Role { get; set; }
+
+    private string _name = "";
+    private string? _description;
+
+    protected override void OnInitialized() => (_name, _description) = (Role?.Name ?? "", Role?.Description);
+
+    private async Task SaveAsync()
+    {
+        var ok = Role is null
+            ? await Snackbar.TryAsync(async () => await Api.Send(new CreateRole(_name, _description)), "Role created.")
+            : await Snackbar.TryAsync(async () => await Api.Send(new UpdateRole(Role.Id, _name, _description)), "Role saved.");
+        if (ok)
+            Dialog.Close(DialogResult.Ok(true));
+    }
+}

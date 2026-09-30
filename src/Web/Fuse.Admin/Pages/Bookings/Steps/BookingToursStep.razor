@@ -1,0 +1,226 @@
+@* Legacy Tours step: the pack incentive, the booking's packages and its tours. Changes stay in the draft until Save. *@
+
+@if (Draft.Pack is { } pack && !E.Cancelled)
+{
+    var eligible = BookingPricing.EligibleTours(pack, E.Lines);
+    var qualifies = eligible >= pack.MinimumTours;
+    <MudPaper Outlined="true" Elevation="0" Class="booking-pack mb-3" Style="@($"border-left: 4px solid var(--mud-palette-{(qualifies ? "success" : "warning")});")">
+        <MudIcon Icon="@Icons.Material.Filled.Inventory2" Color="@(qualifies ? Color.Success : Color.Warning)" />
+        <div class="booking-pack__text">
+            <MudText Typo="Typo.body1"><strong>@pack.Name</strong> applied</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                @if (qualifies)
+                {
+                    <text>Qualifies — @eligible eligible tour@(eligible == 1 ? "" : "s"). Charged at the pack price and pays the pack commission.</text>
+                }
+                else
+                {
+                    <text>Needs @pack.MinimumTours eligible tours — this booking has @eligible. Add more or the incentive won't apply.</text>
+                }
+            </MudText>
+        </div>
+        @if (pack.Tiers.Count > 0)
+        {
+            <MudSelect T="DefaultIdType?" Value="E.PackIncentiveTierId" ValueChanged="SetPackTier" Dense="true" Margin="Margin.Dense"
+                       Variant="Variant.Outlined" Label="Price tier" Class="booking-pack__tier" Disabled="@(!Draft.CanChangeTours)"
+                       ToStringFunc="@(id => pack.Tiers.FirstOrDefault(t => t.Id == id) is { } t ? $"{t.Title} — {t.Price:$#,##0.00}" : "")">
+                @foreach (var tier in pack.Tiers)
+                {
+                    <MudSelectItem T="DefaultIdType?" Value="@tier.Id">@($"{tier.Title} — {tier.Price:$#,##0.00}")</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        @if (Draft.CanChangeTours)
+        {
+            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Close" OnClick="RemovePack">Remove</MudButton>
+        }
+    </MudPaper>
+}
+else if (Draft.SuggestedPack is { } suggested && Draft.CanChangeTours)
+{
+    <MudPaper Outlined="true" Elevation="0" Class="booking-pack mb-3" Style="border-left: 4px solid var(--mud-palette-secondary);">
+        <MudIcon Icon="@Icons.Material.Filled.Inventory2" Color="Color.Secondary" />
+        <div class="booking-pack__text">
+            <MudText Typo="Typo.body1"><strong>@suggested.Name</strong> available</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                This booking has @BookingPricing.EligibleTours(suggested, E.Lines) eligible tours. Apply the pack to charge its price and earn the pack commission.
+            </MudText>
+        </div>
+        <MudButton Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Inventory2"
+                   OnClick="() => ApplyPack(suggested)">Apply Pack</MudButton>
+    </MudPaper>
+}
+
+@if (Draft.Packages.Any())
+{
+    <MudText Typo="Typo.subtitle2" Class="mb-1">Packages</MudText>
+    <div class="booking-packages mb-3">
+        @foreach (var package in Draft.Packages)
+        {
+            <MudPaper Outlined="true" Class="booking-packages__chip" @key="package.Key">
+                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" Color="Color.Secondary" />
+                <div>
+                    <MudText Typo="Typo.body2"><strong>@package.PackageName</strong></MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@(package.TierTitle is null ? "" : $"{package.TierTitle} · ")@package.Price.ToString("$#,##0.00")</MudText>
+                </div>
+                @if (Draft.CanChangeTours && !HasSavedCancelled(package))
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" aria-label="Edit package" OnClick="() => EditPackageAsync(package)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" aria-label="Remove package" OnClick="() => RemovePackageAsync(package)" />
+                }
+            </MudPaper>
+        }
+    </div>
+}
+
+@if (Draft.CanChangeTours)
+{
+    <div class="booking-tours__buttons">
+        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddLocationAlt" IconColor="Color.Surface" OnClick="AddToursAsync">Add Tour(s)</MudButton>
+        @if (Draft.Catalog.Packages.Count > 0)
+        {
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Inventory2" IconColor="Color.Surface" OnClick="() => AddPackageAsync()">Add a Package</MudButton>
+        }
+    </div>
+}
+
+<MudSimpleTable Dense="true" Elevation="0" Class="booking-lines admin-plain-table">
+    <thead>
+        <tr>
+            <th>Tour</th>
+            <th>Package</th>
+            <th>Start Date</th>
+            <th>End Date</th>
+            <th>Price</th>
+            <th>Total Guests</th>
+            <th>Pick Up Location</th>
+            <th>Waiver</th>
+            <th class="text-right">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (E.Lines.Count == 0)
+        {
+            <tr><td colspan="9" class="mud-text-secondary">No Tours added yet. Use Add Tour(s) or Add a Package.</td></tr>
+        }
+        @foreach (var line in E.Lines.OrderBy(l => l.StartDate))
+        {
+            <tr @key="line.Key" class="@(line.Cancelled ? "booking-lines__cancelled" : null)">
+                <td>
+                    @line.TourName
+                    @if (line.Cancelled)
+                    {
+                        <span class="booking-status--bad ml-1">(Cancelled)</span>
+                    }
+                </td>
+                <td>@Draft.PackageName(line)</td>
+                <td>@line.StartDate.ToString("dd/MM/yyyy HH:mm")</td>
+                <td>@line.EndDate?.ToString("dd/MM/yyyy HH:mm")</td>
+                <td>@line.Amount.ToString("$#,##0.00")</td>
+                <td>@line.GuestCount</td>
+                <td>@line.PickupLocation</td>
+                <td>@(line.WaiverSigned ? "Signed" : "N/A")</td>
+                <td class="booking-lines__actions">
+                    @* As legacy: package tours are changed through their package. *@
+                    @if (CanEdit(line) != CanRemove(line))
+                    {
+                        @* One action only: an icon button rather than a menu of one. *@
+                        var edit = CanEdit(line);
+                        <RowIconButton Icon="@(edit ? Icons.Material.Outlined.Edit : Icons.Material.Outlined.Delete)" Label="@(edit ? "Edit" : "Delete")" Danger="!edit"
+                                       OnClick="() => edit ? EditLineAsync(line) : RemoveLineAsync(line)" />
+                    }
+                    else if (CanEdit(line))
+                    {
+                        <RowMenu>
+                            @if (CanEdit(line))
+                            {
+                                <MudMenuItem OnClick="() => AfterMenuCloses(() => EditLineAsync(line))">Edit</MudMenuItem>
+                            }
+                            @if (CanRemove(line))
+                            {
+                                <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => RemoveLineAsync(line))">Delete</MudMenuItem>
+                            }
+                        </RowMenu>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public BookingDraft Draft { get; set; } = null!;
+
+    private BookingEditor E => Draft.Editor;
+
+    private Task AfterMenuCloses(Func<Task> action) => MenuActions.AfterMenuCloses(action, DispatchExceptionAsync);
+
+    public bool Validate()
+    {
+        if (E.Lines.Count == 0)
+        {
+            Snackbar.Add("No Tours selected. Please add a Tour to continue.", Severity.Warning);
+            return false;
+        }
+        if (Draft.Pack is { } pack && !BookingPricing.Qualifies(pack, E.Lines))
+        {
+            Snackbar.Add($"{pack.Name} needs {pack.MinimumTours} eligible tours. Add more tours or remove the pack.", Severity.Warning);
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Package tours are changed through their package; cancelled ones not at all. As legacy, a paid booking's too (what may change is up to the dialog).</summary>
+    private bool CanEdit(BookingLine line) => Draft.CanEditTours && !line.Cancelled && line.PackageKey is null;
+
+    /// <summary>New tours, and tours of an unpaid booking (their spaces are freed on save).</summary>
+    private bool CanRemove(BookingLine line) => Draft.CanChangeTours && !line.Cancelled && line.PackageKey is null;
+
+    private bool HasSavedCancelled(BookingPackageLine package) => E.Lines.Any(l => l.PackageKey == package.Key && l.Cancelled);
+
+    private void ApplyPack(PackOption pack) => Draft.ApplyPack(pack, null);
+    private void SetPackTier(DefaultIdType? tier) => Draft.SetPackTier(tier);
+    private void RemovePack() => Draft.RemovePack();
+
+    private async Task AddToursAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<AddToursDialog>(null, new DialogParameters<AddToursDialog> { { d => d.Draft, Draft } }, AddToursDialog.Options);
+        await dialog.Result;
+    }
+
+    private async Task AddPackageAsync(BookingPackageLine? editing = null)
+    {
+        var dialog = await Dialogs.ShowAsync<BookPackageDialog>(null, new DialogParameters<BookPackageDialog>
+        {
+            { d => d.Draft, Draft },
+            { d => d.Editing, editing },
+        }, BookPackageDialog.Options);
+        await dialog.Result;
+    }
+
+    private Task EditPackageAsync(BookingPackageLine package) => AddPackageAsync(package);
+
+    private async Task RemovePackageAsync(BookingPackageLine package)
+    {
+        if (await Dialogs.ConfirmAsync("Remove this package?", $"\"{package.PackageName}\" and its tours will come off the booking when you save.",
+                "Remove package", "Keep package"))
+            Draft.RemovePackage(package);
+    }
+
+    private async Task EditLineAsync(BookingLine line)
+    {
+        var dialog = await Dialogs.ShowAsync<BookingLineDialog>(null, new DialogParameters<BookingLineDialog>
+        {
+            { d => d.Draft, Draft },
+            { d => d.Line, line },
+        }, BookingLineDialog.Options);
+        await dialog.Result;
+    }
+
+    private async Task RemoveLineAsync(BookingLine line)
+    {
+        if (line.IsNew || await Dialogs.ConfirmAsync("Remove this tour?", $"{line.TourName} on {line.StartDate:d MMM yyyy} will come off the booking and its spaces freed when you save.",
+                "Remove tour", "Keep tour"))
+            Draft.Remove(line);
+    }
+}

@@ -1,0 +1,27 @@
+@* Legacy's circular video (videoplayer.js): a dark mask with a play button; a click plays or pauses, and
+   the mask fades out while it plays. *@
+@inherits JsComponent
+
+<div class="offcut-image-border full-circle videoContainer" @onclick="ToggleAsync">
+    <video @ref="_video" class="img-fluid object-fit-cover shadow-4" webkit-playsinline playsinline @onended="() => _playing = false">
+        <source src="@Src" type="video/mp4">
+    </video>
+    <div class="mask object-fit-cover fuse-video__mask @(_playing ? "is-playing" : "")" style="background-color: hsla(0, 0%, 0%, 0.6); border-radius:50%; z-index: 100; cursor:pointer; ">
+        <div class="d-flex justify-content-center align-items-center h-100">
+            <i class="@($"fa-regular {(_playing ? "fa-circle-pause" : "fa-circle-play")} text-white")" style="font-size: 8rem;"></i>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Src { get; set; } = "";
+
+    private ElementReference _video;
+    private bool _playing;
+
+    private async Task ToggleAsync()
+    {
+        _playing = !_playing;
+        await Js.InvokeVoidAsync("playVideo", _video, _playing);
+    }
+}

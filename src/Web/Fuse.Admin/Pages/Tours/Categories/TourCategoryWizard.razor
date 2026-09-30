@@ -1,0 +1,106 @@
+@using Fuse.Contracts.Tours
+
+@* Create / edit a tour category: name, content and image, all saved together on Save. *@
+
+<ModalWizard TModel="CategoryModel" Model="_model!" Loading="_model is null" OnSave="SaveAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Tour Category" : "Edit Tour Category")
+    </TitleContent>
+    <ChildContent>
+        @if (_model is not null)
+        {
+            <WizardStep TModel="CategoryModel" Title="Content" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["Details.Name"])" OnLeaveAsync="_ => Task.FromResult(_content?.EnsureRequired() ?? true)">
+                <ContentSections @ref="_content" Sections="_sections" />
+            </WizardStep>
+            <WizardStep TModel="CategoryModel" Title="Image" OnLeaveAsync="_ => Task.FromResult(HasImage())">
+                <ImagePicker Label="Image" Hint="Shown for the category on the website." Src="@Preview" Pending="_model.NewImage is not null"
+                             OnPick="PickImageAsync" OnRemove="RemoveImage" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? CategoryId { get; set; }
+
+    private bool IsCreate => CategoryId is null;
+    private CategoryModel? _model;
+    /// <summary>The save's rules, checked step by step (each step lists the ones it edits).</summary>
+    private static readonly SaveTourCategoryValidator Rules = new();
+    private object Command() => new SaveTourCategory(CategoryId, _model!.Details, _model.NewImage, _model.RemoveImage);
+    private IReadOnlyList<ContentSection> _sections = [];
+    private ContentSections? _content;
+
+    private RenderFragment DetailsForm(TourCategoryInput details) =>
+        @<MudTextField Label="Name" @bind-Value="details.Name" Required="true" RequiredError="Name is required" MaxLength="1024"
+                       HelperText="Enter a Tour Category name" Variant="Variant.Outlined" />;
+
+    private string? Preview => _model?.NewImage is { } image
+        ? $"data:{image.ContentType};base64,{Convert.ToBase64String(image.Content)}"
+        : _model?.ImagePath;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsCreate)
+        {
+            Load(new CategoryModel());
+            return;
+        }
+        await Snackbar.TryAsync(async () =>
+        {
+            var category = await Api.Send(new GetTourCategory(CategoryId!.Value));
+            Load(new CategoryModel { Details = category.Details, ImagePath = category.ImagePath });
+        });
+    }
+
+    private void Load(CategoryModel model)
+    {
+        var details = model.Details;
+        _sections =
+        [
+            ContentSection.Fields("Details", "Name", DetailsForm(details), () => !string.IsNullOrWhiteSpace(details.Name), required: true),
+            new("Short description", "A sentence or two about the category", () => details.ShortDescription, v => details.ShortDescription = v),
+            new("Full description", "The main text on the category page", () => details.Description, v => details.Description = v),
+        ];
+        _model = model;
+    }
+
+    /// <summary>As legacy: a new category needs an image. An existing one can keep, replace or remove its image.</summary>
+    private bool HasImage()
+    {
+        if (!IsCreate || _model!.NewImage is not null)
+            return true;
+        Snackbar.Add("Choose an image for the new category.", Severity.Warning);
+        return false;
+    }
+
+    private async Task PickImageAsync(InputFileChangeEventArgs e) =>
+        await Snackbar.TryAsync(async () => _model!.NewImage = await e.File.ToUploadAsync());
+
+    /// <summary>Discards a picked (unsaved) image, otherwise marks the saved one for removal on Save.</summary>
+    private void RemoveImage()
+    {
+        if (_model!.NewImage is not null)
+        {
+            _model.NewImage = null;
+            return;
+        }
+        _model.ImagePath = null;
+        _model.RemoveImage = true;
+    }
+
+    private async Task<bool> SaveAsync(CategoryModel model) =>
+        await Snackbar.TryAsync(async () => await Api.Send(new SaveTourCategory(CategoryId, model.Details, model.NewImage, model.RemoveImage)),
+            IsCreate ? "Category created." : "Category saved.");
+
+    public sealed class CategoryModel
+    {
+        public TourCategoryInput Details { get; set; } = new();
+        public string? ImagePath { get; set; }
+        public FileUpload? NewImage { get; set; }
+        public bool RemoveImage { get; set; }
+    }
+}

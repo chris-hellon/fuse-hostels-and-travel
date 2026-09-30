@@ -1,0 +1,90 @@
+@page "/tours/{Slug}/{Departure?}/{GuestCount?}"
+@page "/tours/staff-booking/{Slug}/{StaffId:guid}/{Departure?}/{GuestCount?}"
+@inject IApi Api
+@inject NavigationManager Navigation
+
+@* Legacy Tour/Index: the tour's photo, its heading and description, and the booking card beside them (sticky on
+   desktop). /tours/{name}/{departure}/{guests} starts the card on that departure (legacy's basket "edit" link).
+   /tours/staff-booking/{name}/{staff id} is a staff member's booking QR code (Admin › Account › QR Codes): it also
+   shows tours that are only on QR codes, at prices not published to the website (never in-house ones), and credits the booking to them. Never indexed. *@
+
+@if (Details is { } tour)
+{
+    <SeoHead Page="tour.Seo" PageName="@tour.Name" Parent="@(("Tours", "/tours"))" ImageUrl="@tour.ImagePath" NoIndex="@(!tour.Listed || StaffId is not null)" />
+
+    <section id="headerBanner">
+        <HeaderBanner Headings="NoHeadings" ImageUrl="@tour.ImagePath" />
+    </section>
+    <section id="introduction" class="bg-light">
+        <div class="container-fluid">
+            <div class="container pb-8 pt-8">
+                <div class="row">
+                    <div class="col-md-12 col-lg-6 mb-5 mb-lg-0 has-parallax-scroll">
+                        <h1 class="display-3">@tour.Heading</h1>
+                        @if (tour.SubHeading is { } subHeading)
+                        {
+                            <h2>@subHeading</h2>
+                        }
+                        @((MarkupString)(tour.Description ?? ""))
+                    </div>
+                    <div class="p-0 mt-5 mt-lg-0 col-md-12 col-lg-6 d-flex justify-content-center has-parallax-scroll">
+                        <div class="tour-booking__sticky">
+                            <TourBookingCard Tour="tour" DepartureId="DepartureId" Guests="Guests" StaffId="@(tour.StaffName is null ? null : StaffId)" @key="tour.Id" />
+                            @if (tour.StaffName is { } staffName)
+                            {
+                                <p class="tour-booking__staff"><i class="fa-solid fa-user-tag me-2" aria-hidden="true"></i>Booking with @staffName</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+else
+{
+    @* Arriving from another page: the banner (its photo is the tour's) and content while they load. *@
+    <section id="headerBanner">
+        <HeaderBanner Headings="NoHeadings" LoadingText="Loading the tour…" />
+    </section>
+    <PageSkeleton />
+}
+
+@code {
+    /// <summary>The tour's banner is just its photo (the heading is beside the booking card).</summary>
+    private static readonly PageHeadings NoHeadings = new(string.Empty, null, null);
+
+    [Parameter] public string Slug { get; set; } = "";
+    // Legacy's links could carry anything here (old ones a date), and it still showed the tour: only a departure's id
+    // and a number of guests are used; anything else just opens the tour.
+    [Parameter] public string? Departure { get; set; }
+    [Parameter] public string? GuestCount { get; set; }
+    [Parameter] public DefaultIdType? StaffId { get; set; }
+
+    private DefaultIdType? DepartureId => DefaultIdType.TryParse(Departure, out var id) ? id : null;
+    private int? Guests => int.TryParse(GuestCount, out var n) && n > 0 ? n : null;
+
+    // Fetched once while prerendering and handed to the browser, so WebAssembly doesn't re-fetch.
+    [PersistentState] public SiteTour? Details { get; set; }
+    /// <summary>The tour and staff link <see cref="Details"/> is for.</summary>
+    [PersistentState] public string? DetailsFor { get; set; }
+
+    private string Key => $"{Slug.ToLowerInvariant()}/{StaffId}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Details is not null && DetailsFor == Key)
+            return;
+        Details = null; // from another tour's page: loading, not the last tour
+        try
+        {
+            Details = await Api.Send(new GetSiteTour(Slug, StaffId));
+            DetailsFor = Key;
+        }
+        catch (NotFoundException)
+        {
+            // Legacy showed an empty page; a real 404 is better for visitors and search engines.
+            Navigation.NotFound();
+        }
+    }
+}

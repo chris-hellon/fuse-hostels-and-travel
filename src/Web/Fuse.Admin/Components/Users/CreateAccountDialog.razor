@@ -1,0 +1,54 @@
+@* Creates a back-office account (staff member, supplier...) with a password. The caller says how. *@
+
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <ProfileForm Profile="_profile" EmailRequired="true" Compact="true" />
+            <MudGrid Spacing="3" Class="mt-1">
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_password" Label="Password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_confirm" Label="Confirm password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+            @if (Note is not null)
+            {
+                <MudText Typo="Typo.caption" Class="mt-2 d-block">@Note</MudText>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Secondary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Create</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    /// <summary>Creates the account from the profile, password and confirmation; returns its id.</summary>
+    [Parameter, EditorRequired] public Func<UserProfile, string, string, Task<string>> Create { get; set; } = null!;
+    [Parameter] public string SuccessText { get; set; } = "Account created.";
+    [Parameter] public string? Note { get; set; }
+
+    private MudForm? _form;
+    private readonly UserProfile _profile = new();
+    private string _password = "";
+    private string _confirm = "";
+    private bool _saving;
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+
+        _saving = true;
+        string? id = null;
+        var ok = await Snackbar.TryAsync(async () => id = await Create(_profile, _password, _confirm), SuccessText);
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok(id));
+    }
+}

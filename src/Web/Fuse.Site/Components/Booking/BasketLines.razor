@@ -1,0 +1,64 @@
+@* The tours in the basket (legacy's basket items), as the server priced them: photo, tour (a link back to change the
+   booking), when, guests and pick-up, price, and any problem. Editable on the basket page; a summary at checkout. *@
+
+@foreach (var line in Lines)
+{
+    <div class="@($"basket-line{(Compact ? " basket-line--compact" : "")}")" @key="line.DepartureId">
+        @if (!Compact)
+        {
+            <div class="basket-line__photo">
+                @if (!string.IsNullOrEmpty(line.ImagePath))
+                {
+                    <img src="@CdnImages.Sized(line.ImagePath, 300)" alt="@line.TourName" loading="lazy" />
+                }
+            </div>
+        }
+        <div class="basket-line__body">
+            @if (Editable && line.TourSlug.Length > 0)
+            {
+                <a class="basket-line__name" href="@($"{Basket.TourLink(line.TourSlug)}/{line.DepartureId}/{line.Guests}")">
+                    <i class="fa-solid fa-pen-to-square me-1" aria-hidden="true"></i>@line.TourName
+                </a>
+            }
+            else
+            {
+                <span class="basket-line__name">@(line.TourName.Length > 0 ? line.TourName : "Tour")</span>
+            }
+            @if (line.Start != default)
+            {
+                <span class="basket-line__when">@line.Start.ToString("dddd d MMMM yyyy · h:mm tt")</span>
+            }
+            <span class="basket-line__meta">
+                @line.Guests guest@(line.Guests == 1 ? "" : "s")@(line.Pickup is { } pickup ? $" · Pick-up: {pickup}" : "")
+            </span>
+            @if (line.Problem is { } problem)
+            {
+                <span class="basket-line__problem"><i class="fas fa-circle-exclamation me-1" aria-hidden="true"></i>@problem</span>
+            }
+        </div>
+        <div class="basket-line__price">
+            @if (line.UnitPrice > 0)
+            {
+                <strong>@Money.Usd(line.Total)</strong>
+                <span>@line.Guests × @Money.Usd(line.UnitPrice)</span>
+            }
+        </div>
+        @if (Editable)
+        {
+            <button type="button" class="basket-line__remove" aria-label="@($"Remove {line.TourName}")" @onclick="() => OnRemove.InvokeAsync(line.DepartureId)">
+                <i class="fas fa-times"></i>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Basket Basket { get; set; } = null!;
+
+    [Parameter, EditorRequired] public IReadOnlyList<BasketQuoteLine> Lines { get; set; } = [];
+    /// <summary>Change and remove links (the basket page).</summary>
+    [Parameter] public bool Editable { get; set; }
+    /// <summary>The checkout's order summary: no photos.</summary>
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public EventCallback<DefaultIdType> OnRemove { get; set; }
+}

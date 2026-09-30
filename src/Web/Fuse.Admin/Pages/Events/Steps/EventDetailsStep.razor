@@ -1,0 +1,67 @@
+@using Fuse.Contracts.Tours
+@using MudBlazor.Utilities
+
+@* Same fields and layout as legacy's Details step; the image has its own step. *@
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="8">
+        <MudTextField Label="Name" @bind-Value="Draft.Details.Name" Required="true" RequiredError="Name is required" MaxLength="256"
+                      HelperText="Enter an event name" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12" md="4">
+        <MudSelect T="DefaultIdType?" Label="Category" @bind-Value="Draft.Details.EventCategoryId" Clearable="true" Variant="Variant.Outlined"
+                   HelperText="The type of event (e.g. Pub Crawl)">
+            @foreach (var category in Categories)
+            {
+                <MudSelectItem T="DefaultIdType?" Value="category.Id">
+                    <span class="colour-dot" style="@($"background:{category.Colour ?? "transparent"}")"></span>@category.Name
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudColorPicker Label="Calendar colour" @bind-Text="Draft.Details.Colour" Variant="Variant.Outlined" Clearable="true"
+                        ColorPickerMode="ColorPickerMode.HEX" ColorPickerView="ColorPickerView.Palette" Palette="Palette" ShowAlpha="false"
+                        HelperText="Used instead of the category's colour; clear it to use the category's" />
+    </MudItem>
+    <MudItem xs="12" md="6" Class="switch-cell">
+        <MudSwitch T="bool" @bind-Value="Draft.Details.PublishToSite" Color="Color.Primary" Label="Publish to website" />
+        <MudSwitch T="bool" @bind-Value="Draft.Details.IsFeatured" Color="Color.Primary" Label="Featured" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField Label="Link (optional)" @bind-Value="Draft.Details.ExternalUrl" Variant="Variant.Outlined" InputType="InputType.Url"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Link"
+                      HelperText="A Facebook event, ticket page or any external link for this event" />
+    </MudItem>
+    <MudItem xs="12">
+        @* Searchable: there are a lot of tours. Focusing it (or clearing the text) lists them all. *@
+        <MudAutocomplete T="LookupItem" Label="Book as a tour (optional)" Value="SelectedTour" ValueChanged="TourChanged" SearchFunc="SearchTours"
+                         ToStringFunc="@(t => t?.Name)" Variant="Variant.Outlined" Clearable="true" ResetValueOnEmptyText="true" CoerceText="true"
+                         MinCharacters="0" MaxItems="null" AdornmentIcon="@Icons.Material.Filled.Search" AnchorOrigin="Origin.BottomLeft"
+                         Placeholder="Type to search tours"
+                         HelperText="For a ticketed event (e.g. a bar crawl): the website shows its price and books each date's departure. Its dates can follow the tour's departures (Schedule step)" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public EventDraft Draft { get; set; } = null!;
+    [Parameter] public IReadOnlyList<EventCategoryItem> Categories { get; set; } = [];
+    [Parameter] public IReadOnlyList<LookupItem> Tours { get; set; } = [];
+
+    private LookupItem? SelectedTour => Tours.FirstOrDefault(t => t.Id == Draft.Details.TourId?.ToString());
+
+    /// <summary>Every tour whose name contains the text (any case, anywhere in the name).</summary>
+    private Task<IEnumerable<LookupItem>> SearchTours(string? text, CancellationToken cancellationToken) =>
+        Task.FromResult(string.IsNullOrWhiteSpace(text)
+            ? Tours.AsEnumerable()
+            : Tours.Where(t => t.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    // A newly chosen tour brings its departures as the event's dates (the Schedule step can switch that off).
+    private void TourChanged(LookupItem? tour)
+    {
+        Draft.Details.TourId = DefaultIdType.TryParse(tour?.Id, out var tourId) ? tourId : null;
+        Draft.Details.FollowsTourDates = Draft.Details.TourId != null;
+    }
+
+    private static readonly IEnumerable<MudColor> Palette =
+        ["#48bb78", "#4299e1", "#ed8936", "#9f7aea", "#f56565", "#ecc94b", "#38b2ac", "#ed64a6", "#fb62f6", "#d1ac00"];
+}

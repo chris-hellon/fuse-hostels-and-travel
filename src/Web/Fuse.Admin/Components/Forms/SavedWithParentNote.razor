@@ -1,0 +1,11 @@
+@* Tells the user that edits on this step are held until the whole record is saved (wizards save once). *@
+
+<div class="saved-with-parent-note" role="note">
+    <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
+    <span>Changes on this step will be saved when you save the @Parent.</span>
+</div>
+
+@code {
+    /// <summary>What gets saved, e.g. "tour".</summary>
+    [Parameter, EditorRequired] public string Parent { get; set; } = "";
+}

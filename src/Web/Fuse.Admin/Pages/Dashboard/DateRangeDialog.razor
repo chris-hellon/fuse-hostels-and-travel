@@ -1,0 +1,24 @@
+@* Choose a custom range of booking dates for the dashboard totals. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Custom range</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudDateRangePicker @bind-DateRange="_range" PickerVariant="PickerVariant.Static" DisplayMonths="2" MaxDate="DateTime.Today" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="@(_range?.Start is null || _range.End is null)"
+                   OnClick="() => Dialog.Close(DialogResult.Ok(_range))">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public DateRange? Range { get; set; }
+
+    private DateRange? _range;
+
+    protected override void OnInitialized() => _range = Range;
+}

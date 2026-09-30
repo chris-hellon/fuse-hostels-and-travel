@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <RootNamespace>Fuse.Web.Client</RootNamespace>
+    <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
+    <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="MudBlazor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fuse.Site\Fuse.Site.csproj" />
+    <ProjectReference Include="..\Fuse.Admin\Fuse.Admin.csproj" />
+  </ItemGroup>
+
+  <!--
+    The back office's pages are only downloaded when someone navigates to /admin (Routes.razor).
+    MudBlazor itself can't be lazy: its services must be registered when the app starts.
+  -->
+  <ItemGroup>
+    <BlazorWebAssemblyLazyLoad Include="Fuse.Admin.wasm" />
+    <!-- Admin-only dependency: downloaded with the admin, never by the Fuse site. -->
+    <BlazorWebAssemblyLazyLoad Include="Heron.MudCalendar.wasm" />
+  </ItemGroup>
+
+</Project>

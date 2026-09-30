@@ -1,0 +1,40 @@
+@page "/admin/management/tours/tour-categories"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Tours)]
+@using Fuse.Contracts.Tours
+
+<AdminPageHeader Title="Tour Categories" Description="Manage Tour Categories." />
+
+<EntityTable @ref="_table" T="TourCategoryItem" Fields="Fields" Load="LoadAsync" EntityNamePlural="Tour Categories" Resource="@FuseResource.Tours" CanDelete="c => c.Tours == 0"
+             OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<TourCategoryItem>> Fields =
+    [
+        new(c => c.Name, "Name", nameof(TourCategoryItem.Name)),
+        new(c => c.Tours, "Tours", nameof(TourCategoryItem.Tours)),
+    ];
+
+    private EntityTable<TourCategoryItem>? _table;
+
+    private async Task<PagedResult<TourCategoryItem>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchTourCategories()), cancellationToken);
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(TourCategoryItem category) => OpenWizardAsync(category.Id);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<TourCategoryWizard>(null, new DialogParameters<TourCategoryWizard> { { w => w.CategoryId, id } }, TourCategoryWizard.Options);
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(TourCategoryItem category)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this category?", $"\"{category.Name}\" will be deleted straight away.", "Delete category", "Keep category"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteTourCategory(category.Id)), "Category deleted."))
+            await _table!.ReloadAsync();
+    }
+}

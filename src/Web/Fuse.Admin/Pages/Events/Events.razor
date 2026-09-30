@@ -1,0 +1,129 @@
+@page "/admin/management/events"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Events)]
+@using Heron.MudCalendar
+
+<AdminPageHeader Title="Events" Description="Manage Events." />
+
+<div class="d-flex justify-end mb-3">
+    <ViewSwitch TView="bool" Options="ViewOptions" Value="_calendar" ValueChanged="ShowCalendarAsync" />
+</div>
+
+@* The list stays mounted while the calendar shows, so switching back doesn't reload or flicker. *@
+<div style="@(_calendar ? "display:none" : null)">
+    <EntityTable @ref="_table" T="EventSummary" Fields="_fields" Load="LoadAsync" EntityNamePlural="Events" Resource="@FuseResource.Events"
+                 OnCreate="CreateAsync" OnEdit="EditAsync" OnDelete="DeleteAsync" />
+</div>
+
+@if (_calendar)
+{
+    <MudPaper Elevation="25" Class="pa-2">
+        <MudCalendar T="EventCalendarItem" Items="_items" MonthCellMinHeight="110" Color="Color.Dark"
+                     DateRangeChanged="RangeChangedAsync" ItemClicked="OpenAsync">
+            <CellTemplate>
+                <MudTooltip Inline="false" RootStyle="width:100%;">
+                    <ChildContent>
+                        <div class="event-chip" style="@($"--event-colour:{context.Colour ?? "var(--mud-palette-dark)"}")">
+                            @if (!context.AllDay)
+                            {
+                                <span class="event-chip__time">@context.Start.ToString("HH:mm")</span>
+                            }
+                            @context.Text
+                        </div>
+                    </ChildContent>
+                    <TooltipContent>
+                        <MudText Typo="Typo.subtitle2">@context.Text</MudText>
+                        <MudText Typo="Typo.caption" Class="d-block">@(context.AllDay ? context.Start.ToString("ddd d MMM") + ", all day" : context.Start.ToString("ddd d MMM, h:mm tt"))</MudText>
+                        @if (context.CategoryName is not null)
+                        {
+                            <MudText Typo="Typo.caption" Class="d-block">@context.CategoryName</MudText>
+                        }
+                    </TooltipContent>
+                </MudTooltip>
+            </CellTemplate>
+        </MudCalendar>
+    </MudPaper>
+}
+
+@code {
+    private static readonly IReadOnlyList<ViewSwitch<bool>.Option> ViewOptions =
+    [
+        new(false, Icons.Material.Filled.ViewList, "List"),
+        new(true, Icons.Material.Filled.CalendarMonth, "Calendar"),
+    ];
+
+    private readonly IReadOnlyList<EntityField<EventSummary>> _fields =
+    [
+        new(e => e.Name, "Name", nameof(EventSummary.Name)),
+        new(e => e.CategoryName, "Category", nameof(EventSummary.CategoryName), e => @<span><span class="colour-dot" style="@($"background:{e.Colour ?? "transparent"}")"></span>@e.CategoryName</span>),
+        new(e => e.AllDay ? e.StartDate.ToString("ddd d MMM yyyy") : e.StartDate.ToString("ddd d MMM yyyy, HH:mm"), "Starts", nameof(EventSummary.StartDate)),
+        new(e => e.Repeats, "Repeats"),
+        EntityField<EventSummary>.Bool(e => e.PublishToSite, "On Website", nameof(EventSummary.PublishToSite)),
+        EntityField<EventSummary>.Bool(e => e.IsFeatured, "Featured", nameof(EventSummary.IsFeatured)),
+    ];
+
+    private EntityTable<EventSummary>? _table;
+    private bool _calendar;
+    private List<EventCalendarItem> _items = [];
+    private DateRange? _range;
+
+    private async Task<PagedResult<EventSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchEvents()), cancellationToken);
+
+    private Task ShowCalendarAsync(bool calendar)
+    {
+        _calendar = calendar;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Loads the dates for the month on show. The same range again (a re-render) is ignored.</summary>
+    private async Task RangeChangedAsync(DateRange range)
+    {
+        if (range is not { Start: not null, End: not null } || (_range?.Start == range.Start && _range?.End == range.End))
+            return;
+        _range = range;
+        await LoadRangeAsync();
+    }
+
+    private Task LoadRangeAsync() => Snackbar.TryAsync(async () =>
+    {
+        var occurrences = await Api.Send(new ListEventOccurrences(_range!.Start!.Value, _range.End!.Value.Date.AddDays(1).AddTicks(-1)));
+        _items = [.. occurrences.Select(o => new EventCalendarItem
+        {
+            EventId = o.EventId,
+            Text = o.Name,
+            Start = o.Start,
+            End = o.End > o.Start ? o.End : null,
+            AllDay = o.AllDay,
+            Colour = o.Colour,
+            CategoryName = o.CategoryName,
+        })];
+    });
+
+    private Task CreateAsync() => OpenWizardAsync(null);
+
+    private Task EditAsync(EventSummary summary) => OpenWizardAsync(summary.Id);
+
+    private Task OpenAsync(EventCalendarItem item) => OpenWizardAsync(item.EventId);
+
+    private async Task OpenWizardAsync(DefaultIdType? id)
+    {
+        var dialog = await Dialogs.ShowAsync<EventWizard>(null, new DialogParameters<EventWizard> { { w => w.EventId, id } }, EventWizard.Options);
+        if ((await dialog.Result)!.Canceled)
+            return;
+        await _table!.ReloadAsync();
+        if (_range is not null)
+            await LoadRangeAsync();
+    }
+
+    private async Task DeleteAsync(EventSummary summary)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this event?", $"\"{summary.Name}\" will be deleted straight away, with all its dates.", "Delete event", "Keep event"))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeleteEvent(summary.Id)), "Event deleted."))
+        {
+            await _table!.ReloadAsync();
+            if (_range is not null)
+                await LoadRangeAsync();
+        }
+    }
+}

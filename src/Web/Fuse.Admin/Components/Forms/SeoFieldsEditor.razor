@@ -1,0 +1,51 @@
+@* The SEO fields of a public page: keywords and description, the URL slug when the page has one
+   (ISlugField), and with the full set (ISeoFields) the page title, headings (H1 the page heading,
+   H2 the sub heading) and scripts. *@
+
+<MudGrid Spacing="3">
+    @if (Full is { } full)
+    {
+        <MudItem xs="12">
+            <MudTextField Label="Page title" @bind-Value="full.SeoPageTitle" HelperText="Replaces the browser tab title (the <title> tag)" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField Label="Heading" @bind-Value="full.H1" HelperText="The page heading (h1). Leave empty to use the name." Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField Label="Sub heading" @bind-Value="full.H2" HelperText="Shown under the heading (h2)" Variant="Variant.Outlined" />
+        </MudItem>
+        @AfterHeadings
+    }
+    @if (ShowSlug && Seo is ISlugField slug)
+    {
+        <MudItem xs="12" md="6">
+            <MudTextField Label="URL slug" @bind-Value="slug.UrlSlug" HelperText="@SlugHelp" Variant="Variant.Outlined" />
+        </MudItem>
+    }
+    <MudItem xs="12" md="@(ShowSlug && Seo is ISlugField ? 6 : 12)">
+        <MudTextField Label="Meta keywords" @bind-Value="Seo.MetaKeywords" HelperText="Up to about 20, comma separated" Variant="Variant.Outlined" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField Label="Meta description" Lines="3" @bind-Value="Seo.MetaDescription" HelperText="Shown in search results" Variant="Variant.Outlined" />
+    </MudItem>
+    @if (Full is { } scripts)
+    {
+        <MudItem xs="12">
+            <MudTextField T="string" Label="SEO scripts" Lines="6" @bind-Value="scripts.CustomSeoScripts" HelperText="Wrap the markup in <script> tags" Variant="Variant.Outlined" />
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public IMetaFields Seo { get; set; } = null!;
+    [Parameter] public string SlugExample { get; set; } = "this-page";
+    /// <summary>False where the address is fixed by the site (e.g. its built-in pages).</summary>
+    [Parameter] public bool ShowSlug { get; set; } = true;
+    /// <summary>Extra fields after the headings (e.g. the home page's third heading).</summary>
+    [Parameter] public RenderFragment? AfterHeadings { get; set; }
+    /// <summary>Overrides the slug's helper text (e.g. when an empty slug is made from the title).</summary>
+    [Parameter] public string? SlugHint { get; set; }
+
+    private ISeoFields? Full => Seo as ISeoFields;
+    private string SlugHelp => SlugHint ?? $"e.g. {SlugExample}";
+}

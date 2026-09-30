@@ -1,0 +1,72 @@
+@* Legacy Fuse _FooterPartial. *@
+
+<footer class="bg-black text-white" id="footer">
+    <div class="container py-4 p-lg-5 text-start">
+        <section class="">
+            <div class="row">
+                <div class="col-lg-3 col-md-6 mb-4 mb-md-0 d-flex justify-content-start">
+                    <a class="navbar-brand" href="/">
+                        <img src="@SiteHeader.Logo" alt="Fuse Brand Logo" height="77" />
+                    </a>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4 mb-md-0">
+                    <span class="mb-3 display-6 d-block">Sleep &amp; Explore</span>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-3"><a class="text-white" href="/hostels">Hostels</a></li>
+                        <li class="mb-3"><a class="text-white" href="/tours">Tours</a></li>
+                        <li class="mb-3"><a class="text-white" href="/events">Events</a></li>
+                        <li class="mb-3"><a class="text-white" href="/blogs-and-tips">Travel Guides</a></li>
+                        <li><a class="text-white" href="/our-story">Our Story</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4 mb-md-0">
+                    <span class="mb-3 display-6 d-block">FUSE</span>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-3"><a class="text-white" href="/contact">Contact</a></li>
+                        <AuthorizeView>
+                            <NotAuthorized>
+                                <li class="mb-3"><button class="text-white border-0 bg-transparent p-0 m-0" type="button" @onclick="Dialogs.OpenSignIn">Sign In</button></li>
+                            </NotAuthorized>
+                        </AuthorizeView>
+                        <li class="mb-3"><button type="button" class="text-white border-0 p-0 m-0 bg-transparent" @onclick="Dialogs.OpenBookNow">Book</button></li>
+                        <li><a class="text-white" href="/join-our-crew">Join Our Crew</a></li>
+                    </ul>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4 mb-md-0">
+                    <span class="mb-3 display-6 d-block">Legal</span>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-3"><a class="text-white" href="/terms-and-conditions">Terms &amp; Conditions</a></li>
+                        <li class="mb-3"><a class="text-white" href="/privacy-policy">Privacy Policy</a></li>
+                        <li><a class="text-white" href="/cookie-policy">Cookie Policy</a></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </div>
+    <div class="container text-start">
+        <div class="row">
+            <div class="col-lg-3">
+                <section class="mb-4">
+                    <a class="btn btn-floating m-lg-1" href="https://www.facebook.com/fusehostelsandtravel" target="_blank" rel="noopener" role="button" aria-label="Fuse Official Facebook page">
+                        <i class="fab fa-facebook"></i>
+                    </a>
+                    <a class="btn btn-floating m-lg-1" href="https://www.instagram.com/fusehostels" target="_blank" rel="noopener" role="button" aria-label="Fuse Official Instagram page">
+                        <i class="fab fa-instagram"></i>
+                    </a>
+                </section>
+            </div>
+            <div class="col-lg-6">
+                <div class="text-start pb-3 p-lg-3 small">
+                    FUSE Hostels &amp; Travel © @DateTime.Today.Year | All rights reserved | Designed by
+                    <a href="https://www.shuffledesign.co/" class="text-white" target="_blank" rel="noopener" aria-label="Shuffle Design official page">Shuffle</a> powered by Fuse
+                </div>
+            </div>
+            <div class="col-lg-3">
+            </div>
+        </div>
+    </div>
+</footer>
+
+@code {
+    [CascadingParameter] private ISiteDialogs Dialogs { get; set; } = null!;
+}

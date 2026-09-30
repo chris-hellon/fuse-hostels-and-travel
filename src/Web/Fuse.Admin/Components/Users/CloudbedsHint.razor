@@ -1,0 +1,12 @@
+@* The Cloudbeds value for a field that differs from ours, with one-click apply. Sits under the field. *@
+
+<div class="cloudbeds-hint">
+    <MudIcon Icon="@Icons.Material.Filled.Cloud" Size="Size.Small" Color="Color.Warning" />
+    <span class="cloudbeds-hint__value">Cloudbeds: <strong>@Value</strong></span>
+    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning" Class="cloudbeds-hint__use" OnClick="OnApply">Use</MudButton>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public EventCallback OnApply { get; set; }
+}

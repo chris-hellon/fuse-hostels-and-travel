@@ -1,0 +1,11 @@
+@* A labelled read-only value (settings shown for reference). *@
+
+<div class="readonly-value">
+    <span class="readonly-value__label">@Label</span>
+    <span class="readonly-value__text">@(string.IsNullOrEmpty(Value) ? "Not set" : Value)</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Value { get; set; }
+}

@@ -1,0 +1,37 @@
+@* Legacy <recaptcha />: Google's "I'm not a robot" box, drawn once the page is interactive. The form reads its
+   answer when sending (ResponseAsync) and asks for a fresh box after each try (ResetAsync). *@
+@inherits JsComponent
+
+<div class="fuse-captcha" @ref="_element"></div>
+<Validation Message="@Message" />
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    [Parameter] public string? Message { get; set; }
+
+    private ElementReference _element;
+    private int? _widget;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || string.IsNullOrEmpty(Chrome?.CaptchaSiteKey))
+            return;
+        try
+        {
+            _widget = await Js.InvokeAsync<int>("renderCaptcha", _element, Chrome.CaptchaSiteKey);
+        }
+        catch (JSException)
+        {
+            // Blocked or offline: sending then says the captcha is missing.
+        }
+    }
+
+    public async Task<string> ResponseAsync() => _widget is { } id ? await Js.InvokeAsync<string>("captchaResponse", id) : "";
+
+    public async Task ResetAsync()
+    {
+        if (_widget is { } id)
+            await Js.InvokeVoidAsync("resetCaptcha", id);
+    }
+}

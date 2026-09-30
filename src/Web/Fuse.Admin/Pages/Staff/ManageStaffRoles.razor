@@ -1,0 +1,28 @@
+@page "/admin/staff/{Id}/roles"
+@attribute [RequirePermission(FuseAction.View, FuseResource.UserRoles)]
+
+<AdminPageHeader Title="Staff Roles" Description="@($"Choose which roles {_name ?? "this person"} has.")">
+    <MudButton Href="@($"/admin/staff/{Id}/profile")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Back to profile</MudButton>
+</AdminPageHeader>
+
+<AuthorizeView>
+    <UserRolesEditor UserId="@Id" CanEdit="context.User.HasPermission(FuseAction.Update, FuseResource.UserRoles)" />
+</AuthorizeView>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private string? _name;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _name = (await Api.Send(new GetStaff(Id))).FullName;
+        }
+        catch (Exception)
+        {
+            _name = null; // the roles editor reports problems; the name is only a nicety
+        }
+    }
+}

@@ -1,0 +1,73 @@
+@* Record money received against a booking (legacy AddPaymentDialog): cash, or a Stripe payment taken elsewhere. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Add a Payment</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Class="mb-2">The outstanding balance for this booking is <strong>@Outstanding.ToString("$#,##0.00")</strong>.</MudText>
+        <MudText Class="mb-4 mud-text-secondary">Record a payment received against this booking. It can't be more than the outstanding balance.</MudText>
+
+        <MudSelect T="BookingPaymentMethod" @bind-Value="_method" Label="Payment Type" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="BookingPaymentMethod" Value="BookingPaymentMethod.Cash">Cash</MudSelectItem>
+            <MudSelectItem T="BookingPaymentMethod" Value="BookingPaymentMethod.Stripe">Stripe</MudSelectItem>
+        </MudSelect>
+
+        <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Variant="Variant.Outlined" Min="0" Max="Outstanding" Format="N2"
+                         Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true" Class="mb-3" />
+
+        @if (_method == BookingPaymentMethod.Stripe)
+        {
+            <MudTextField T="string" @bind-Value="_stripeId" Label="Stripe Payment ID" Variant="Variant.Outlined" Immediate="true"
+                          HelperText="e.g. pi_3U0h8UAykrFnOKCR1fQN7xQR" />
+        }
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Cancel" Disabled="_saving" OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton StartIcon="@(_saving ? null : Icons.Material.Filled.Check)" Color="Color.Secondary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Add Payment
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, BackdropClick = false };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public DefaultIdType BookingId { get; set; }
+    [Parameter] public decimal Outstanding { get; set; }
+
+    private BookingPaymentMethod _method = BookingPaymentMethod.Cash;
+    private decimal _amount;
+    private string? _stripeId;
+    private string? _error;
+    private bool _saving;
+
+    protected override void OnInitialized() => _amount = Outstanding;
+
+    private async Task SaveAsync()
+    {
+        _error = _amount <= 0 ? "The payment amount must be greater than zero."
+            : _amount > Outstanding ? "The payment can't be more than the outstanding balance."
+            : _method == BookingPaymentMethod.Stripe && string.IsNullOrWhiteSpace(_stripeId) ? "A Stripe payment ID is required for Stripe payments."
+            : null;
+        if (_error is not null)
+            return;
+
+        _saving = true;
+        var ok = await Snackbar.TryAsync(async () => await Api.Send(new AddBookingPayment(BookingId, _amount, _method,
+            _method == BookingPaymentMethod.Stripe ? _stripeId!.Trim() : null)), "Payment added.");
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok(true));
+    }
+}

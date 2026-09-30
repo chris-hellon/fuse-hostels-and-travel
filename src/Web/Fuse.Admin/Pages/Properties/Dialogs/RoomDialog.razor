@@ -1,0 +1,79 @@
+@using Fuse.Contracts.Properties
+
+@* Add or edit a room in the draft (saved with the property). Returns the edited room. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(Room is null ? Icons.Material.Filled.Add : Icons.Material.Outlined.Edit)" Class="mr-3 mb-n1" />
+            @(Room is null ? "Add room" : "Edit room")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="5">
+                    <MudTextField Label="Name" @bind-Value="_model.Name" Required="true" RequiredError="Name is required" HelperText="e.g. 8-bed dorm" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="7">
+                    <ImagePicker Label="Image" Hint="Optional." Src="@_model.ImageUrl" Pending="@(_model.ImageUrl != Room?.ImageUrl && _model.ImageUrl is not null)"
+                                 Busy="_uploading" OnPick="PickAsync" OnRemove="() => _model.ImageUrl = null" />
+                </MudItem>
+                <MudItem xs="12">
+                    <ContentSections Sections="_sections" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_uploading" OnClick="DoneAsync">@(Room is null ? "Add room" : "Done")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    /// <summary>The room to edit; null to add one.</summary>
+    [Parameter] public PropertyRoomEdit? Room { get; set; }
+    /// <summary>Other rooms' names (names must be unique).</summary>
+    [Parameter] public IReadOnlyCollection<string> TakenNames { get; set; } = [];
+
+    private MudForm? _form;
+    private PropertyRoomEdit _model = new();
+    private IReadOnlyList<ContentSection> _sections = [];
+    private ContentSection? _full;
+    private bool _uploading;
+
+    protected override void OnInitialized()
+    {
+        _model = Room is null ? new PropertyRoomEdit() : Room with { };
+        var model = _model;
+        _full = new ContentSection("Full description", "Shown on the property page", () => model.Description, v => model.Description = v ?? "", Required: true);
+        _sections = [new("Short description", "A line or two about the room", () => model.ShortDescription, v => model.ShortDescription = v), _full];
+    }
+
+    private async Task PickAsync(InputFileChangeEventArgs e)
+    {
+        _uploading = true;
+        await Snackbar.TryAsync(async () => _model.ImageUrl = await Api.Send(new UploadPropertyMedia(await e.File.ToUploadAsync(), IsVideo: false)));
+        _uploading = false;
+    }
+
+    private async Task DoneAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        if (TakenNames.Contains(_model.Name.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            Snackbar.Add($"There's already a room called {_model.Name.Trim()}.", Severity.Warning);
+            return;
+        }
+        if (!_full!.HasText)
+        {
+            Snackbar.Add("Add a full description for the room.", Severity.Warning);
+            return;
+        }
+        Dialog.Close(DialogResult.Ok(_model with { Name = _model.Name.Trim() }));
+    }
+}

@@ -1,0 +1,51 @@
+@* Create / edit a redirect: two page slugs. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(Redirect is null ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+            @(Redirect is null ? "Create Redirect" : "Edit Redirect")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudGrid Spacing="3">
+                <MudItem xs="12">
+                    <MudTextField Label="From" @bind-Value="_url" Required="true" RequiredError="Enter the old page's slug" Variant="Variant.Outlined"
+                                  HelperText="The old address on this site, not the full web address, e.g. /travel-guides/old-guide" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField Label="To" @bind-Value="_target" Required="true" RequiredError="Enter where it should go" Variant="Variant.Outlined"
+                                  HelperText="Where to send visitors, e.g. /blogs-and-tips/new-guide" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public PageRedirect? Redirect { get; set; }
+
+    private MudForm? _form;
+    private string _url = "", _target = "";
+    private bool _saving;
+
+    protected override void OnInitialized() => (_url, _target) = (Redirect?.Url ?? "", Redirect?.RedirectUrl ?? "");
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid)
+            return;
+        _saving = true;
+        var ok = await Snackbar.TryAsync(async () => await Api.Send(new SavePageRedirect(Redirect?.Id, _url, _target)), Redirect is null ? "Redirect created." : "Redirect saved.");
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok(true));
+    }
+}

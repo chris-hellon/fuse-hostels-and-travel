@@ -1,0 +1,67 @@
+@* A page's SEO. Tour and property pages are edited with their tour or property (legacy). *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Filled.Update" Class="mr-3 mb-n1" />@(_page?.Title ?? "Page")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_page is null)
+        {
+            <div class="modal-wizard__loading"><MudProgressCircular Indeterminate="true" Color="Color.Secondary" /></div>
+        }
+        else if (PageRules.IsManagedElsewhere(_page.Title))
+        {
+            <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-2">
+                This page's SEO is edited with its @(_page.Title.StartsWith("Tours") ? "tour (Management › Tours, SEO step)" : "property (Management › Properties, SEO step)").
+            </MudAlert>
+        }
+        else
+        {
+            <MudForm @ref="_form">
+                <SeoFieldsEditor Seo="_page.Details" ShowSlug="false">
+                    <AfterHeadings>
+                        @if (PageRules.HasThirdHeading(_page.Title))
+                        {
+                            <MudItem xs="12">
+                                <MudTextField Label="Third heading" @bind-Value="_page.Details.H3" HelperText="The home page's third title (h3)" Variant="Variant.Outlined" />
+                            </MudItem>
+                        }
+                    </AfterHeadings>
+                </SeoFieldsEditor>
+            </MudForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">@(Editable ? "Cancel" : "Close")</MudButton>
+        @if (Editable)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public DefaultIdType PageId { get; set; }
+
+    private PageEditor? _page;
+    private MudForm? _form;
+    private bool _saving;
+
+    private bool Editable => _page is not null && !PageRules.IsManagedElsewhere(_page.Title);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Snackbar.TryAsync(async () => _page = await Api.Send(new GetPageEditor(PageId)));
+        Dialog.StateHasChanged(); // the title is drawn by the dialog container
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        var ok = await Snackbar.TryAsync(async () => await Api.Send(new UpdatePage(PageId, _page!.Details)), "Page saved.");
+        _saving = false;
+        if (ok)
+            Dialog.Close(DialogResult.Ok(true));
+    }
+}

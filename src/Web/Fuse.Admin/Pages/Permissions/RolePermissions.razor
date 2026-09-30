@@ -1,0 +1,93 @@
+@page "/admin/permissions/{RoleId}"
+@attribute [RequirePermission(FuseAction.View, FuseResource.RoleClaims)]
+
+<AdminPageHeader Title="@($"{_roleName} permissions")" Description="Tick what this role can do.">
+    <MudButton Href="/admin/permissions" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Back to roles</MudButton>
+</AdminPageHeader>
+
+@if (_granted is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <AuthorizeView Context="auth">
+        @{ var canEdit = auth.User.HasPermission(FuseAction.Update, FuseResource.RoleClaims); }
+        <MudTextField @bind-Value="_filter" Placeholder="Filter permissions" Adornment="Adornment.End"
+                      AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mb-4" Style="max-width:320px" />
+        <MudGrid Spacing="3">
+            @foreach (var group in Groups)
+            {
+                <MudItem xs="12" sm="6" md="4" lg="3">
+                    <MudPaper Class="pa-4" Elevation="25" Style="height: 100%">
+                        <div class="d-flex align-center">
+                            <MudText Typo="Typo.subtitle1"><b>@group.Key</b></MudText>
+                            <MudSpacer />
+                            <MudCheckBox T="bool?" Value="GroupState(group)" ValueChanged="on => SetGroup(group, on == true)"
+                                         Disabled="!canEdit" Color="Color.Secondary" Size="Size.Small" />
+                        </div>
+                        @foreach (var permission in group)
+                        {
+                            <MudCheckBox T="bool" Value="_granted.Contains(permission.Name)" Disabled="!canEdit" Color="Color.Secondary" Dense="true"
+                                         ValueChanged="on => Set(permission.Name, on)" Label="@permission.Description" />
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        @if (canEdit)
+        {
+            <div class="d-flex justify-end mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save permissions</MudButton>
+            </div>
+        }
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public string RoleId { get; set; } = "";
+
+    private HashSet<string>? _granted;
+    private string _roleName = "Role";
+    private string? _filter;
+    private bool _saving;
+
+    private IEnumerable<IGrouping<string, FusePermission>> Groups => FusePermissions.Admin
+        .Where(p => string.IsNullOrWhiteSpace(_filter) || p.Description.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+        .GroupBy(p => p.Resource);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Snackbar.TryAsync(async () =>
+        {
+            var roles = await Api.Send(new ListRoles());
+            _roleName = roles.FirstOrDefault(r => r.Id == RoleId)?.Name ?? "Role";
+            _granted = [.. await Api.Send(new GetRolePermissions(RoleId))];
+        });
+    }
+
+    private bool? GroupState(IGrouping<string, FusePermission> group)
+    {
+        var count = group.Count(p => _granted!.Contains(p.Name));
+        return count == 0 ? false : count == group.Count() ? true : null;
+    }
+
+    private void SetGroup(IGrouping<string, FusePermission> group, bool on)
+    {
+        foreach (var permission in group)
+            Set(permission.Name, on);
+    }
+
+    private void Set(string name, bool on)
+    {
+        if (on) _granted!.Add(name);
+        else _granted!.Remove(name);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        await Snackbar.TryAsync(async () => await Api.Send(new UpdateRolePermissions(RoleId, [.. _granted!])), "Permissions saved.");
+        _saving = false;
+    }
+}

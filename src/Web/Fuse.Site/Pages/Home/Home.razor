@@ -1,0 +1,60 @@
+@page "/"
+@inherits SitePage
+
+<SeoHead Page="Page" />
+
+<HomeHero Page="Page" />
+@if (Page is not null)
+{
+    <HomeIntroduction />
+    <section id="hostels" class="bg-light pb-lg-5 overflow-hidden">
+        <div class="container-fluid p-0 m-0 position-relative">
+            <SectionIntro Title="HOSTELS IN VIETNAM">
+                <div class="col-12 col-lg-6">
+                    <p class="m-0 p-0">Check out what our backpacker hostels have to offer below.</p>
+                </div>
+            </SectionIntro>
+            <OvalContainer Id="homePageHostelsOvals" Top="-70" Left="-20" />
+        </div>
+        <HostelRows Hostels="@(Hostels ?? [])" />
+    </section>
+    <HomeMarquee />
+    <HomeTours Tours="@(Tours ?? [])" />
+    @* Featured events still to come; no section at all without any. *@
+    <WhatsOn Events="@(Events ?? [])" />
+}
+else
+{
+    @* Arriving from another page: its content is loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [PersistentState] public IReadOnlyList<SiteCard>? Hostels { get; set; }
+    [PersistentState] public IReadOnlyList<SiteCard>? Tours { get; set; }
+    [PersistentState] public IReadOnlyList<SiteEvent>? Events { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.Home;
+
+    protected override async Task LoadAsync()
+    {
+        var hostels = Api.Send(new ListSiteHostels()).AsTask();
+        var tours = Api.Send(new ListSiteTours()).AsTask();
+        var events = Api.Send(new ListSiteEvents(FeaturedOnly: true)).AsTask();
+        (Hostels, Tours, Events) = (await hostels, await tours, await events);
+    }
+
+    private bool _started;
+
+    // The home page's own effects (staggered tour cards, marquee) start once it is interactive and shown (arriving
+    // from another page, it shows once its data has loaded).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_started || Page is null)
+            return;
+        _started = true;
+        await Js.InvokeVoidAsync("initHome");
+    }
+
+    protected override Task OnDisposeAsync() => Js.InvokeVoidAsync("disposeHome").AsTask();
+}

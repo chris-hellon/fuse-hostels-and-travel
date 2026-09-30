@@ -1,0 +1,53 @@
+@* The banner and the slideshow. Picked files upload straight away (to keep Save small) but are only
+   attached on Save. *@
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="5">
+        <ImagePicker Label="Banner image *" Hint="Shown at the top of the guide and on its card. Required." Src="@Draft.Banner" Busy="_bannerBusy"
+                     Pending="@(Draft.Banner is not null && Draft.Banner != _originalBanner)" OnPick="PickBannerAsync" OnRemove="() => Draft.Banner = null" />
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <div class="image-picker__label">
+            <MudText Typo="Typo.subtitle2">Slideshow</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Optional. Shown in this order on the guide. Use the arrows to reorder.</MudText>
+        </div>
+        <ImageGallery TItem="GuideSlide" Items="Draft.Gallery" Url="s => s.DisplayUrl" Badge="@(s => s.NewUrl is null ? null : "Unsaved")" Busy="_galleryBusy"
+                      OnAdd="AddAsync" OnRemove="s => Draft.Gallery.Remove(s)" OnMove="Move" />
+        <SavedWithParentNote Parent="travel guide" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public TravelGuideDraft Draft { get; set; } = null!;
+
+    private string? _originalBanner;
+    private bool _bannerBusy, _galleryBusy;
+
+    protected override void OnInitialized() => _originalBanner = Draft.Banner;
+
+    private async Task PickBannerAsync(InputFileChangeEventArgs e)
+    {
+        _bannerBusy = true;
+        await Snackbar.TryAsync(async () => Draft.Banner = await Api.Send(new UploadTravelGuideImage(await e.File.ToUploadAsync())));
+        _bannerBusy = false;
+    }
+
+    private async Task AddAsync(InputFileChangeEventArgs e)
+    {
+        _galleryBusy = true;
+        foreach (var file in e.GetMultipleFiles(20))
+        {
+            // One at a time: a bad file doesn't lose the good ones.
+            await Snackbar.TryAsync(async () =>
+            {
+                var url = await Api.Send(new UploadTravelGuideImage(await file.ToUploadAsync()));
+                Draft.Gallery.Add(new GuideSlide(null, url, url));
+            });
+            StateHasChanged();
+        }
+        _galleryBusy = false;
+    }
+
+    private void Move((int Index, int By) move) =>
+        (Draft.Gallery[move.Index], Draft.Gallery[move.Index + move.By]) = (Draft.Gallery[move.Index + move.By], Draft.Gallery[move.Index]);
+}

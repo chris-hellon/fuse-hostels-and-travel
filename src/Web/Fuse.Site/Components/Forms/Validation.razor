@@ -1,0 +1,9 @@
+@* Legacy's field message (.travaloud-validation), under a form field. *@
+
+<span class="@($"travaloud-validation {(Message is null ? "field-validation-valid" : "field-validation-error")}")" style="@Style">@Message</span>
+
+@code {
+    [Parameter] public string? Message { get; set; }
+    /// <summary>Legacy pushed the booking form's messages 20px below the field.</summary>
+    [Parameter] public string? Style { get; set; } = "bottom:-20px;";
+}

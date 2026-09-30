@@ -1,0 +1,99 @@
+@* Fields for a person's profile (staff, guests, own account). Binds straight to the contract's UserProfile.
+   With Suggested (a guest's Cloudbeds details), fields that differ show the Cloudbeds value to apply. *@
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+        <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.FirstName" For="() => Profile.FirstName" Label="First name" Required="true" />
+        @Hint(Suggested?.FirstName, Profile.FirstName, v => Profile.FirstName = v)
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.LastName" For="() => Profile.LastName" Label="Last name" Required="true" />
+        @Hint(Suggested?.LastName, Profile.LastName, v => Profile.LastName = v)
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.Email" For="() => Profile.Email" Label="Email" InputType="InputType.Email" Required="EmailRequired" />
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.PhoneNumber" For="() => Profile.PhoneNumber" Label="Phone number" />
+        @Hint(Suggested?.PhoneNumber, Profile.PhoneNumber, v => Profile.PhoneNumber = v)
+    </MudItem>
+    @if (!Compact)
+    {
+        <MudItem xs="12" md="4">
+            <MudDatePicker Variant="Variant.Outlined" @bind-Date="Profile.DateOfBirth" Label="Date of birth" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" />
+            @DateHint(Suggested?.DateOfBirth, Profile.DateOfBirth, v => Profile.DateOfBirth = v)
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudAutocomplete T="string" Variant="Variant.Outlined" @bind-Value="Profile.Nationality" Label="Nationality" SearchFunc="SearchCountries"
+                             ToStringFunc="Countries.DisplayName" MaxItems="null" Clearable="true" CoerceValue="true" />
+            @Hint(Suggested?.Nationality, Countries.DisplayName(Profile.Nationality), v => Profile.Nationality = v)
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="string" Variant="Variant.Outlined" @bind-Value="Profile.Gender" Label="Gender" Clearable="true">
+                @foreach (var gender in Genders.Options)
+                {
+                    <MudSelectItem Value="gender">@gender</MudSelectItem>
+                }
+            </MudSelect>
+            @Hint(Suggested?.Gender, Genders.DisplayName(Profile.Gender), v => Profile.Gender = v)
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.Address" Label="Address" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.City" Label="City" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.ZipPostalCode" Label="Zip / postal code" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField Variant="Variant.Outlined" @bind-Value="Profile.PassportNumber" Label="Passport number" />
+            @Hint(Suggested?.PassportNumber, Profile.PassportNumber, v => Profile.PassportNumber = v)
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudAutocomplete T="string" Variant="Variant.Outlined" @bind-Value="Profile.PassportIssuingCountry" Label="Passport issuing country"
+                             ToStringFunc="Countries.DisplayName" SearchFunc="SearchCountries" MaxItems="null" Clearable="true" CoerceValue="true" />
+            @Hint(Suggested?.PassportIssuingCountry, Countries.DisplayName(Profile.PassportIssuingCountry), v => Profile.PassportIssuingCountry = v)
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker Variant="Variant.Outlined" @bind-Date="Profile.PassportIssueDate" Label="Passport issue date" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" />
+            @DateHint(Suggested?.PassportIssueDate, Profile.PassportIssueDate, v => Profile.PassportIssueDate = v)
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker Variant="Variant.Outlined" @bind-Date="Profile.PassportExpiryDate" Label="Passport expiry date" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" />
+            @DateHint(Suggested?.PassportExpiryDate, Profile.PassportExpiryDate, v => Profile.PassportExpiryDate = v)
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker Variant="Variant.Outlined" @bind-Date="Profile.VisaIssueDate" Label="Visa issue date" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudDatePicker Variant="Variant.Outlined" @bind-Date="Profile.VisaExpiryDate" Label="Visa expiry date" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" />
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public UserProfile Profile { get; set; } = null!;
+
+    /// <summary>Staff and own-account forms need an email; guests added at the desk may not have one.</summary>
+    [Parameter] public bool EmailRequired { get; set; }
+
+    /// <summary>Names and contact details only (staff).</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>Values from another source (Cloudbeds) to offer where they differ. Blank values are never offered.</summary>
+    [Parameter] public UserProfile? Suggested { get; set; }
+
+    private static Task<IEnumerable<string>> SearchCountries(string? text, CancellationToken _) =>
+        Task.FromResult(Countries.Search(text));
+
+    private RenderFragment? Hint(string? suggested, string? ours, Action<string> apply) =>
+        string.IsNullOrWhiteSpace(suggested) || string.Equals((ours ?? "").Trim(), suggested.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? null
+            : @<CloudbedsHint Value="@suggested" OnApply="() => apply(suggested)" />;
+
+    private RenderFragment? DateHint(DateTime? suggested, DateTime? ours, Action<DateTime?> apply) =>
+        suggested is not { } date || ours?.Date == date.Date
+            ? null
+            : @<CloudbedsHint Value="@date.ToString("dd/MM/yyyy")" OnApply="() => apply(date)" />;
+}

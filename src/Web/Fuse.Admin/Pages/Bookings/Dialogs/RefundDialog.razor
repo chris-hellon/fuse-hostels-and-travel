@@ -1,0 +1,82 @@
+@* Legacy PartialRefundConfirmationDialog: an amount to refund, for refunding or cancelling a booking or one tour.
+   Sends the command itself so errors (e.g. Stripe refusing) show without closing. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="text-center">
+            @if (Cancelling)
+            {
+                <MudText Class="mb-2">Would you like to refund anything before cancelling this @Subject?</MudText>
+                <MudText Class="mb-2">The most you can refund is <strong>@MaxAmount.ToString("$#,##0.00")</strong>.</MudText>
+                <MudText Class="mb-4 mud-text-secondary">Enter an amount to refund, or leave it at zero to cancel without a refund.</MudText>
+            }
+            else
+            {
+                <MudText Class="mb-2">Enter the amount you'd like to refund.</MudText>
+                <MudText Class="mb-4">The most you can refund is <strong>@MaxAmount.ToString("$#,##0.00")</strong>.</MudText>
+            }
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount to refund" Variant="Variant.Outlined" Min="0" Max="MaxAmount"
+                             Format="N2" Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true" />
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Cancel" Disabled="_saving" OnClick="() => Dialog.Cancel()">@(Cancelling ? "Keep" : "Cancel")</MudButton>
+        <MudButton StartIcon="@(_saving ? null : Icons.Material.Filled.Check)" Color="Color.Error" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(Cancelling ? $"Cancel {Subject}" : "Refund")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, BackdropClick = false };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>"booking" or "tour".</summary>
+    [Parameter] public string Subject { get; set; } = "booking";
+    [Parameter] public bool Cancelling { get; set; }
+    [Parameter] public decimal MaxAmount { get; set; }
+    /// <summary>Sends the refund / cancellation for the amount and returns the message to show.</summary>
+    [Parameter, EditorRequired] public Func<decimal, Task<string>> Submit { get; set; } = null!;
+
+    private decimal _amount;
+    private string? _error;
+    private bool _saving;
+
+    private async Task SaveAsync()
+    {
+        _error = _amount < 0 ? "The amount can't be negative."
+            : _amount > MaxAmount ? $"The most you can refund is {MaxAmount:$#,##0.00}."
+            : !Cancelling && _amount <= 0 ? $"Enter an amount greater than zero. To give nothing back, cancel the {Subject} instead."
+            : null;
+        if (_error is not null)
+            return;
+
+        _saving = true;
+        try
+        {
+            var message = await Submit(_amount);
+            Snackbar.Add(message, Severity.Success);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        catch (AppException failure)
+        {
+            _error = failure.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -1,0 +1,111 @@
+@using System.Text.Json
+@using Fuse.Contracts.Galleries
+
+@* Create / edit a gallery: Content (title + description) -> SEO -> Images, all saved together. *@
+
+<ModalWizard TModel="GalleryInput" Model="_input!" Loading="_input is null" OnSave="SaveAsync" OnCancel="CancelAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Gallery" : "Edit Gallery")
+    </TitleContent>
+    <ChildContent>
+        @if (_input is not null)
+        {
+            <WizardStep TModel="GalleryInput" Title="Content" Validator="Rules" ValidationTarget="Command" ValidationProperties="@(["Details.Title", "Details.Description"])" OnLeaveAsync="_ => Task.FromResult(_content?.EnsureRequired() ?? true)">
+                <ContentSections @ref="_content" Sections="_sections" />
+            </WizardStep>
+            <WizardStep TModel="GalleryInput" Title="SEO">
+                <SeoFieldsEditor Seo="_input" />
+            </WizardStep>
+            <WizardStep TModel="GalleryInput" Title="Images" OnLeaveAsync="_ => Task.FromResult(HasImages())">
+                <div class="image-picker__label">
+                    <MudText Typo="Typo.subtitle2">Images *</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">At least one. Shown in this order in the gallery; use the arrows to reorder.</MudText>
+                </div>
+                <ImageGallery TItem="Slide" Items="_images" Url="s => s.DisplayUrl" Badge="@(s => s.NewUrl is null ? null : "Unsaved")" Busy="_busy"
+                              OnAdd="AddAsync" OnRemove="s => _images.Remove(s)" OnMove="Move" />
+                <SavedWithParentNote Parent="gallery" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? GalleryId { get; set; }
+
+    private sealed record Slide(DefaultIdType? Id, string DisplayUrl, string? NewUrl);
+
+    private bool IsCreate => GalleryId is null;
+    private GalleryInput? _input;
+    private List<Slide> _images = [];
+    /// <summary>The save's rules, checked step by step (each step lists the ones it edits).</summary>
+    private static readonly SaveGalleryValidator Rules = new();
+    private object Command() => new SaveGallery(GalleryId, _input!, [.. _images.Select(i => new GalleryRef(i.Id, i.NewUrl))]);
+    private string _original = "";
+    private IReadOnlyList<ContentSection> _sections = [];
+    private ContentSections? _content;
+    private bool _busy;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        GalleryInput input;
+        if (IsCreate)
+            input = new GalleryInput();
+        else
+        {
+            var editor = await Api.Send(new GetGalleryEditor(GalleryId!.Value));
+            input = editor.Details;
+            _images = [.. editor.Images.Select(i => new Slide(i.Id, i.ImagePath, null))];
+        }
+        _sections =
+        [
+            ContentSection.Fields("Details", "Title", DetailsForm(input), () => !string.IsNullOrWhiteSpace(input.Title), required: true),
+            new("Description", "Shown with the gallery", () => input.Description, v => input.Description = v, Required: true),
+        ];
+        _original = Snapshot(input);
+        _input = input;
+    });
+
+    private RenderFragment DetailsForm(GalleryInput input) =>
+        @<MudTextField Label="Title" @bind-Value="input.Title" Required="true" RequiredError="Title is required" MaxLength="1024" Variant="Variant.Outlined" />;
+
+    private string Snapshot(GalleryInput input) => JsonSerializer.Serialize(new { input, Images = _images.Select(i => i.Id?.ToString() ?? i.NewUrl) });
+
+    private async Task AddAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        foreach (var file in e.GetMultipleFiles(20))
+        {
+            // One at a time: a bad file doesn't lose the good ones.
+            await Snackbar.TryAsync(async () =>
+            {
+                var url = await Api.Send(new UploadGalleryImage(await file.ToUploadAsync()));
+                _images.Add(new Slide(null, url, url));
+            });
+            StateHasChanged();
+        }
+        _busy = false;
+    }
+
+    private void Move((int Index, int By) move) =>
+        (_images[move.Index], _images[move.Index + move.By]) = (_images[move.Index + move.By], _images[move.Index]);
+
+    private bool HasImages()
+    {
+        if (_images.Count > 0)
+            return true;
+        Snackbar.Add("Add at least one image.", Severity.Warning);
+        return false;
+    }
+
+    private async Task<bool> SaveAsync(GalleryInput input) =>
+        await Snackbar.TryAsync(async () => await Api.Send(new SaveGallery(GalleryId, input, [.. _images.Select(i => new GalleryRef(i.Id, i.NewUrl))])),
+            IsCreate ? "Gallery created." : "Gallery saved.");
+
+    private async Task<bool> CancelAsync() =>
+        _input is null || Snapshot(_input) == _original
+        || await Dialogs.ConfirmAsync("Discard your changes?", "You've changed this gallery but haven't saved it. If you close now, those changes are lost.",
+            "Discard changes", "Keep editing");
+}

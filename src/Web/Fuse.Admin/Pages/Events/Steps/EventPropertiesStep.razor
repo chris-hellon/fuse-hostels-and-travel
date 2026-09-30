@@ -1,0 +1,50 @@
+@using Fuse.Contracts.Tours
+
+<MudText Typo="Typo.body2" Class="mb-3">Choose which hostel(s) this event is on at. Use <strong>All hostels</strong> for a chain-wide event.</MudText>
+
+<MudSwitch T="bool" Value="Draft.Details.AllProperties" ValueChanged="SetAll" Color="Color.Primary" Label="All hostels (chain-wide)" />
+
+@if (!Draft.Details.AllProperties)
+{
+    <div class="readonly-panel mt-3">
+        @if (Properties.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">No hostels found.</MudText>
+        }
+        else
+        {
+            <MudGrid Spacing="1">
+                @foreach (var property in Properties)
+                {
+                    var id = DefaultIdType.Parse(property.Id);
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCheckBox T="bool" Value="Draft.Details.PropertyIds.Contains(id)" ValueChanged="on => Toggle(id, on)" Label="@property.Name" Dense="true" />
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </div>
+    @if (Draft.Details.PropertyIds.Count == 0)
+    {
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">No hostels chosen: the event only shows on the Events page.</MudText>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public EventDraft Draft { get; set; } = null!;
+    [Parameter] public IReadOnlyList<LookupItem> Properties { get; set; } = [];
+
+    private void SetAll(bool all)
+    {
+        Draft.Details.AllProperties = all;
+        if (all)
+            Draft.Details.PropertyIds.Clear();
+    }
+
+    private void Toggle(DefaultIdType id, bool on)
+    {
+        Draft.Details.PropertyIds.Remove(id);
+        if (on)
+            Draft.Details.PropertyIds.Add(id);
+    }
+}

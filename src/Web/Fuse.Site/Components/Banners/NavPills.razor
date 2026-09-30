@@ -1,0 +1,20 @@
+@* Legacy _NavPillsPartial: links to the page's sections, which scroll there below the fixed header. *@
+@inherits JsComponent
+
+<div class="container-fluid py-3 mt-7 nav-pills-container">
+    <ul class="nav nav-pills menu-sidebar justify-content-center text-center">
+        @foreach (var (label, target) in Items)
+        {
+            <li class="nav-item mx-3 has-parallax-scroll mb-4 mb-lg-0">
+                <a class="nav-link text-purple" href="@($"#{target}")" @onclick="() => ScrollAsync(target)" @onclick:preventDefault="true">@label</a>
+            </li>
+        }
+    </ul>
+</div>
+
+@code {
+    /// <summary>Each pill's label and the id of the section it scrolls to.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Label, string Target)> Items { get; set; } = [];
+
+    private Task ScrollAsync(string target) => Js.InvokeVoidAsync("scrollToSection", target).AsTask();
+}

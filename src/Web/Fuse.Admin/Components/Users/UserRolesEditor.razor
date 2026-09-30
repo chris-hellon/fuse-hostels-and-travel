@@ -1,0 +1,67 @@
+
+@if (_roles is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="admin-card" Elevation="25">
+        <MudTable Items="_roles" Dense="true" Hover="true" Elevation="0" Class="admin-subtable">
+            <HeaderContent>
+                <MudTh>Role</MudTh>
+                <MudTh>Description</MudTh>
+                <MudTh Style="width: 120px; text-align: center">Assigned</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Role">@context.RoleName</MudTd>
+                <MudTd DataLabel="Description">@context.Description</MudTd>
+                <MudTd DataLabel="Assigned">
+                    <div class="d-flex justify-center">
+                        <MudCheckBox T="bool" Value="_assigned.Contains(context.RoleId)" Disabled="!CanEdit" Dense="true"
+                                     ValueChanged="on => Toggle(context.RoleId, on)" Color="Color.Primary" aria-label="@($"Assigned {context.RoleName}")" />
+                    </div>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        @if (CanEdit)
+        {
+            <div class="admin-card__actions">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Roles decide what this person can see and do.</MudText>
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" Disabled="_saving" OnClick="SaveAsync">Save roles</MudButton>
+            </div>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public string UserId { get; set; } = "";
+    [Parameter] public bool CanEdit { get; set; }
+
+    private IReadOnlyList<UserRoleAssignment>? _roles;
+    private HashSet<string> _assigned = [];
+    private bool _saving;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Snackbar.TryAsync(async () =>
+        {
+            _roles = await Api.Send(new GetUserRoles(UserId));
+            _assigned = [.. _roles.Where(r => r.Assigned).Select(r => r.RoleId)];
+        });
+    }
+
+    private void Toggle(string roleId, bool on)
+    {
+        if (on) _assigned.Add(roleId);
+        else _assigned.Remove(roleId);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        await Snackbar.TryAsync(async () => await Api.Send(new UpdateUserRoles(UserId, [.. _assigned])), "Roles updated.");
+        _saving = false;
+    }
+}

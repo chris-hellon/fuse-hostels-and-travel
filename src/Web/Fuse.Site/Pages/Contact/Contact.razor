@@ -1,0 +1,71 @@
+@page "/contact"
+@inherits SitePage
+
+@* Legacy /contact: "GET IN TOUCH" with the enquiry form in a card, the socials strip, and each hostel's details.
+   ?tour=… starts the form on that tour. *@
+
+<SeoHead Page="Page" PageName="Get In Touch" Keywords="contact us, get in touch, reach us, email us, phone us"
+         MetaDescription="Need to get in touch with Fuse Hostels and Travels? Contact us by email or phone and we'll get back to you as soon as possible." />
+
+<section id="getInTouch" class="bg-light overflow-hidden position-relative">
+    <div class="container-fluid">
+        <div class="container pt-8 pb-8">
+            <div class="row d-flex justify-content-center text-center">
+                <div class="col-lg-6 has-parallax-scroll">
+                    <h1 class="display-3 mb-4">@(Page is null ? "GET IN TOUCH" : PageHeadings.Of(Page, "GET IN TOUCH").Title)</h1>
+                    <p class="mb-0">Do you have a question? Or, do you want to know more about our hostels and tours? Reach out to our team via the enquiry form. We’re happy to help!</p>
+                    <div class="card mt-5">
+                        <div class="card-body p-5">
+                            <div class="d-flex justify-content-center">
+                                <h4 class="tilted display-6">HOW CAN WE HELP?</h4>
+                            </div>
+                            <ContactForm Tour="@Tour" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <OvalContainer Id="contactPageOvals1" Top="-20" Left="-18" />
+        <OvalContainer Id="contactPageOvals2" Bottom="-20" Right="-18" />
+    </div>
+</section>
+<section id="socials">
+    <div class="container-fluid bg-gray">
+        <div class="container py-4 has-parallax-scroll">
+            <div class="row align-items-center">
+                <div class="col-lg-3 mb-3 mb-lg-0 text-center text-lg-end">
+                    <a class="btn btn-floating m-1" href="https://www.instagram.com/fusehostels" target="_blank" rel="noopener" aria-label="Instagram">
+                        <i class="fab fa-instagram display-7 text-light-purple"></i>
+                    </a>
+                </div>
+                <div class="col-lg-6 mb-3 mb-lg-0 text-center">
+                    <p class="text-white mb-0">Follow us to keep up to date with our latest news and events!</p>
+                </div>
+                <div class="col-lg-3 text-center text-lg-start">
+                    <a class="btn btn-floating m-1" href="https://www.facebook.com/fusehostelsandtravel" target="_blank" rel="noopener" aria-label="Facebook">
+                        <i class="fab fa-facebook display-7 text-light-purple"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+@if (Hostels is not null)
+{
+    <HostelDetails Hostels="Hostels" />
+}
+else
+{
+    @* Arriving from another page: the hostels are loading. *@
+    <PageSkeleton />
+}
+
+@code {
+    [PersistentState] public IReadOnlyList<SiteHostelContact>? Hostels { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tour")] private string? Tour { get; set; }
+
+    protected override DefaultIdType PageId => SitePages.Contact;
+
+    protected override async Task LoadAsync() => Hostels = await Api.Send(new ListSiteHostelContacts());
+}

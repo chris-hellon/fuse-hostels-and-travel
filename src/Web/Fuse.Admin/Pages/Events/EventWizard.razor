@@ -1,0 +1,82 @@
+@* Create / edit an event. Every step edits an EventDraft; Save sends it all in one command. *@
+
+<ModalWizard TModel="EventDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" OnCancel="CancelAsync">
+    <TitleContent>
+        <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+        @(IsCreate ? "Create Event" : "Edit Event")
+    </TitleContent>
+    <ChildContent>
+        @if (_draft is not null)
+        {
+            <WizardStep TModel="EventDraft" Title="Details" Validator="Rules" ValidationModel="_draft.Details" ValidationProperties="@(["Name", "Colour", "ExternalUrl"])">
+                <EventDetailsStep Draft="_draft" Categories="_categories" Tours="_tours" />
+            </WizardStep>
+            <WizardStep TModel="EventDraft" Title="Content" Validator="Rules" ValidationModel="_draft.Details" ValidationProperties="@(["ShortDescription"])" OnLeaveAsync="_ => Task.FromResult(ContentIsValid())">
+                <ContentSections @ref="_content" Sections="_sections" />
+            </WizardStep>
+            <WizardStep TModel="EventDraft" Title="Schedule" Validator="Rules" ValidationModel="_draft.Details" ValidationProperties="@(["StartDate", "EndDate", "RecurrenceInterval", "RecurrenceEndDate", "RecurrenceDaysOfWeek", "TimeSlots"])" OnLeaveAsync="_ => Task.FromResult(_schedule?.Validate() ?? true)">
+                <EventScheduleStep @ref="_schedule" Draft="_draft" />
+            </WizardStep>
+            <WizardStep TModel="EventDraft" Title="Hostels">
+                <EventPropertiesStep Draft="_draft" Properties="_properties" />
+            </WizardStep>
+            <WizardStep TModel="EventDraft" Title="Image">
+                <EventImageStep Draft="_draft" />
+            </WizardStep>
+        }
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter] public DefaultIdType? EventId { get; set; }
+
+    private bool IsCreate => EventId is null;
+    private EventDraft? _draft;
+    /// <summary>The save's rules, checked step by step (each step lists the ones it edits).</summary>
+    private static readonly EventInputValidator Rules = new();
+    private IReadOnlyList<EventCategoryItem> _categories = [];
+    private IReadOnlyList<Fuse.Contracts.Tours.LookupItem> _tours = [];
+    private IReadOnlyList<Fuse.Contracts.Tours.LookupItem> _properties = [];
+    private IReadOnlyList<ContentSection> _sections = [];
+    private ContentSection? _short;
+    private ContentSections? _content;
+    private EventScheduleStep? _schedule;
+
+    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    {
+        var categories = Api.Send(new ListEventCategories()).AsTask();
+        var tours = Api.Send(new ListEventTours()).AsTask();
+        var properties = Api.Send(new ListEventProperties()).AsTask();
+        var draft = IsCreate ? Task.FromResult(EventDraft.New()) : LoadAsync(EventId!.Value);
+        await Task.WhenAll(categories, tours, properties, draft);
+        _categories = categories.Result;
+        _tours = tours.Result;
+        _properties = properties.Result;
+        var details = draft.Result.Details;
+        _short = new ContentSection("Short description", "A line or two for event cards and the calendar", () => details.ShortDescription, v => details.ShortDescription = v);
+        _sections = [_short, new("Full description", "The main text on the event page", () => details.Description, v => details.Description = v)];
+        _draft = draft.Result;
+    });
+
+    private async Task<EventDraft> LoadAsync(DefaultIdType id) => EventDraft.From(await Api.Send(new GetEventEditor(id)));
+
+    /// <summary>The short description column holds 500 characters, formatting included.</summary>
+    private bool ContentIsValid()
+    {
+        if ((_draft!.Details.ShortDescription?.Length ?? 0) <= EventInputValidator.ShortDescriptionMax)
+            return true;
+        _content?.Select(_short!);
+        Snackbar.Add("The short description is too long. Keep it to a line or two.", Severity.Warning);
+        return false;
+    }
+
+    private async Task<bool> SaveAsync(EventDraft draft) =>
+        await Snackbar.TryAsync(async () => await Api.Send(draft.ToCommand()), IsCreate ? "Event created." : "Event saved.");
+
+    private async Task<bool> CancelAsync() =>
+        _draft is not { HasChanges: true }
+        || await Dialogs.ConfirmAsync("Discard your changes?", "You've changed this event but haven't saved it. If you close now, those changes are lost.",
+            "Discard changes", "Keep editing");
+}

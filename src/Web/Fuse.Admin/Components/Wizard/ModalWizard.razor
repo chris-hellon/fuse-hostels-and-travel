@@ -1,0 +1,129 @@
+@typeparam TModel
+@attribute [CascadingTypeParameter(nameof(TModel))]
+
+@* Legacy "has-wizard" dialog: steps in the title bar, Cancel / Back / Next|Save in the footer. *@
+
+<MudDialog Class="has-wizard" ContentClass="modal-wizard__content">
+    <TitleContent>
+        <div class="modal-wizard__title-row">
+            <MudText Typo="Typo.h6" Class="modal-wizard__title">
+                @TitleContent
+            </MudText>
+            @if (_wizard is not null)
+            {
+                <WizardSteps Titles="_wizard.StepTitles" ActiveIndex="_wizard.ActiveIndex" Reached="_wizard.Reached" Select="i => _wizard.JumpToAsync(i)" />
+            }
+            @* Not the dialog's own close button: closing must go through OnCancel (e.g. discard unsaved changes). *@
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Class="modal-wizard__close" Disabled="Saving" OnClick="CancelAsync" aria-label="Close" />
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (Loading)
+        {
+            <div class="modal-wizard__loading"><MudProgressCircular Indeterminate="true" Color="Color.Secondary" /></div>
+        }
+        else
+        {
+            @* While saving, the step is locked and faded (not covered): the Save button shows the progress. *@
+            <div class="@($"modal-wizard__body{(Saving ? " is-saving" : "")}")" inert="@Saving" aria-busy="@(Saving ? "true" : null)">
+                <Wizard TModel="TModel" @ref="_wizard" Model="Model" OnFinished="Finished" OnStateChanged="Refresh">
+                    @ChildContent
+                </Wizard>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton EndIcon="@Icons.Material.Filled.Cancel" Disabled="@(_wizard?.Busy == true || Saving)" OnClick="CancelAsync">@CancelText</MudButton>
+        <MudSpacer />
+        <MudButton StartIcon="@Icons.Material.Filled.ArrowLeft" Disabled="@(!(_wizard?.CanGoBack ?? false) || Saving)" OnClick="() => _wizard!.BackAsync()">Back</MudButton>
+        @if (!(_wizard?.CanFinish ?? false))
+        {
+            <MudButton EndIcon="@Icons.Material.Filled.ArrowRight" Disabled="@(!(_wizard?.CanGoNext ?? false))" OnClick="() => _wizard!.NextAsync()">Next</MudButton>
+        }
+        else if (CanSave)
+        {
+            <MudButton EndIcon="@(Saving ? null : Icons.Material.Filled.Save)" Color="Color.Secondary" Variant="Variant.Filled" Disabled="Saving"
+                       OnClick="() => _wizard!.FinishAsync()">
+                @if (Saving)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" Style="width: 16px; height: 16px" />
+                    <span>Saving…</span>
+                }
+                else
+                {
+                    @FinishText
+                }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public TModel Model { get; set; } = default!;
+    /// <summary>Shows a spinner in the same dialog (same size) until the model has loaded.</summary>
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? TitleContent { get; set; }
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public string FinishText { get; set; } = "Save";
+    [Parameter] public bool CanSave { get; set; } = true;
+
+    /// <summary>Saves the model; return true to close the dialog.</summary>
+    [Parameter] public Func<TModel, Task<bool>>? OnSave { get; set; }
+
+    /// <summary>Runs before closing on Cancel; return false to keep the dialog open.</summary>
+    [Parameter] public Func<Task<bool>>? OnCancel { get; set; }
+
+    private Wizard<TModel>? _wizard;
+    private bool _stepsShown;
+
+    /// <summary>
+    /// MudBlazor draws the title in the dialog's container, which doesn't re-render with this
+    /// component, so the step list in the title row needs the container refreshed too.
+    /// </summary>
+    private void Refresh()
+    {
+        StateHasChanged();
+        Dialog.StateHasChanged();
+    }
+
+    /// <summary>The Wizard's @ref is only set after its first render (after its steps registered): refresh once then.</summary>
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_wizard is not null && !_stepsShown)
+        {
+            _stepsShown = true;
+            Refresh();
+        }
+    }
+    private bool Saving { get; set; }
+
+    private async Task Finished(TModel model)
+    {
+        if (OnSave is null)
+            return;
+        Saving = true;
+        Refresh(); // the footer (Save button) and title live in the dialog container
+        var saved = false;
+        try
+        {
+            saved = await OnSave(model);
+        }
+        finally
+        {
+            Saving = false;
+        }
+        if (saved)
+            Dialog.Close(DialogResult.Ok(true));
+        else
+            Refresh();
+    }
+
+    private async Task CancelAsync()
+    {
+        if (OnCancel is null || await OnCancel())
+            Dialog.Cancel();
+    }
+}

@@ -1,0 +1,411 @@
+@* Legacy Add Tour(s): choose tours, a price and departure for each, then pick up and guests. When the
+   choice is exactly a package's tours it offers the package; when it qualifies for a pack, the pack. *@
+
+<ModalWizard TModel="BookingDraft" Model="Draft" OnSave="SaveAsync" FinishText="@FinishText">
+    <TitleContent>
+        <MudIcon Icon="@Icons.Material.Filled.AddLocationAlt" Class="mr-3 mb-n1" />Add Tour(s)
+    </TitleContent>
+    <ChildContent>
+        <WizardStep TModel="BookingDraft" Title="Tours" OnLeaveAsync="_ => LeaveToursAsync()">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="4">
+                    <MudSelect T="DefaultIdType?" Label="Category" @bind-Value="_categoryId" Clearable="true" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" Placeholder="All categories">
+                        @foreach (var category in Draft.Catalog.Categories)
+                        {
+                            <MudSelectItem T="DefaultIdType?" Value="@DefaultIdType.Parse(category.Id)">@category.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="8">
+                    <MudTextField T="string" @bind-Value="_search" Label="Search" Placeholder="Search tours by name..." Immediate="true"
+                                  DebounceInterval="150" Clearable="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12" Class="d-flex align-center flex-wrap gap-2">
+                    <span class="status-pill status-pill--neutral">@_selected.Count selected</span>
+                    @foreach (var tour in SelectedTours)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined" OnClose="() => Toggle(tour, false)" @key="tour.Id">@tour.Name</MudChip>
+                    }
+                    @if (_selected.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="ClearSelection">Clear</MudButton>
+                    }
+                </MudItem>
+                <MudItem xs="12">
+                    <div class="add-tours__list">
+                        @foreach (var tour in FilteredTours)
+                        {
+                            <MudCheckBox T="bool" Value="_selected.Contains(tour.Id)" ValueChanged="v => Toggle(tour, v)" Dense="true" Color="Color.Secondary" Label="@tour.Name" @key="tour.Id" />
+                        }
+                        @if (!FilteredTours.Any())
+                        {
+                            <MudText Typo="Typo.body2" Class="pa-3 mud-text-secondary">No tours match.</MudText>
+                        }
+                    </div>
+                </MudItem>
+            </MudGrid>
+        </WizardStep>
+
+        <WizardStep TModel="BookingDraft" Title="Departures" OnLeaveAsync="_ => Task.FromResult(LeaveDepartures())">
+            @if (MatchedPackage is { } match)
+            {
+                <div class="@($"booking-banner {(_packageApplied ? "booking-banner--applied" : "")}")">
+                    <MudIcon Icon="@(_packageApplied ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Inventory2)" Color="@(_packageApplied ? Color.Success : Color.Secondary)" />
+                    <div class="booking-banner__text">
+                        @if (_packageApplied)
+                        {
+                            <MudText Typo="Typo.body1"><strong>@match.Name</strong> package applied</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Charged at the package price (@match.TotalFor(_packageTierId!.Value).ToString("$#,##0.00") per guest) and grouped as one package.</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body1">These tours make up the <strong>@match.Name</strong> package</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Apply it to charge the package price and group them together.</MudText>
+                        }
+                    </div>
+                    @if (match.Tiers.Count > 1)
+                    {
+                        <MudSelect T="DefaultIdType?" @bind-Value="_packageTierId" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined" Label="Price tier" Class="booking-banner__select">
+                            @foreach (var tier in match.Tiers)
+                            {
+                                <MudSelectItem T="DefaultIdType?" Value="@tier.Id">@($"{tier.Title} — {match.TotalFor(tier.Id):$#,##0.00}")</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    @if (_packageApplied)
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Close" OnClick="() => _packageApplied = false">Remove</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="ApplyPackage">Apply package</MudButton>
+                    }
+                </div>
+            }
+            @if (!_packageApplied && QualifyingPack is { } pack)
+            {
+                <div class="@($"booking-banner {(_packApplied ? "booking-banner--applied" : "")}")">
+                    <MudIcon Icon="@(_packApplied ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Inventory2)" Color="@(_packApplied ? Color.Success : Color.Secondary)" />
+                    <div class="booking-banner__text">
+                        <MudText Typo="Typo.body1"><strong>@pack.Name</strong> @(_packApplied ? "applied" : "available")</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @if (_packApplied && PackTier is { } tier)
+                            {
+                                <text>Charged at @tier.Title (@tier.Price.ToString("$#,##0.00")) split across its tours, with the booking's other pack tours. Pays the pack commission.</text>
+                            }
+                            else
+                            {
+                                <text>These tours count toward this pack incentive. Apply it to charge the pack price and earn the pack commission.</text>
+                            }
+                        </MudText>
+                    </div>
+                    @if (pack.Tiers.Count > 1)
+                    {
+                        <MudSelect T="DefaultIdType?" @bind-Value="_packTierId" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined" Label="Price tier" Class="booking-banner__select">
+                            @foreach (var tier in pack.Tiers)
+                            {
+                                <MudSelectItem T="DefaultIdType?" Value="@tier.Id">@($"{tier.Title} — {tier.Price:$#,##0.00}")</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    @if (_packApplied)
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Close" OnClick="() => _packApplied = false">Remove</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="() => _packApplied = true">Apply pack</MudButton>
+                    }
+                </div>
+            }
+
+            <MudText Typo="Typo.body2" Class="mb-3">Choose a price and departure for each tour.</MudText>
+            @foreach (var tour in SelectedTours)
+            {
+                <DeparturePicker @key="tour.Id" TourName="@tour.Name" Departures="Departures(tour.Id)" Loading="_loading.Contains(tour.Id)"
+                                 PriceLocked="@(_packageApplied || (_packApplied && IsPackTour(tour.Id)))"
+                                 PriceNote="@PickerNote(tour.Id)"
+                                 @bind-DepartureId="_departureByTour[tour.Id]" />
+            }
+            @foreach (var late in LateDepartures)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@late</MudAlert>
+            }
+        </WizardStep>
+
+        <WizardStep TModel="BookingDraft" Title="Guests" OnLeaveAsync="_ => Task.FromResult(LeaveGuests())">
+            <DialogSection Icon="@Icons.Material.Filled.Summarize" Title="Summary" />
+            <MudPaper Outlined="true" Elevation="0" Class="pa-2 mb-5">
+                <MudList T="string" Dense="true" ReadOnly="true">
+                    @foreach (var tour in SelectedTours)
+                    {
+                        var departure = Chosen(tour.Id);
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Place" @key="tour.Id">
+                            <div class="dialog-summary__line">
+                                <MudText Typo="Typo.body2">@tour.Name</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                    @(departure is null ? "No departure selected"
+                                        : $"{PriceNote(tour.Id) ?? $"{departure.PriceTitle} ({departure.Price:$#,##0.00})"} · {departure.StartDate:ddd dd MMM · h:mm tt}")
+                                </MudText>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+
+            @if (Pickups.Count > 0)
+            {
+                <DialogSection Icon="@Icons.Material.Filled.DirectionsBus" Title="Pick Up Location" Description="Applied to every tour in this selection." />
+                <PickupPicker Pickups="Pickups" @bind-Value="_pickup" Class="mb-5" />
+            }
+
+            <DialogSection Icon="@Icons.Material.Filled.People" Title="Guests"
+                           Description="The lead guest is the booking's guest. Any additional guests added here apply to every tour selected." />
+            <GuestListPicker GuestIds="_guests" NameOf="Draft.NameOf" Remember="Draft.Remember" LeadGuestId="@Draft.Editor.GuestId" OnChanged="StateHasChanged" />
+
+            <MudDivider Class="my-3" />
+            <div class="d-flex justify-end">
+                <MudText Typo="Typo.subtitle1"><strong>Total (@(_guests.Count + 1) guest@(_guests.Count == 0 ? "" : "s")): @PreviewTotal.ToString("$#,##0.00")</strong></MudText>
+            </div>
+        </WizardStep>
+    </ChildContent>
+</ModalWizard>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Large, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [Parameter, EditorRequired] public BookingDraft Draft { get; set; } = null!;
+
+    private DefaultIdType? _categoryId;
+    private string? _search;
+    private readonly HashSet<DefaultIdType> _selected = [];
+    private readonly Dictionary<DefaultIdType, IReadOnlyList<DepartureOption>> _departures = [];
+    private readonly Dictionary<DefaultIdType, DefaultIdType?> _departureByTour = [];
+    private readonly HashSet<DefaultIdType> _loading = [];
+    private readonly List<string> _guests = [];
+    private string? _pickup;
+    /// <summary>The lead guest's stay now or next (Cloudbeds), looked up quietly: to warn about departures after
+    /// check-out and default the pick-up to their hostel.</summary>
+    private GuestCurrentStay? _stay;
+    private bool _stayAsked;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_stayAsked || Draft.Editor.GuestId is not { } guestId)
+            return;
+        _stayAsked = true;
+        try
+        {
+            _stay = await Api.Send(new GetGuestCurrentStay(guestId));
+        }
+        catch (AppException)
+        {
+            // No Cloudbeds answer: no warning or default, nothing else changes.
+        }
+    }
+
+    /// <summary>What's chosen so far, for the stay card to flag any after check-out.</summary>
+    /// <summary>Chosen departures after the lead guest checks out.</summary>
+    private IEnumerable<string> LateDepartures => _stay?.Stay is not { } stay ? [] : ChosenDepartures
+        .Where(d => DateOnly.FromDateTime(d.Start) > stay.CheckOut)
+        .Select(d => $"{d.Tour} on {d.Start:ddd d MMM} is after they check out of {stay.Hostel} ({stay.CheckOut:ddd d MMM}).");
+
+    private IReadOnlyList<(string Tour, DateTime Start)> ChosenDepartures =>
+        [.. SelectedTours.Select(t => (t.Name, Chosen(t.Id)?.StartDate)).Where(x => x.StartDate is not null).Select(x => (x.Name, x.StartDate!.Value))];
+    private bool _packageApplied, _packApplied;
+    private DefaultIdType? _packageTierId, _packTierId;
+
+    private string FinishText => _packageApplied ? "Add package" : $"Add {_selected.Count} tour{(_selected.Count == 1 ? "" : "s")}";
+
+    private IEnumerable<BookableTour> FilteredTours => Draft.Catalog.Tours
+        .Where(t => _categoryId is null || t.CategoryId == _categoryId)
+        .Where(t => string.IsNullOrWhiteSpace(_search) || t.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private IReadOnlyList<BookableTour> SelectedTours => [.. Draft.Catalog.Tours.Where(t => _selected.Contains(t.Id))];
+
+    private IReadOnlyList<DepartureOption> Departures(DefaultIdType tourId) => _departures.GetValueOrDefault(tourId) ?? [];
+
+    private DepartureOption? Chosen(DefaultIdType tourId) =>
+        _departureByTour.GetValueOrDefault(tourId) is { } id ? Departures(tourId).FirstOrDefault(d => d.Id == id) : null;
+
+    /// <summary>The package whose tours are exactly the selection.</summary>
+    private PackageOption? MatchedPackage => _selected.Count < 2 ? null
+        : Draft.Catalog.Packages.FirstOrDefault(p => p.Items.Select(i => i.TourId).ToHashSet().SetEquals(_selected));
+
+    /// <summary>The highest pack the booking's tours plus this selection qualify for, unless the booking already has one.</summary>
+    private PackOption? QualifyingPack
+    {
+        get
+        {
+            if (Draft.Editor.PackIncentiveId is not null || _selected.Count == 0)
+                return null;
+            var combined = Draft.Editor.Lines.Concat(_selected.Select(id => new BookingLine { TourId = id })).ToList();
+            return Draft.Catalog.Packs.Where(p => p.MinimumTours > 0 && _selected.Any(p.TourIds.Contains) && BookingPricing.Qualifies(p, combined))
+                .MaxBy(p => p.MinimumTours);
+        }
+    }
+
+    private PackTierOption? PackTier => QualifyingPack?.Tiers.FirstOrDefault(t => t.Id == _packTierId);
+
+    private bool IsPackTour(DefaultIdType tourId) => QualifyingPack?.TourIds.Contains(tourId) == true;
+
+    /// <summary>What a pack or package charges for the tour ("Pack price ($22.90)"), or null when it's the tour's own price.</summary>
+    private string? PriceNote(DefaultIdType tourId) =>
+        PackageOrPackPrice(tourId) is { } price ? $"{(_packageApplied ? "Package" : "Pack")} price ({price:$#,##0.00})" : null;
+
+    /// <summary>Legacy's locked price field: "Pack price — $22.90".</summary>
+    private string? PickerNote(DefaultIdType tourId) =>
+        PackageOrPackPrice(tourId) is { } price ? $"{(_packageApplied ? "Package" : "Pack")} price — {price:$#,##0.00}" : null;
+
+    private decimal? PackageOrPackPrice(DefaultIdType tourId)
+    {
+        if (_packageApplied && MatchedPackage?.Items.FirstOrDefault(i => i.TourId == tourId) is { } item && _packageTierId is { } tier)
+            return item.Prices.GetValueOrDefault(tier);
+        if (_packApplied && IsPackTour(tourId) && QualifyingPack is { } pack && PackTier is { } packTier)
+        {
+            // Split across all the pack's tours: the booking's and these (as the booking will be priced).
+            var tours = Draft.Editor.Lines.Count(l => pack.TourIds.Contains(l.TourId)) + _selected.Count(pack.TourIds.Contains);
+            return BookingPricing.PackPrice(packTier.Price, Math.Max(1, tours));
+        }
+        return null;
+    }
+
+    /// <summary>Pick ups offered by any of the chosen tours (one choice applies to them all, as legacy).</summary>
+    private IReadOnlyList<string> Pickups => [.. SelectedTours.SelectMany(t => t.Pickups).Distinct(StringComparer.OrdinalIgnoreCase).Order()];
+
+    private decimal PreviewTotal
+    {
+        get
+        {
+            var lines = BuildLines().ToList();
+            var all = Draft.Editor.Lines.Concat(lines).ToList();
+            IReadOnlyList<BookingPackageLine> packages = _packageApplied && PackageLine() is { } package ? [.. Draft.Editor.Packages, package] : Draft.Editor.Packages;
+            var pack = _packApplied ? QualifyingPack : Draft.Pack;
+            BookingPricing.Apply(all, pack, _packApplied ? _packTierId : Draft.Editor.PackIncentiveTierId, packages, Draft.Catalog.Packages);
+            Draft.Reprice(); // the preview mustn't change what's already on the booking
+            return BookingPricing.Total(lines); // as legacy: pack tours at their exact share, then to the cent
+        }
+    }
+
+    private void Toggle(BookableTour tour, bool selected)
+    {
+        if (selected)
+            _selected.Add(tour.Id);
+        else
+            _selected.Remove(tour.Id);
+        if (MatchedPackage is null)
+            _packageApplied = false;
+        if (QualifyingPack is null)
+            _packApplied = false;
+    }
+
+    private void ClearSelection()
+    {
+        _selected.Clear();
+        _packageApplied = _packApplied = false;
+    }
+
+    private async Task<bool> LeaveToursAsync()
+    {
+        if (_selected.Count == 0)
+        {
+            Snackbar.Add("Select at least one tour.", Severity.Warning);
+            return false;
+        }
+        var missing = _selected.Where(id => !_departures.ContainsKey(id)).ToList();
+        foreach (var id in missing)
+            _loading.Add(id);
+        StateHasChanged();
+        await Snackbar.TryAsync(async () =>
+        {
+            var loads = missing.ToDictionary(id => id, id => Api.Send(new ListTourDepartures(id)).AsTask());
+            await Task.WhenAll(loads.Values);
+            foreach (var (id, load) in loads)
+                _departures[id] = load.Result;
+        });
+        _loading.Clear();
+        foreach (var id in _selected)
+            _departureByTour.TryAdd(id, null);
+        _packageTierId ??= MatchedPackage?.DefaultTier?.Id;
+        _packTierId ??= QualifyingPack?.Tiers.FirstOrDefault()?.Id;
+        return true;
+    }
+
+    private void ApplyPackage()
+    {
+        _packageApplied = true;
+        _packApplied = false;
+        _packageTierId ??= MatchedPackage?.DefaultTier?.Id;
+    }
+
+    private bool LeaveDepartures()
+    {
+        if (_selected.All(id => Chosen(id) is not null))
+        {
+            // Picked up from the hostel they're staying at, when the tours pick up there (staff can change it).
+            if (string.IsNullOrWhiteSpace(_pickup) && _stay?.Stay?.Hostel is { } hostel
+                && Pickups.FirstOrDefault(p => p.Equals(hostel, StringComparison.OrdinalIgnoreCase)) is { } pickup)
+                _pickup = pickup;
+            return true;
+        }
+        Snackbar.Add("Choose a departure for every tour.", Severity.Warning);
+        return false;
+    }
+
+    private bool LeaveGuests()
+    {
+        if (Pickups.Count > 0 && string.IsNullOrWhiteSpace(_pickup))
+        {
+            Snackbar.Add("Choose a pick up location.", Severity.Warning);
+            return false;
+        }
+        return true;
+    }
+
+    private DefaultIdType _packageKey = DefaultIdType.NewGuid();
+
+    private BookingPackageLine? PackageLine() => MatchedPackage is { } package && _packageTierId is { } tier
+        ? new BookingPackageLine
+        {
+            Key = _packageKey,
+            PackageId = package.Id,
+            PackageName = package.Name,
+            TierId = tier,
+            TierTitle = package.Tiers.FirstOrDefault(t => t.Id == tier)?.Title,
+            Price = package.TotalFor(tier),
+        }
+        : null;
+
+    /// <summary>One line per chosen tour (a package tour included more than once gets a line each).</summary>
+    private IEnumerable<BookingLine> BuildLines()
+    {
+        foreach (var tour in SelectedTours)
+        {
+            if (Chosen(tour.Id) is not { } departure)
+                continue;
+            var quantity = _packageApplied ? MatchedPackage?.Items.FirstOrDefault(i => i.TourId == tour.Id)?.Quantity ?? 1 : 1;
+            for (var i = 0; i < quantity; i++)
+                yield return Draft.NewLine(tour, departure, _pickup, _guests, _packageApplied ? _packageKey : null);
+        }
+    }
+
+    private Task<bool> SaveAsync(BookingDraft draft)
+    {
+        if (!LeaveGuests())
+            return Task.FromResult(false);
+        var lines = BuildLines().ToList();
+        if (_packageApplied && PackageLine() is { } package)
+        {
+            draft.SetPackage(package, lines);
+        }
+        else
+        {
+            draft.Add(lines);
+            if (_packApplied && QualifyingPack is { } pack)
+                draft.ApplyPack(pack, _packTierId);
+        }
+        return Task.FromResult(true);
+    }
+}

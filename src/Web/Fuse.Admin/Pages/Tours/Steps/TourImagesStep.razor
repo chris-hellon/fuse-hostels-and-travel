@@ -1,0 +1,44 @@
+@using Fuse.Contracts.Tours
+
+@* Picked images upload straight away (to keep Save small) but are only attached to the tour on Save. *@
+
+<MudGrid Spacing="4">
+    <MudItem xs="12" md="5">
+    <ImagePicker Label="Banner image" Hint="Shown at the top of the tour page." Src="@Draft.Banner" Pending="@(Draft.BannerChanged && Draft.Banner is not null)"
+                 Busy="_bannerBusy" OnPick="PickBannerAsync" OnRemove="() => Draft.SetBanner(null)" />
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <div class="image-picker__label">
+            <MudText Typo="Typo.subtitle2">Slideshow</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Shown in this order on the tour page. Use the arrows to reorder.</MudText>
+        </div>
+        <ImageGallery TItem="GalleryDraft" Items="Draft.Gallery" Url="g => g.DisplayUrl" Badge="@(g => g.NewUrl is null ? null : "Unsaved")" Busy="_galleryBusy"
+                      OnAdd="AddSlideshowAsync" OnRemove="Draft.RemoveGalleryImage" OnMove="m => Draft.MoveGalleryImage(m.Index, m.By)" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public TourDraft Draft { get; set; } = null!;
+
+    private bool _bannerBusy;
+    private bool _galleryBusy;
+
+    private async Task PickBannerAsync(InputFileChangeEventArgs e)
+    {
+        _bannerBusy = true;
+        await Snackbar.TryAsync(async () => Draft.SetBanner(await Api.Send(new UploadTourImage(await e.File.ToUploadAsync()))));
+        _bannerBusy = false;
+    }
+
+    private async Task AddSlideshowAsync(InputFileChangeEventArgs e)
+    {
+        _galleryBusy = true;
+        foreach (var file in e.GetMultipleFiles(20))
+        {
+            // One at a time: a bad file doesn't lose the good ones.
+            await Snackbar.TryAsync(async () => Draft.AddGalleryImage(await Api.Send(new UploadTourImage(await file.ToUploadAsync()))));
+            StateHasChanged();
+        }
+        _galleryBusy = false;
+    }
+}

@@ -1,0 +1,185 @@
+@* Events (home: featured; hostels: all; a hostel: its own) as a gig poster and its line-up: the chosen event (the
+   soonest to start with) on the poster, the next six in the line-up beside it, and a link to the rest. Pills narrow
+   them to one hostel (not on a hostel's page, which shows only its own). View calendar opens the events calendar;
+   View event goes to the event's page. *@
+
+@if (Coming.Count > 0 && Shown is { } shown)
+{
+    var next = EventDates.Next(shown)!;
+    <section id="events" class="whats-on pb-8">
+        <SectionIntro Title="@Heading" Class="container pt-8 pb-6 text-center ovals-container-parent">
+            <div class="col-12 col-lg-6">
+                <p class="m-0 p-0">Pub quizzes, parties, live music and more. There's always something on at FUSE.</p>
+            </div>
+        </SectionIntro>
+        <div class="container">
+            @if (HostelId is null && Filters.Count > 1)
+            {
+                <ul class="nav nav-pills justify-content-center mb-6 whats-on__filters">
+                    <li class="nav-item">
+                        <a class="@PillClass(null)" href="" @onclick="() => Filter(null)" @onclick:preventDefault="true">ALL HOSTELS</a>
+                    </li>
+                    @foreach (var hostel in Filters)
+                    {
+                        <li class="nav-item" @key="hostel.Id">
+                            <a class="@PillClass(hostel.Id)" href="" @onclick="() => Filter(hostel.Id)" @onclick:preventDefault="true">@hostel.Name.ToUpperInvariant()</a>
+                        </li>
+                    }
+                </ul>
+            }
+            <div class="row gx-lg-8 gy-6">
+                <div class="col-12 col-lg-7">
+                    @* Built as the old event cards: the offcut border and the oval dots in two corners. *@
+                    <div class="position-relative overflow-hidden h-100 whats-on__poster-frame">
+                        <article class="card rounded-0 offcut-image-border card-full-background whats-on__poster" style="@Accent(shown)" @key="shown.Id">
+                            @if (!string.IsNullOrEmpty(shown.ImagePath))
+                            {
+                                <img class="whats-on__poster-image" src="@CdnImages.Sized(shown.ImagePath, 1000)" alt="@($"{shown.Name} image")" />
+                            }
+                            <div class="whats-on__poster-shade"></div>
+                            <span class="tilted whats-on__when">@EventDates.Describe(shown, next)</span>
+                            <div class="whats-on__poster-body">
+                                @if (!string.IsNullOrEmpty(shown.CategoryName))
+                                {
+                                    <span class="whats-on__category">@shown.CategoryName</span>
+                                }
+                                <h3 class="whats-on__title">@shown.Name</h3>
+                                <p class="whats-on__meta">@Meta(shown)</p>
+                                @if (shown.Times.Count > 1)
+                                {
+                                    <p class="whats-on__times">@EventDates.Times(shown, next).ToUpperInvariant()</p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(shown.ShortDescription))
+                                {
+                                    <div class="whats-on__text">@((MarkupString)shown.ShortDescription)</div>
+                                }
+                                @if (EventDates.Later(shown, next) is { Length: > 0 } later)
+                                {
+                                    <p class="whats-on__later">ALSO ON @later</p>
+                                }
+                                <div class="whats-on__actions">
+                                    <EventBook Booking="shown.Booking" Date="next" Class="whats-on__button whats-on__button--book">
+                                        <i class="fas fa-ticket me-2" aria-hidden="true"></i>@EventDates.BookLabel(shown.Booking, next)
+                                    </EventBook>
+                                    <a class="whats-on__button" href="@($"/events/{shown.Slug}")">VIEW EVENT</a>
+                                    @* target: a server route (the iCal feed), so the browser loads it rather than Blazor's router. *@
+                                    <a class="whats-on__button" href="@($"/events/calendar.ics?eventId={shown.Id}")" target="_top">
+                                        <i class="far fa-calendar-plus me-2" aria-hidden="true"></i>ADD TO CALENDAR
+                                    </a>
+                                    @if (!string.IsNullOrEmpty(shown.ExternalUrl))
+                                    {
+                                        <a class="whats-on__button" href="@shown.ExternalUrl" target="_blank" rel="noopener">MORE INFO</a>
+                                    }
+                                </div>
+                            </div>
+                        </article>
+                        @* The old cards' corners in pixels, as percentages of this larger poster. *@
+                        <OvalContainer Id="whatsOnOvals1" Top="-58" Left="-63" />
+                        <OvalContainer Id="whatsOnOvals2" Bottom="-58" Right="-58" />
+                    </div>
+                </div>
+                <div class="col-12 col-lg-5">
+                    <h4 class="tilted whats-on__lineup-title">THE LINE-UP</h4>
+                    <ul class="whats-on__lineup">
+                        @foreach (var item in Visible)
+                        {
+                            var date = EventDates.Next(item)!;
+                            <li @key="item.Id">
+                                <button type="button" class="@($"whats-on__act{(item.Id == shown.Id ? " is-active" : "")}")" style="@Accent(item)"
+                                        aria-pressed="@(item.Id == shown.Id ? "true" : "false")" @onclick="() => _chosen = item.Id">
+                                    <span class="whats-on__date" aria-hidden="true">
+                                        <span class="whats-on__weekday">@EventDates.Day(date.Start).ToUpperInvariant()</span>
+                                        <span class="whats-on__day">@date.Start.Day</span>
+                                    </span>
+                                    <span class="whats-on__act-body">
+                                        <span class="whats-on__act-name">
+                                            @item.Name
+                                            @if (EventDates.PriceText(item.Booking, date) is { } price)
+                                            {
+                                                <span class="whats-on__act-price">@price</span>
+                                            }
+                                        </span>
+                                        <span class="whats-on__act-meta">@EventDates.Times(item, date)  ·  @Meta(item)</span>
+                                    </span>
+                                    <i class="fas fa-arrow-right-long whats-on__act-arrow" aria-hidden="true"></i>
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                    @if (ShowLinks)
+                    {
+                        <div class="whats-on__links">
+                            <button type="button" class="btn btn-primary" @onclick="() => _calendar = true">
+                                <i class="far fa-calendar me-2" aria-hidden="true"></i>VIEW CALENDAR
+                            </button>
+                            <a class="whats-on__all" href="/events">SEE ALL EVENTS <i class="fas fa-arrow-right-long ms-2" aria-hidden="true"></i></a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+    @if (ShowLinks)
+    {
+        <FuseModal @bind-Open="_calendar" Title="@Heading"
+                   DialogClass="modal-xl modal-dialog-scrollable" ContentClass="p-4 p-lg-5 bg-light" BodyClass="p-0 text-start">
+            <EventsCalendar HostelId="HostelId" />
+        </FuseModal>
+    }
+}
+
+@code {
+    [CascadingParameter] private SiteChrome? Chrome { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<SiteEvent> Events { get; set; } = [];
+    /// <summary>A hostel's page: only its events (and those at every hostel), in the list and the calendar.</summary>
+    [Parameter] public DefaultIdType? HostelId { get; set; }
+    [Parameter] public string? HostelName { get; set; }
+    /// <summary>View calendar and See all events; off on the events page, which has both below.</summary>
+    [Parameter] public bool ShowLinks { get; set; } = true;
+
+    /// <summary>The section's heading, when not "WHAT'S ON" (at the hostel).</summary>
+    [Parameter] public string? Title { get; set; }
+
+    private string Heading => Title ?? (HostelName is null ? "WHAT'S ON" : $"WHAT'S ON AT {HostelName.ToUpperInvariant()}");
+
+    private DefaultIdType? _hostel, _chosen;
+    private bool _calendar;
+
+    /// <summary>Events with a date to come, soonest first.</summary>
+    private IReadOnlyList<SiteEvent> Coming =>
+        [.. Events.Where(e => EventDates.Next(e) is not null && At(e, HostelId)).OrderBy(e => EventDates.Next(e)!.Start)];
+
+    /// <summary>The home page shows a taste; the Events page has the rest.</summary>
+    private const int MaxShown = 6;
+
+    private IReadOnlyList<SiteEvent> Visible =>
+        [.. Coming.Where(e => At(e, _hostel)).Take(MaxShown)];
+
+    /// <summary>On at the hostel (every event, with none).</summary>
+    private static bool At(SiteEvent item, DefaultIdType? hostel) =>
+        hostel is not { } id || item.AllHostels || item.Hostels.Any(h => h.Id == id);
+
+    /// <summary>The event on the poster: the one chosen, else the soonest.</summary>
+    private SiteEvent? Shown => Visible.FirstOrDefault(e => e.Id == _chosen) ?? Visible.FirstOrDefault();
+
+    /// <summary>The site's hostels that have something on (every one, once an event is on at all of them).</summary>
+    private IReadOnlyList<SiteLink> Filters =>
+        [.. (Chrome?.Hostels ?? []).Where(h => Coming.Any(e => At(e, h.Id)))];
+
+    private void Filter(DefaultIdType? hostel) => (_hostel, _chosen) = (hostel, null);
+
+    private string PillClass(DefaultIdType? hostel) => $"nav-link mb-0{(_hostel == hostel ? " active" : "")}";
+
+    /// <summary>The event's colour (its own, else its category's), for the poster's tint and the date blocks.</summary>
+    private static string? Accent(SiteEvent item) => item.Colour is { } colour ? $"--accent: {colour}" : null;
+
+    /// <summary>"Every Mon &amp; Wed · 7pm · All hostels".</summary>
+    private static string Meta(SiteEvent item) =>
+        string.Join("  ·  ", new[]
+        {
+            item.Repeats ?? "One night only",
+            item.AllHostels ? "All hostels" : string.Join(", ", item.Hostels.Select(h => h.Name)),
+        }.Where(t => t.Length > 0));
+}

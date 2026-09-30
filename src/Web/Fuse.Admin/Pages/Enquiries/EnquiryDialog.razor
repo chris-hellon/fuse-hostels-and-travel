@@ -1,0 +1,76 @@
+@using Fuse.Contracts.Enquiries
+
+@* One enquiry, read-only (legacy's view): what they sent, Reply (the email app, to them), and marking it replied
+   (general and tour enquiries). Closes with true when the replied flag changed, so the list reloads. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">Sent @Submitted.ToString("dddd d MMMM yyyy, h:mm tt")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSimpleTable Dense="true" Elevation="0" Class="enquiry-details">
+            <tbody>
+                @foreach (var (label, value) in Fields.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
+                {
+                    <tr>
+                        <th style="width: 30%; vertical-align: top;">@label</th>
+                        <td style="white-space: pre-wrap;">
+                            @if (label == "Email")
+                            {
+                                <MudLink Href="@($"mailto:{value}")">@value</MudLink>
+                            }
+                            else
+                            {
+                                @value
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (_replied is { } replied)
+        {
+            <MudSwitch T="bool" Class="mt-4" Color="Color.Success" Value="replied" ValueChanged="SetRepliedAsync" Disabled="@(!CanUpdate || _saving)"
+                       Label="@(replied ? "Replied" : "Not replied yet")" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Reply" Href="@ReplyLink" Target="_blank">Reply by email</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public DateTime Submitted { get; set; }
+    [Parameter, EditorRequired] public string Email { get; set; } = "";
+    /// <summary>What's shown, in order (blank ones are left out).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Label, string? Value)> Fields { get; set; } = [];
+    [Parameter] public EnquiryKind Kind { get; set; }
+    [Parameter] public DefaultIdType Id { get; set; }
+    /// <summary>Whether it's been replied to; null for job applications (no such flag).</summary>
+    [Parameter] public bool? Replied { get; set; }
+    [Parameter] public bool CanUpdate { get; set; }
+    /// <summary>The email's subject when replying.</summary>
+    [Parameter] public string ReplySubject { get; set; } = "Your enquiry";
+
+    private bool? _replied;
+    private bool _saving, _changed;
+
+    protected override void OnInitialized() => _replied = Replied;
+
+    private string ReplyLink => $"mailto:{Email}?subject={Uri.EscapeDataString($"Re: {ReplySubject}")}";
+
+    private async Task SetRepliedAsync(bool replied)
+    {
+        _saving = true;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new SetEnquiryReplied(Kind, Id, replied))))
+            (_replied, _changed) = (replied, true);
+        _saving = false;
+    }
+
+    private void Close() => Dialog.Close(DialogResult.Ok(_changed));
+}

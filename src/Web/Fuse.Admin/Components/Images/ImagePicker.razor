@@ -1,0 +1,108 @@
+@* A single image (e.g. a banner): empty drop zone, preview with actions, or a "couldn't load" state. *@
+
+<div class="image-picker">
+    @if (Label is not null)
+    {
+        <div class="image-picker__label">
+            <MudText Typo="Typo.subtitle2">@Label</MudText>
+            @if (Hint is not null)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@Hint</MudText>
+            }
+        </div>
+    }
+
+    @if (string.IsNullOrEmpty(Src))
+    {
+        <div class="image-picker__empty">
+            <InputFile class="image-picker__input" accept="@AcceptFor" OnChange="OnPick" disabled="@Busy" title="" />
+            <MudIcon Icon="@(Video ? Icons.Material.Outlined.VideoCall : Icons.Material.Outlined.AddPhotoAlternate)" Size="Size.Large" Class="mud-text-secondary" />
+            <MudText Typo="Typo.body2"><b>Click to choose @(Video ? "a video" : "an image")</b> or drag one here</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@(Video ? "MP4, MOV, AVI, WMV or WebM, up to 10 MB" : "JPG, PNG, WebP or AVIF, up to 2 MB")</MudText>
+            @if (Busy)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Secondary" Class="image-picker__progress" />
+            }
+        </div>
+    }
+    else
+    {
+        <div class="image-picker__preview">
+            @if (_broken)
+            {
+                <div class="image-picker__broken">
+                    <MudIcon Icon="@Icons.Material.Outlined.BrokenImage" Size="Size.Large" Class="mud-text-secondary" />
+                    <MudText Typo="Typo.body2">This @(Video ? "video" : "image") couldn't be loaded.</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Replace it, or remove it.</MudText>
+                </div>
+            }
+            else if (Video)
+            {
+                <video src="@Src" controls preload="metadata" @onerror="() => _broken = true"></video>
+            }
+            else
+            {
+                <img src="@Src" alt="@(Label ?? "Image")" @onerror="() => _broken = true" />
+            }
+
+            @if (Pending)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="image-picker__badge">Unsaved</MudChip>
+            }
+
+            <div class="image-picker__actions">
+                @if (!_broken && !Pending)
+                {
+                    <MudTooltip Text="Open full size">
+                        <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Href="@Src" Target="_blank" aria-label="Open full size" />
+                    </MudTooltip>
+                }
+                <MudTooltip Text="Replace">
+                    @* Same component as its neighbours (so it lines up), rendered as a label for the hidden input. *@
+                    <MudIconButton HtmlTag="label" for="@_inputId" Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Small" Disabled="Busy" aria-label="Replace" />
+                </MudTooltip>
+                <InputFile id="@_inputId" hidden accept="@AcceptFor" OnChange="OnPick" disabled="@Busy" />
+                @if (OnRemove.HasDelegate)
+                {
+                    <MudTooltip Text="@(Pending ? "Discard" : "Remove")">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="OnRemove" Disabled="Busy" aria-label="Remove" />
+                    </MudTooltip>
+                }
+            </div>
+
+            @if (Busy)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Secondary" Class="image-picker__progress" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    public const string Accept = ".jpg,.jpeg,.png,.webp,.avif";
+    public const string VideoAccept = ".mp4,.mov,.avi,.wmv,.webm";
+
+    /// <summary>A video instead of an image (preview with a player).</summary>
+    [Parameter] public bool Video { get; set; }
+
+    private string AcceptFor => Video ? VideoAccept : Accept;
+
+    [Parameter] public string? Src { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    /// <summary>The image is a local preview that hasn't been saved yet.</summary>
+    [Parameter] public bool Pending { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnPick { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private readonly string _inputId = $"image-picker-{Guid.NewGuid():N}";
+    private bool _broken;
+    private string? _lastSrc;
+
+    protected override void OnParametersSet()
+    {
+        if (Src != _lastSrc)
+            (_lastSrc, _broken) = (Src, false);
+    }
+}

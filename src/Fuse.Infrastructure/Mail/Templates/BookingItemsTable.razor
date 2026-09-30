@@ -1,0 +1,34 @@
+@* The order lines and total, as the legacy templates list them (each line per guest, or at its total: see LineTotals). *@
+<tr>
+    <td align="left" style="padding-top: 20px;">
+        <table cellspacing="0" cellpadding="0" border="0" width="100%">
+            <tr>
+                <td width="75%" align="left" bgcolor="#eeeeee" style="@EmailStyles.HeaderCell">Order Confirmation #</td>
+                <td width="25%" align="left" bgcolor="#eeeeee" style="@EmailStyles.HeaderCell">@Booking.Reference</td>
+            </tr>
+            @foreach (var item in Booking.Items)
+            {
+                <tr>
+                    <td width="75%" align="left" style="@EmailStyles.ItemCell">@EmailStyles.Line(item)</td>
+                    <td width="25%" align="left" style="@EmailStyles.ItemCell">@EmailStyles.Money(Booking.LineTotals ? item.LineTotal : item.Amount)</td>
+                </tr>
+            }
+        </table>
+    </td>
+</tr>
+<tr>
+    <td align="left" style="padding-top: 20px;">
+        <table cellspacing="0" cellpadding="0" border="0" width="100%">
+            <tr>
+                <td width="75%" align="left" style="@EmailStyles.TotalCell">@TotalLabel</td>
+                <td width="25%" align="left" style="@EmailStyles.TotalCell">@EmailStyles.Money(Total)</td>
+            </tr>
+        </table>
+    </td>
+</tr>
+
+@code {
+    [Parameter, EditorRequired] public BookingEmail Booking { get; set; } = null!;
+    [Parameter] public string TotalLabel { get; set; } = "TOTAL";
+    [Parameter] public decimal Total { get; set; }
+}

@@ -1,0 +1,54 @@
+@* Legacy FullImageCarouselComponent with one slide: the full-height photo, the headline, and the booking form
+   floating over its foot. *@
+
+<div class="lightbox mb-3" id="fullImageCarouselLightbox">
+    <section id="fullPageCarousel" class="carousel slide">
+        <div class="carousel-inner">
+            <div class="carousel-item active" style="@($"background-image:{CdnImages.Background(Image, 2000)};")" data-index="0">
+                <div class="mask" style="background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.9));">
+                    <div class="d-flex justify-content-center align-items-lg-center mt-lg-0 pt-lg-0 pt-8 h-100 position-relative">
+                        <div class="text-white text-center ">
+                            @if (Headline is { } headline)
+                            {
+                                <h1 class="">
+                                    @if (headline.SubTitle is { } subTitle)
+                                    {
+                                        <span class="d-block">@subTitle</span>
+                                    }
+                                    @headline.Title
+                                    @if (headline.SubSubTitle is { } subSubTitle)
+                                    {
+                                        <span class="d-block mb-3 ">@subSubTitle</span>
+                                    }
+                                </h1>
+                            }
+                            else
+                            {
+                                @* The headline's lines, shimmering while the page's record loads. *@
+                                <h1 class="" aria-hidden="true">
+                                    <span class="d-block"><span class="skeleton skeleton--dark hero-line-skeleton hero-line-skeleton--short"></span></span>
+                                    <span class="skeleton skeleton--dark hero-title-skeleton"></span>
+                                    <span class="d-block mb-3"><span class="skeleton skeleton--dark hero-line-skeleton"></span></span>
+                                </h1>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="container-fluid position-absolute floating-book-banner">
+            <div class="container p-4 booking-banner w-80">
+                <BookNowForm />
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    private const string Image = "https://travaloudcdn.azureedge.net/fuse/assets/images/POOLPARTY_23-03-22-12-min.jpg";
+
+    /// <summary>Null while it loads.</summary>
+    [Parameter, EditorRequired] public PageSeo? Page { get; set; }
+
+    private PageHeadings? Headline => Page is null ? null : PageHeadings.Of(Page, "FUSE", "COME TOGETHER AT", "HOSTELS AND TRAVEL");
+}

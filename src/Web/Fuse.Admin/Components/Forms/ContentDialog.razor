@@ -1,0 +1,85 @@
+@* A one-screen editor for a text-heavy record: its few fields as a "Details" section and its rich
+   text, all in the Content sidebar (ContentSections), saved together. For records that need more
+   than that (images, SEO...) use a ModalWizard with a Content step. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
+            @Title
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (Loading)
+        {
+            <div class="modal-wizard__loading"><MudProgressCircular Indeterminate="true" Color="Color.Secondary" /></div>
+        }
+        else
+        {
+            <div class="@($"content-dialog__body{(_saving ? " is-saving" : "")}")" inert="@_saving">
+                <ContentSections @ref="_sections" Sections="Sections" UploadImage="UploadImage" />
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton EndIcon="@Icons.Material.Filled.Cancel" Disabled="_saving" OnClick="CancelAsync">Cancel</MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" EndIcon="@(_saving ? null : Icons.Material.Filled.Save)" Disabled="@(Loading || _saving)" OnClick="SaveAsync">
+            @if (_saving)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="mr-2" Style="width: 16px; height: 16px" />
+                <span>Saving…</span>
+            }
+            else
+            {
+                <span>Save</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.ExtraLarge, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public bool IsCreate { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ContentSection> Sections { get; set; } = [];
+    [Parameter] public Func<FileUpload, Task<string>>? UploadImage { get; set; }
+    /// <summary>What's being edited, for the discard question (e.g. "job vacancy").</summary>
+    [Parameter] public string Noun { get; set; } = "record";
+    /// <summary>Saves; return true to close.</summary>
+    [Parameter, EditorRequired] public Func<Task<bool>> Save { get; set; } = null!;
+    [Parameter] public Func<bool>? HasChanges { get; set; }
+
+    private ContentSections? _sections;
+    private bool _saving;
+
+    private async Task SaveAsync()
+    {
+        if (_sections?.EnsureRequired() == false)
+            return;
+        _saving = true;
+        var saved = false;
+        try
+        {
+            saved = await Save();
+        }
+        finally
+        {
+            _saving = false;
+        }
+        if (saved)
+            Dialog.Close(DialogResult.Ok(true));
+    }
+
+    private async Task CancelAsync()
+    {
+        if (HasChanges?.Invoke() != true
+            || await Dialogs.ConfirmAsync("Discard your changes?", $"You've changed this {Noun} but haven't saved it. If you close now, those changes are lost.",
+                "Discard changes", "Keep editing"))
+            Dialog.Cancel();
+    }
+}

@@ -1,0 +1,24 @@
+@* Legacy's terms, privacy and cookie pages: the title over the page's text in a light section, ovals in two
+   corners. *@
+
+<section id="@Id" class="bg-light overflow-hidden position-relative legal-page">
+    <div class="container-fluid">
+        <div class="container pt-8 pb-8">
+            <div class="row d-flex justify-content-center text-center">
+                <div class="col-lg-10 text-start">
+                    <h1 class="display-3 mb-4 text-center">@Title</h1>
+                    @ChildContent
+                </div>
+            </div>
+        </div>
+        <OvalContainer Id="@($"{Id}PageOvals1")" Top="-8" Left="-18" />
+        <OvalContainer Id="@($"{Id}PageOvals2")" Bottom="-8" Right="-18" />
+    </div>
+</section>
+
+@code {
+    /// <summary>The section's id (legacy: termsAndConditions, privacyPolicy, cookiePolicy), also naming its ovals.</summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

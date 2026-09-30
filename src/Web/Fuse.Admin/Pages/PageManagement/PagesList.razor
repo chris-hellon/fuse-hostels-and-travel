@@ -1,0 +1,38 @@
+@page "/admin/management/page-management/pages"
+@attribute [RequirePermission(FuseAction.View, FuseResource.Pages)]
+
+<AdminPageHeader Title="Pages" Description="Manage Pages." />
+
+<EntityTable @ref="_table" T="PageSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Pages" Resource="@FuseResource.Pages"
+             OnEdit="p => OpenAsync(p.Id)" OnDelete="DeleteAsync" CanDelete="p => !p.ManagedElsewhere" />
+
+@code {
+    private static readonly IReadOnlyList<EntityField<PageSummary>> Fields =
+    [
+        new(p => p.Title, "Title", nameof(PageSummary.Title)),
+        new(p => p.UrlSlug, "URL Slug", nameof(PageSummary.UrlSlug)),
+        new(p => p.ManagedElsewhere ? "Its tour or property" : "Here", "SEO Edited In"),
+    ];
+
+    private EntityTable<PageSummary>? _table;
+
+    private async Task<PagedResult<PageSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
+        await Api.Send(request.Apply(new SearchPages()), cancellationToken);
+
+    private async Task OpenAsync(DefaultIdType id)
+    {
+        var dialog = await Dialogs.ShowAsync<PageDialog>(null, new DialogParameters<PageDialog> { { d => d.PageId, id } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, BackdropClick = false });
+        if (!(await dialog.Result)!.Canceled)
+            await _table!.ReloadAsync();
+    }
+
+    private async Task DeleteAsync(PageSummary page)
+    {
+        if (!await Dialogs.ConfirmAsync("Delete this page?", $"\"{page.Title}\" will be deleted straight away.", "Delete page", "Keep page",
+                detail: "Its SEO and any page modals shown on it go too. The website may need this page, so only delete pages you know are unused."))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new DeletePage(page.Id)), "Page deleted."))
+            await _table!.ReloadAsync();
+    }
+}

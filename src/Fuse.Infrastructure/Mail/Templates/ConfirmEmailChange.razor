@@ -1,0 +1,17 @@
+@* Legacy's "Confirm your email" (sent to the new address when a guest changes theirs in My Account). *@
+<EmailFrame Brand="Brand" Title="Confirm your email" Preheader="Confirm your new email address"
+            ActionIntro="Is this your new email address?" ActionText="Confirm Email" ActionUrl="@Link">
+    <tr>
+        <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
+            <p style="@EmailStyles.Paragraph">Hi@(string.IsNullOrWhiteSpace(FirstName) ? "" : $" {FirstName}"), you asked to use this email address for your @Brand.TenantName account. Confirm it with the button below and we'll send everything here from now on.</p>
+            <p style="@EmailStyles.Paragraph">If you didn't ask for this, just ignore this email: nothing will change.</p>
+        </td>
+    </tr>
+    <SignOff />
+</EmailFrame>
+
+@code {
+    [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
+    [Parameter] public string FirstName { get; set; } = "";
+    [Parameter, EditorRequired] public string Link { get; set; } = "";
+}

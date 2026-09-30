@@ -1,0 +1,81 @@
+@using Fuse.Contracts.Tours
+
+@* Adds a departure every day in a range, for one price or all prices. Held in the draft until Save. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.DateRange" Class="mr-3 mb-n1" />Add date range</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudDateRangePicker Label="Dates" AutoClose="true" @bind-DateRange="_range" Margin="Margin.Dense" MaxDate="DateTime.Today.AddYears(2)"
+                                    MinDate="DateTime.Today" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" PlaceholderStart="First day" PlaceholderEnd="Last day"
+                                    Required="true" RequiredError="Choose the first and last day" />
+                <MudSelect T="RepeatEvery" Label="Repeats" @bind-Value="_every" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem T="RepeatEvery" Value="RepeatEvery.Day">Every day</MudSelectItem>
+                    <MudSelectItem T="RepeatEvery" Value="RepeatEvery.Week">Every week (same weekday as the first day)</MudSelectItem>
+                    <MudSelectItem T="RepeatEvery" Value="RepeatEvery.Month">Every month (same date as the first day)</MudSelectItem>
+                </MudSelect>
+                <MudTimePicker Label="Start time" AmPm="true" @bind-Time="_time" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Choose a start time" />
+                <MudSelect T="DefaultIdType?" Label="Price" @bind-Value="_priceKey" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           HelperText="Choose one price, or add the dates for every price." Required="true" RequiredError="Choose a price">
+                    <MudSelectItem T="DefaultIdType?" Value="AllPrices">All prices</MudSelectItem>
+                    @foreach (var price in Draft.Prices)
+                    {
+                        <MudSelectItem T="DefaultIdType?" Value="price.Key">@price.Label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudNumericField T="decimal?" Label="Price override" @bind-Value="_override" Variant="Variant.Outlined" Margin="Margin.Dense" HideSpinButtons="true"
+                                 Adornment="Adornment.Start" AdornmentText="$" HelperText="Optional: charge a different price on these dates." />
+                <MudAlert Severity="@(Preview > TourSchedule.MaxNewDates ? Severity.Warning : Severity.Normal)" Dense="true" Variant="Variant.Text">
+                    @PreviewText
+                </MudAlert>
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Preview is 0 or > TourSchedule.MaxNewDates)" OnClick="AddAsync">Add dates</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly DefaultIdType AllPrices = DefaultIdType.Empty;
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter, EditorRequired] public TourDraft Draft { get; set; } = null!;
+
+    private MudForm? _form;
+    private DateRange? _range;
+    private RepeatEvery _every = RepeatEvery.Day;
+    private TimeSpan? _time;
+    private DefaultIdType? _priceKey;
+    private decimal? _override;
+
+    private IReadOnlyList<DefaultIdType> PriceKeys => _priceKey == AllPrices ? [.. Draft.Prices.Select(p => p.Key)] : _priceKey is { } key ? [key] : [];
+
+    private List<DateTime> Starts => _range?.Start is { } first && _range.End is { } last && _time is { } time
+        ? [.. TourSchedule.Starts(DateOnly.FromDateTime(first), DateOnly.FromDateTime(last), _every, 1, [TimeOnly.FromTimeSpan(time)])]
+        : [];
+
+    private int Preview => Starts.Count * PriceKeys.Count;
+
+    private string PreviewText => Preview switch
+    {
+        0 => "Choose the dates, a start time and a price to see how many dates this adds.",
+        > TourSchedule.MaxNewDates => $"That's {Preview:N0} dates; the most one save can add is {TourSchedule.MaxNewDates:N0}. Use a shorter range.",
+        _ => $"Up to {Preview:N0} date{(Preview == 1 ? "" : "s")} will be added when you save the tour. Any that already exist are skipped.",
+    };
+
+    private async Task AddAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_form.IsValid || Preview == 0)
+            return;
+        var added = Draft.AddDates(Starts, PriceKeys, _override);
+        Snackbar.Add(added == 0 ? "Those dates already exist." : $"{added:N0} date{(added == 1 ? "" : "s")} will be added when you save the tour.",
+            added == 0 ? Severity.Info : Severity.Success);
+        Dialog.Close(DialogResult.Ok(added));
+    }
+}

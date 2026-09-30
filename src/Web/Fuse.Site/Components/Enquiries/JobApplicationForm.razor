@@ -1,0 +1,71 @@
+@* Legacy JoinOurCrewComponent: who you are, how we can work together, when you're here and where you've been, your
+   socials and kit, and the captcha. Emailed to the team, who reply to the applicant. *@
+@inject IApi Api
+
+@if (_sending.Sent)
+{
+    <div class="enquiry-sent" role="status">
+        <i class="fas fa-circle-check" aria-hidden="true"></i>
+        <p>Thanks for applying! A member of our team will be in touch shortly.</p>
+    </div>
+}
+else
+{
+    <form class="row g-4 text-start" novalidate @onsubmit="SendAsync">
+        <div class="col-sm-6 position-relative">
+            <OutlineInput Id="Apply_FirstName" Label="First Name" @bind-Value="_first" autocomplete="given-name" maxlength="256" />
+            <Validation Message="@_sending["FirstName"]" />
+        </div>
+        <div class="col-sm-6 position-relative">
+            <OutlineInput Id="Apply_LastName" Label="Last Name" @bind-Value="_last" autocomplete="family-name" maxlength="256" />
+            <Validation Message="@_sending["LastName"]" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineInput Id="Apply_Email" Label="Email" type="email" @bind-Value="_email" autocomplete="email" maxlength="256" />
+            <Validation Message="@_sending["Email"]" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineTextArea Id="Apply_Collaborate" Label="How can we collaborate?" @bind-Value="_collaborate" maxlength="2000" />
+            <Validation Message="@_sending["HowCanWeCollaborate"]" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineTextArea Id="Apply_Dates" Label="What are your estimated dates here?" @bind-Value="_dates" Rows="3" maxlength="500" />
+            <Validation Message="@_sending["EstimatedDates"]" />
+        </div>
+        <div class="col-12 position-relative">
+            <OutlineTextArea Id="Apply_Destinations" Label="Which destinations have you previously visited?" @bind-Value="_destinations" Rows="3" maxlength="500" />
+            <Validation Message="@_sending["DestinationsVisited"]" />
+        </div>
+        <div class="col-sm-6"><OutlineInput Id="Apply_Instagram" Label="Instagram handle" @bind-Value="_instagram" maxlength="256" /></div>
+        <div class="col-sm-6"><OutlineInput Id="Apply_TikTok" Label="TikTok handle" @bind-Value="_tikTok" maxlength="256" /></div>
+        <div class="col-sm-6"><OutlineInput Id="Apply_YouTube" Label="YouTube handle" @bind-Value="_youTube" maxlength="256" /></div>
+        <div class="col-sm-6"><OutlineInput Id="Apply_Portfolio" Label="Portfolio Url" type="url" @bind-Value="_portfolio" maxlength="256" /></div>
+        <div class="col-12">
+            <OutlineTextArea Id="Apply_Equipment" Label="What equipment do you have?" @bind-Value="_equipment" Rows="3" maxlength="500" />
+        </div>
+        <div class="col-12 position-relative mb-2">
+            <Captcha @ref="_captcha" Message="@_sending["Captcha"]" />
+        </div>
+        <input class="d-none" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" @bind="_sending.Website" />
+        @if (_sending.Problem is not null)
+        {
+            <p class="col-12 text-danger mb-0" role="alert">@_sending.Problem</p>
+        }
+        <div class="col-12">
+            <button type="submit" class="btn btn-primary d-block w-100" disabled="@_sending.Busy">@(_sending.Busy ? "Sending…" : "Apply Now")</button>
+        </div>
+    </form>
+}
+
+@code {
+    [Parameter, EditorRequired] public DefaultIdType VacancyId { get; set; }
+
+    private readonly EnquirySending _sending = new();
+    private Captcha _captcha = null!;
+    private string? _first, _last, _email, _collaborate, _dates, _destinations, _instagram, _tikTok, _youTube, _portfolio, _equipment;
+
+    private Task SendAsync() =>
+        _sending.SendAsync(_captcha, captcha => Api.Send(new ApplyForJobVacancy(
+            VacancyId, _first ?? "", _last ?? "", _email ?? "", _collaborate ?? "", _dates ?? "", _destinations ?? "",
+            _instagram, _tikTok, _youTube, _portfolio, _equipment, captcha, _sending.Website)));
+}

@@ -1,0 +1,145 @@
+@inject NavigationManager Navigation
+
+@* Mirrors the legacy back-office menu. Entries only show with the matching View permission. *@
+
+<AuthorizeView>
+    @{
+        var user = context.User;
+        bool Can(string resource) => user.HasPermission(FuseAction.View, resource);
+        var management = Can(FuseResource.Locations) || Can(FuseResource.Tours) || Can(FuseResource.Properties)
+                         || Can(FuseResource.Events) || Can(FuseResource.JobVacancies) || Can(FuseResource.TravelGuides)
+                         || Can(FuseResource.Gallery) || Can(FuseResource.Pages);
+    }
+    <MudNavMenu Bordered="true">
+        @if (Can(FuseResource.Dashboard))
+        {
+            <MudNavLink Href="/admin" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
+        }
+        @if (Can(FuseResource.Calendar))
+        {
+            <MudNavLink Href="/admin/calendar" Icon="@Icons.Material.Outlined.CalendarMonth">Calendar</MudNavLink>
+        }
+        @if (Can(FuseResource.TourBookings))
+        {
+            <MudNavLink Href="/admin/manifest" Icon="@Icons.Material.Filled.Checklist">Manifest</MudNavLink>
+        }
+        @if (Can(FuseResource.Reports))
+        {
+            <MudNavGroup Title="Reports" Icon="@Icons.Material.Filled.Analytics" Expanded="@Under("admin/reports")">
+                <MudNavLink Href="/admin/reports/payments">Payments</MudNavLink>
+                <MudNavLink Href="/admin/reports/staff-bookings">Staff Bookings</MudNavLink>
+                <MudNavLink Href="/admin/reports/in-house">In House, No Tours</MudNavLink>
+            </MudNavGroup>
+        }
+        <MudDivider />
+        @if (Can(FuseResource.TourBookings))
+        {
+            <MudNavGroup Title="Bookings" Icon="@Icons.Material.Outlined.ConfirmationNumber" Expanded="@Under("admin/bookings")">
+                <MudNavLink Href="/admin/bookings/tour-bookings">Tour Bookings</MudNavLink>
+                <MudNavLink Href="/admin/bookings/hostel-bookings">Hostel Bookings</MudNavLink>
+            </MudNavGroup>
+        }
+        @if (management)
+        {
+            <MudNavGroup Title="Management" Icon="@Icons.Material.Filled.Web" Expanded="@Under("admin/management")">
+                @if (Can(FuseResource.Locations))
+                {
+                    <MudNavLink Href="/admin/management/locations" Icon="@Icons.Material.Filled.FlightTakeoff">Locations</MudNavLink>
+                }
+                @if (Can(FuseResource.Tours))
+                {
+                    <MudNavGroup Title="Tours" Icon="@Icons.Material.Filled.Route" Expanded="@Under("admin/management/tours")">
+                        <MudNavLink Href="/admin/management/tours" Match="NavLinkMatch.All">Tours</MudNavLink>
+                        <MudNavLink Href="/admin/management/tours/tour-categories">Categories</MudNavLink>
+                        @if (Can(FuseResource.Packages))
+                        {
+                            <MudNavLink Href="/admin/management/tours/packages">Packages</MudNavLink>
+                        }
+                        @if (Can(FuseResource.PackIncentives))
+                        {
+                            <MudNavLink Href="/admin/management/tours/pack-incentives">Pack Incentives</MudNavLink>
+                        }
+                        @if (Can(FuseResource.Suppliers))
+                        {
+                            <MudNavLink Href="/admin/management/tours/suppliers">Suppliers</MudNavLink>
+                        }
+                    </MudNavGroup>
+                }
+                @if (Can(FuseResource.Properties))
+                {
+                    <MudNavLink Href="/admin/management/properties" Icon="@Icons.Material.Filled.LocationCity">Properties</MudNavLink>
+                }
+                @if (Can(FuseResource.Events))
+                {
+                    <MudNavGroup Title="Events" Icon="@Icons.Material.Filled.Event" Expanded="@Under("admin/management/event")">
+                        <MudNavLink Href="/admin/management/events">Events</MudNavLink>
+                        <MudNavLink Href="/admin/management/event-categories">Categories</MudNavLink>
+                    </MudNavGroup>
+                }
+                @if (Can(FuseResource.JobVacancies))
+                {
+                    <MudNavLink Href="/admin/management/job-vacancies" Icon="@Icons.Material.Filled.PostAdd">Job Vacancies</MudNavLink>
+                }
+                @if (Can(FuseResource.TravelGuides))
+                {
+                    <MudNavLink Href="/admin/management/travel-guides" Icon="@Icons.Material.Filled.NoteAdd">Travel Guides</MudNavLink>
+                }
+                @if (Can(FuseResource.Gallery))
+                {
+                    <MudNavLink Href="/admin/management/galleries" Icon="@Icons.Material.Filled.Slideshow">Galleries</MudNavLink>
+                }
+                @if (Can(FuseResource.Pages))
+                {
+                    <MudNavGroup Title="Page Management" Icon="@Icons.Material.Filled.Pageview" Expanded="@Under("admin/management/page-management")">
+                        <MudNavLink Href="/admin/management/page-management/pages" Icon="@Icons.Material.Filled.Book">Pages</MudNavLink>
+                        <MudNavLink Href="/admin/management/page-management/page-modals" Icon="@Icons.Material.Filled.AddAlert">Page Modals</MudNavLink>
+                        @if (Can(FuseResource.Seo))
+                        {
+                            <MudNavLink Href="/admin/management/page-management/global-seo" Icon="@Icons.Material.Filled.Bookmarks">Global SEO</MudNavLink>
+                            <MudNavLink Href="/admin/management/page-management/page-redirects" Icon="@Icons.Material.Filled.Refresh">Page Redirects</MudNavLink>
+                        }
+                    </MudNavGroup>
+                }
+            </MudNavGroup>
+        }
+        @if (Can(FuseResource.Enquiries))
+        {
+            <MudNavGroup Title="Enquiries" Icon="@Icons.Material.Outlined.Forum" Expanded="@Under("admin/enquiries")">
+                <MudNavLink Href="/admin/enquiries/general-enquiries">General</MudNavLink>
+                <MudNavLink Href="/admin/enquiries/tours-enquiries">Tours</MudNavLink>
+                @if (Can(FuseResource.JobVacancies))
+                {
+                    <MudNavLink Href="/admin/enquiries/job-vacancies">Job Applications</MudNavLink>
+                }
+            </MudNavGroup>
+        }
+        <MudDivider />
+        @if (Can(FuseResource.Guests))
+        {
+            <MudNavLink Href="/admin/guests" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Groups">Guests</MudNavLink>
+        }
+        @if (Can(FuseResource.Users) || Can(FuseResource.Roles))
+        {
+            @if (Can(FuseResource.Users))
+            {
+                <MudNavLink Href="/admin/staff" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.PeopleAlt">Staff</MudNavLink>
+            }
+            @if (Can(FuseResource.Roles))
+            {
+                <MudNavLink Href="/admin/permissions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Lock">Permissions</MudNavLink>
+            }
+        }
+        @if (Can(FuseResource.Hangfire))
+        {
+            @* Hangfire's own dashboard (not a Blazor page): a new tab, so the admin app doesn't route it. *@
+            <MudNavLink Href="/admin/jobs" Target="_blank" Icon="@Icons.Material.Filled.Schedule">Jobs</MudNavLink>
+        }
+        <MudDivider />
+        <MudNavLink Href="/admin/account" Icon="@Icons.Material.Filled.ManageAccounts">Account</MudNavLink>
+    </MudNavMenu>
+</AuthorizeView>
+
+@code {
+    private bool Under(string prefix) =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+}

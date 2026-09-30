@@ -1,0 +1,88 @@
+@page "/admin/account"
+
+<AdminPageHeader Title="Account" Description="Your profile, password and booking QR codes." />
+
+<MudPaper Class="admin-card" Elevation="25">
+<MudTabs Elevation="0" PanelClass="pt-6">
+    <MudTabPanel Text="Profile">
+        @if (_me is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <MudGrid Spacing="3" Class="mb-4">
+                <MudItem xs="12" sm="6" md="4">
+                    <ProfilePhoto Url="@_me.ImageUrl" UrlChanged="@(url => _me = _me! with { ImageUrl = url })"
+                                  Save="@(image => Api.Send(new SetMyImage(image)).AsTask())" />
+                </MudItem>
+            </MudGrid>
+            <MudForm @ref="_profileForm">
+                <ProfileForm Profile="_me.Profile" EmailRequired="true" />
+            </MudForm>
+            <div class="admin-card__actions">
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="SaveProfileAsync">Save</MudButton>
+            </div>
+        }
+    </MudTabPanel>
+    <MudTabPanel Text="Security">
+        <MudForm @ref="_passwordForm">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_current" Label="Current password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" AutoComplete="current-password" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudTextField @bind-Value="_new" Label="New password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" AutoComplete="new-password" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudTextField @bind-Value="_confirm" Label="Confirm new password" InputType="InputType.Password" Required="true" Variant="Variant.Outlined" AutoComplete="new-password" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+        <div class="admin-card__actions">
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="ChangePasswordAsync">Change password</MudButton>
+        </div>
+    </MudTabPanel>
+    @if (!_supplier)
+    {
+        <MudTabPanel Text="QR Codes">
+            <StaffQrCodes />
+        </MudTabPanel>
+    }
+</MudTabs>
+</MudPaper>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private UserDetails? _me;
+    /// <summary>Suppliers have no booking QR codes (as legacy).</summary>
+    private bool _supplier;
+    private MudForm? _profileForm;
+    private MudForm? _passwordForm;
+    private string _current = "", _new = "", _confirm = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _supplier = AuthState is not null && (await AuthState).User.IsInRole(FuseRoles.Supplier);
+        await Snackbar.TryAsync(async () => _me = await Api.Send(new GetMyProfile()));
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        await _profileForm!.ValidateAsync();
+        if (_profileForm.IsValid)
+            await Snackbar.TryAsync(async () => await Api.Send(new UpdateMyProfile(_me!.Profile)), "Profile saved.");
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        await _passwordForm!.ValidateAsync();
+        if (!_passwordForm.IsValid)
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new ChangeMyPassword(_current, _new, _confirm)), "Password changed."))
+            (_current, _new, _confirm) = ("", "", "");
+    }
+}
