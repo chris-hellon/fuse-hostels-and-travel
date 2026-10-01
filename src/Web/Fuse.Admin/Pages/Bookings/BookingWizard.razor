@@ -1,7 +1,10 @@
 @* Create / edit a tour booking (legacy Booking Details + Tours + summary). Everything is held in the
-   draft and saved together on Save. *@
+   draft and saved together on Save. While an existing booking is open, it's checked every so often for
+   changes made elsewhere (payments, refunds, the manifest…), which would stop the Save: a banner says so
+   and offers to reload it. *@
+@implements IDisposable
 
-<ModalWizard TModel="BookingDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" CanSave="@(_draft?.Editor.Cancelled != true)"
+<ModalWizard TModel="BookingDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" OnCancel="CloseAsync" CanSave="@(_draft?.Editor.Cancelled != true)"
              CancelText="@(_draft?.Editor.Cancelled == true ? "Close" : "Cancel")">
     <TitleContent>
         <MudIcon Icon="@(IsCreate ? Icons.Material.Filled.Add : Icons.Material.Filled.Update)" Class="mr-3 mb-n1" />
@@ -11,6 +14,19 @@
             <span class="status-pill status-pill--bad ml-2">Cancelled</span>
         }
     </TitleContent>
+    <BannerContent>
+        @if (_draft is not null && (_conflict is not null || ChangedElsewhere))
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Square="true" Class="mb-4">
+                <div class="d-flex align-center flex-wrap gap-2">
+                    <span class="flex-grow-1">@(_conflict ?? ChangedElsewhereText)</span>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_reloading" OnClick="ReloadAsync">
+                        Reload
+                    </MudButton>
+                </div>
+            </MudAlert>
+        }
+    </BannerContent>
     <ChildContent>
         @if (_draft is not null)
         {
@@ -18,7 +34,7 @@
                 <BookingDetailsStep @ref="_details" Draft="_draft" />
             </WizardStep>
             <WizardStep TModel="BookingDraft" Title="Tours" OnLeaveAsync="_ => Task.FromResult(_tours?.Validate() ?? true)">
-                <BookingToursStep @ref="_tours" Draft="_draft" />
+                <BookingToursStep @ref="_tours" Draft="_draft" OnSavedChange="SavedChanged" />
             </WizardStep>
             <WizardStep TModel="BookingDraft" Title="Summary">
                 <BookingSummaryStep Draft="_draft" />
@@ -36,17 +52,149 @@
     private BookingDraft? _draft;
     private BookingDetailsStep? _details;
     private BookingToursStep? _tours;
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
 
-    protected override Task OnInitializedAsync() => Snackbar.TryAsync(async () =>
+    /// <summary>
+    /// The booking changed while open: a tour was refunded or cancelled here (already saved, whatever happens to the
+    /// draft), or it was reloaded after a change made elsewhere.
+    /// </summary>
+    private bool _savedChange;
+
+    /// <summary>How often an open booking is checked for changes made elsewhere.</summary>
+    private static readonly TimeSpan CheckEvery = TimeSpan.FromSeconds(30);
+    private readonly CancellationTokenSource _closed = new();
+    /// <summary>The booking's figures when the draft was loaded (or took its own refund / cancellation), to say what changed.</summary>
+    private BookingVersion? _loaded;
+    /// <summary>The latest check.</summary>
+    private BookingVersion? _latest;
+    /// <summary>Save was refused: the booking changed since it was opened (the server's message).</summary>
+    private string? _conflict;
+    private bool _reloading;
+
+    /// <summary>The latest check found changes the draft doesn't know of (its own refunds and cancellations aside).</summary>
+    private bool ChangedElsewhere => _draft is not null && _latest is not null && _latest.Version > _draft.ExpectedVersion;
+
+    private string ChangedElsewhereText
+    {
+        get
+        {
+            var changes = _loaded is not null && _latest is not null ? BookingVersion.Changes(_loaded, _latest) : [];
+            return changes.Count == 0
+                ? "This booking was changed by someone else (e.g. a payment or refund). Reload to see the latest before saving."
+                : $"This booking was changed by someone else: {string.Join("; ", changes)}. Reload to see the latest before saving.";
+        }
+    }
+
+    /// <summary>The title (e.g. Cancelled), the banner and the footer are drawn in the dialog's container, so it re-renders too.</summary>
+    private void Refresh()
+    {
+        StateHasChanged();
+        Dialog.StateHasChanged();
+    }
+
+    private async Task SavedChanged()
+    {
+        _savedChange = true;
+        // Its own change taken into the draft: what changed elsewhere is told from here on.
+        if (_draft is not null && await ReadVersionAsync(_closed.Token) is { } now && now.Version == _draft.ExpectedVersion)
+            _loaded = now;
+        Refresh();
+    }
+
+    /// <summary>
+    /// Closing without saving after the booking changed while open (see <see cref="_savedChange"/>, or a change made
+    /// elsewhere) still closes as a change, so the page behind reloads the booking (the draft's edits are discarded).
+    /// </summary>
+    private Task<bool> CloseAsync()
+    {
+        if (!_savedChange && !ChangedElsewhere && _conflict is null)
+            return Task.FromResult(true);
+        Dialog.Close(DialogResult.Ok(false));
+        return Task.FromResult(false);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (!IsCreate)
+            _ = WatchAsync(_closed.Token);
+    }
+
+    private Task<bool> LoadAsync() => Snackbar.TryAsync(async () =>
     {
         var catalog = Api.Send(new GetBookingCatalog()).AsTask();
         var abilities = Api.Send(new GetBookingAbilities()).AsTask();
         var editor = BookingId is { } id ? Api.Send(new GetBookingEditor(id)).AsTask() : Task.FromResult(new BookingEditor());
-        await Task.WhenAll(catalog, abilities, editor);
+        var version = IsCreate ? Task.FromResult<BookingVersion?>(null) : ReadVersionAsync(_closed.Token);
+        await Task.WhenAll(catalog, abilities, editor, version);
         var draft = new BookingDraft(editor.Result, catalog.Result, abilities.Result);
         draft.Reprice();
+        draft.MarkUnchanged();
+        // Read alongside the booking: only a match describes the draft (otherwise the banner says so generically).
+        _loaded = version.Result?.Version == draft.Editor.ConcurrencyVersion ? version.Result : null;
+        (_latest, _conflict) = (null, null);
         _draft = draft;
     });
+
+    /// <summary>Checks the open booking every <see cref="CheckEvery"/> until the wizard closes, one check at a time.</summary>
+    private async Task WatchAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(CheckEvery);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (_draft is null || _reloading || await ReadVersionAsync(cancellationToken) is not { } latest || cancellationToken.IsCancellationRequested)
+                    continue;
+                var wasChanged = ChangedElsewhere;
+                _latest = latest;
+                if (wasChanged || ChangedElsewhere)
+                    await InvokeAsync(Refresh);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Closed.
+        }
+    }
+
+    /// <summary>The booking's version now, or null when it can't be read (or the wizard closed): errors are left to the next check, or to Save.</summary>
+    private async Task<BookingVersion?> ReadVersionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await Api.Send(new GetBookingVersion(BookingId!.Value), cancellationToken);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Loads the booking as it's saved now, discarding the draft (after asking, when it has unsaved changes).</summary>
+    private async Task ReloadAsync()
+    {
+        if (_draft is { HasChanges: true } && !await Dialogs.ConfirmAsync("Discard your changes?",
+                "Reloading shows the booking as it's saved now, so the changes you've made here and not saved are lost.", "Reload", "Keep editing"))
+            return;
+
+        _reloading = true;
+        var previous = _draft;
+        _draft = null; // the spinner, then the wizard from its first step
+        Refresh();
+        if (await LoadAsync())
+            _savedChange = true;
+        else
+            _draft = previous;
+        _reloading = false;
+        Refresh();
+    }
+
+    public void Dispose()
+    {
+        _closed.Cancel();
+        _closed.Dispose();
+    }
 
     private async Task<bool> SaveAsync(BookingDraft draft)
     {
@@ -66,8 +214,27 @@
         }
 
         DefaultIdType id = Guid.Empty;
-        if (!await Snackbar.TryAsync(async () => id = await Api.Send(new SaveBooking(editor, change, refund)), draft.IsCreate ? "Booking created." : "Booking saved."))
+        string? conflict = null;
+        if (!await Snackbar.TryAsync(async () =>
+            {
+                try
+                {
+                    id = await Api.Send(new SaveBooking(editor, change, refund));
+                }
+                catch (ConflictException stale)
+                {
+                    conflict = stale.Message;
+                }
+            }))
             return false;
+        if (conflict is not null)
+        {
+            // Changed elsewhere since it was opened: said at the top, with Reload, rather than in a passing message.
+            _conflict = conflict;
+            Refresh();
+            return false;
+        }
+        Snackbar.Add(draft.IsCreate ? "Booking created." : "Booking saved.", Severity.Success);
 
         // As legacy: a new card booking goes straight to its payment QR code.
         if (draft.IsCreate && editor.PaymentMethod == BookingPaymentMethod.Stripe)

@@ -28,6 +28,10 @@ public class Booking : AuditableEntity, IAggregateRoot
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int InvoiceId { get; private set; }
 
+    /// <summary>
+    /// Optimistic concurrency: goes up with every change that the booking editor shows or saves (see <see cref="Touch"/>), so
+    /// an editor opened before it can't save over it.
+    /// </summary>
     public int ConcurrencyVersion { get; set; }
 
     /// <summary>Optional "pack" incentive this booking is marked for (the mandatory pack remark); null = no mark.</summary>
@@ -166,6 +170,16 @@ public class Booking : AuditableEntity, IAggregateRoot
         OverrideCreatedBy = true;
         CreatedBy = createdBy.Value;
 
+        return this;
+    }
+
+    /// <summary>
+    /// Marks the booking changed (payments, refunds, cancellations, attendance, edits): once per save, so an editor holding
+    /// the previous <see cref="ConcurrencyVersion"/> is refused rather than saving over the change.
+    /// </summary>
+    public Booking Touch()
+    {
+        ConcurrencyVersion++;
         return this;
     }
 

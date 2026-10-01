@@ -130,7 +130,7 @@ internal sealed class SetGuestAttendanceHandler(IAppDbContext db, SupplierScope 
 
         // As the legacy proc: the booked tour is found by the departure (or the tour and its start),
         // then the guest is an additional traveller if listed, otherwise the lead guest (the item itself).
-        var item = await db.BookingItems
+        var item = await db.BookingItems.Include(i => i.Booking)
             .Where(i => i.Booking.InvoiceId == command.Reference && i.TourId == command.TourId
                         && (command.TourDateId != null ? i.TourDateId == command.TourDateId : i.StartDate == command.StartDate))
             .FirstOrDefaultAsync(cancellationToken)
@@ -149,6 +149,7 @@ internal sealed class SetGuestAttendanceHandler(IAppDbContext db, SupplierScope 
             guest.SetAttendance(checkedIn, noShow, cancelled);
         else
             item.SetAttendance(checkedIn, noShow, cancelled);
+        item.Booking.Touch();
 
         await db.SaveChangesAsync(cancellationToken);
         return Unit.Value;

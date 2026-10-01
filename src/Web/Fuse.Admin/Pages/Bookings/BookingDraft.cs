@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Fuse.Contracts.Bookings;
+using Fuse.Contracts.Dashboard;
 
 namespace Fuse.Admin.Pages.Bookings;
 
@@ -14,6 +16,23 @@ public sealed class BookingDraft(BookingEditor editor, BookingCatalog catalog, B
     public BookingAbilities Abilities { get; } = abilities;
 
     public bool IsCreate => Editor.Id is null;
+
+    /// <summary>Changes this wizard saved straight away (a tour refunded or cancelled) not yet taken into <see cref="BookingEditor.ConcurrencyVersion"/>.</summary>
+    private int _ownChanges;
+
+    /// <summary>The booking's version if nobody else has changed it: the draft's, plus each change this wizard saved itself.</summary>
+    public int ExpectedVersion => Editor.ConcurrencyVersion + _ownChanges;
+
+    /// <summary>This wizard saved a change to the booking straight away (each one moves its version on by one).</summary>
+    public void SavedOwnChange() => _ownChanges++;
+
+    private string _original = "";
+
+    /// <summary>Whether anything was changed since the booking was opened (or taken from the server again).</summary>
+    public bool HasChanges => JsonSerializer.Serialize(Editor) != _original;
+
+    /// <summary>What's in the draft now is the booking as saved (after loading and pricing it).</summary>
+    public void MarkUnchanged() => _original = JsonSerializer.Serialize(Editor);
 
     /// <summary>Paid, refunded or cancelled: the details are read only (legacy FormDisabled).</summary>
     public bool Locked => !IsCreate && (Editor.IsPaid || Editor.Refunded || Editor.Cancelled);
@@ -104,6 +123,56 @@ public sealed class BookingDraft(BookingEditor editor, BookingCatalog catalog, B
         Editor.Lines.RemoveAll(l => l.PackageKey == package.Key);
         Editor.Packages.Remove(package);
         Reprice();
+    }
+
+    /// <summary>
+    /// As legacy: a saved tour that's paid (not Unpaid) and not cancelled can be refunded or cancelled on its own
+    /// straight away, by staff who may refund. New tours can't (they aren't on the booking until Save).
+    /// </summary>
+    public bool CanRefundOrCancel(BookingLine line) =>
+        Abilities.CanRefund && !Editor.Cancelled && !line.IsNew && !line.Cancelled
+        && line.SavedStatus is { } status && status != BookingState.Unpaid;
+
+    /// <summary>
+    /// After a tour was refunded or cancelled on the server: takes what that changed from the booking as it's now
+    /// saved, keeping every other unsaved change in the draft. The booking's refund / cancel / payment state and
+    /// each saved tour's refund state and status are refreshed; a tour cancelled there comes back exactly as saved
+    /// (a cancelled tour doesn't change on Save, so edits to it would be lost anyway). The saved concurrency version is
+    /// taken only when it's exactly <see cref="ExpectedVersion"/> (only this wizard's own changes since it opened);
+    /// otherwise the draft keeps its own, so someone else's change in the meantime still stops the Save.
+    /// </summary>
+    public void ApplySavedState(BookingEditor saved)
+    {
+        var unchanged = !HasChanges;
+        if (saved.ConcurrencyVersion == ExpectedVersion)
+        {
+            Editor.ConcurrencyVersion = saved.ConcurrencyVersion;
+            _ownChanges = 0;
+        }
+        Editor.IsPaid = saved.IsPaid;
+        Editor.Refunded = saved.Refunded;
+        Editor.Cancelled = saved.Cancelled;
+        Editor.SavedTotal = saved.SavedTotal;
+        Editor.AmountOutstanding = saved.AmountOutstanding;
+        foreach (var (id, name) in saved.GuestNames)
+            Editor.GuestNames.TryAdd(id, name);
+
+        for (var i = 0; i < Editor.Lines.Count; i++)
+        {
+            var line = Editor.Lines[i];
+            if (line.IsNew || saved.Lines.FirstOrDefault(l => l.Key == line.Key) is not { } fresh)
+                continue;
+            if (fresh.Cancelled && !line.Cancelled)
+            {
+                Editor.Lines[i] = fresh;
+                continue;
+            }
+            line.Refunded = fresh.Refunded;
+            line.SavedStatus = fresh.SavedStatus;
+        }
+        Reprice();
+        if (unchanged)
+            MarkUnchanged();
     }
 
     public void Remember(string guestId, GuestName name) => Editor.GuestNames[guestId] = name;

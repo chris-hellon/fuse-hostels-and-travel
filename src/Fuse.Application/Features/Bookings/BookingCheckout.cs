@@ -222,7 +222,7 @@ internal sealed class ConfirmCheckoutHandler(
             booking.SetStripeSessonId(command.SessionId);
         else
             booking.Update(updateStripeSessionId: command.SessionId, additionalNotes: booking.AdditionalNotes, bookingSource: booking.BookingSource);
-        booking.ApplyManualPayment(checkout.AmountTotal);
+        booking.ApplyManualPayment(checkout.AmountTotal).Touch();
         await db.SaveChangesAsync(cancellationToken);
 
         await SendConfirmationsAsync(booking, websiteCheckout, cancellationToken);

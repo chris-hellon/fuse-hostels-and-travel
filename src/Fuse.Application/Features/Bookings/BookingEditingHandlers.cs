@@ -7,6 +7,7 @@ using Fuse.Contracts.Tours;
 using Fuse.Domain.Catalog.Bookings;
 using Fuse.Domain.Catalog.Commission;
 using Fuse.Domain.Catalog.Packages;
+using Fuse.Domain.Catalog.Tours;
 
 namespace Fuse.Application.Features.Bookings;
 
@@ -244,12 +245,54 @@ internal sealed class GetBookingEditorHandler(IAppDbContext db, SupplierScope sc
                     GuestIds = [.. (i.Guests ?? []).Where(x => x.DeletedOn == null).Select(x => x.GuestId.ToString())],
                     Cancelled = i.Cancelled == true,
                     Refunded = i.Refunded == true,
+                    SavedStatus = BookingStatuses.Of(i.Cancelled, i.Refunded, i.PartialRefund, i.NoShow, i.CheckedIn, booking),
                     SavedAmount = i.Amount,
                     SavedTourDateId = i.TourDateId,
                     SavedPackageKey = i.BookingPackageId,
                     SavedSpecialPrice = i.BookingPackageId != null || savedPackTours.Contains(i.TourId!.Value),
                 }),
             ],
+        };
+    }
+}
+
+/// <summary>One small read of the booking (no tracking), polled by an open booking editor.</summary>
+internal sealed class GetBookingVersionHandler(IAppDbContext db, SupplierScope scope) : IQueryHandler<GetBookingVersion, BookingVersion>
+{
+    public async ValueTask<BookingVersion> Handle(GetBookingVersion query, CancellationToken cancellationToken)
+    {
+        var booking = await db.Bookings.AsNoTracking().Where(b => b.Id == query.Id)
+            .Select(b => new
+            {
+                b.ConcurrencyVersion, b.Cancelled, b.Refunded, b.PartialRefund, b.IsPaid, b.AmountOutstanding, b.TotalAmount,
+                Payments = b.Payments.Count(),
+                RefundedPayments = b.Payments.Count(p => p.Refunded || p.PartialRefund == true),
+                Tours = b.Items.Where(i => i.TourId != null).Select(i => new
+                {
+                    TourId = i.TourId!.Value, i.Cancelled, i.Refunded, i.PartialRefund, i.CheckedIn, i.NoShow,
+                    Guests = i.Guests!.Select(g => new { g.CheckedIn, g.NoShow, g.Cancelled }).ToList(),
+                }).ToList(),
+            })
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new NotFoundException("Booking not found.");
+        var tours = await scope.TourIdsAsync(cancellationToken);
+        if (tours is not null && !booking.Tours.Any(t => tours.Contains(t.TourId)))
+            throw new NotFoundException("Booking not found.");
+
+        var guests = booking.Tours.SelectMany(t => t.Guests).ToList();
+        return new BookingVersion
+        {
+            Version = booking.ConcurrencyVersion,
+            State = BookingStatuses.Of(booking.Cancelled, booking.Refunded, booking.PartialRefund, booking.AmountOutstanding, booking.IsPaid),
+            Outstanding = BookingStatuses.Outstanding(booking.AmountOutstanding, booking.IsPaid, booking.TotalAmount),
+            Payments = booking.Payments,
+            RefundedPayments = booking.RefundedPayments,
+            Tours = booking.Tours.Count,
+            CancelledTours = booking.Tours.Count(t => t.Cancelled == true),
+            RefundedTours = booking.Tours.Count(t => t.Refunded == true || t.PartialRefund == true),
+            CheckedIn = booking.Tours.Count(t => t.CheckedIn == true) + guests.Count(g => g.CheckedIn == true),
+            NoShows = booking.Tours.Count(t => t.NoShow == true) + guests.Count(g => g.NoShow == true),
+            CancelledGuests = guests.Count(g => g.Cancelled == true),
         };
     }
 }
@@ -417,6 +460,8 @@ internal sealed class SaveBookingHandler(
                     throw new BusinessRuleException("This booking is paid: only an administrator can change a tour or its guests.");
                 if (departureLocked && (moved || (item.PickupLocation ?? "") != (line.PickupLocation ?? "")))
                     throw new BusinessRuleException("This booking is refunded: its tours' departures and pick ups can't be changed.");
+                if (moved && package is not null && item.BookingPackageId == package.Id && input.Packages.Any(p => p.Key == line.PackageKey && !p.Edited))
+                    EnsurePackageMove(item, date, package, packageDefinitions);
 
                 if (moved)
                 {
@@ -512,7 +557,7 @@ internal sealed class SaveBookingHandler(
         booking.PackIncentiveTierId = pack is null ? null : input.PackIncentiveTierId;
 
         ApplyPaymentMethod(booking, input, creating, abilities);
-        booking.ConcurrencyVersion++;
+        booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
         return booking.Id;
     }
@@ -527,6 +572,19 @@ internal sealed class SaveBookingHandler(
         if (chosen != booking.CreatedBy && !abilities.CanChangeSalesPerson)
             throw new ForbiddenException("You can't change who a booking is credited to.");
         return chosen;
+    }
+
+    /// <summary>
+    /// A booked package's tour moved on its own (not by picking the package again): another departure of the same
+    /// tour, at the package's price of the tour when it books a set one. Its price and the package's snapshot stay.
+    /// </summary>
+    private static void EnsurePackageMove(BookingItem item, TourDate date, BookingPackage package, IReadOnlyList<Package> definitions)
+    {
+        if (date.TourId != item.TourId)
+            throw new BusinessRuleException($"A tour in the package \"{package.PackageName}\" can only move to another departure of the same tour. Edit the package to change its tours.");
+        var pinned = definitions.FirstOrDefault(p => p.Id == package.PackageId)?.PackageItems?.FirstOrDefault(i => i.TourId == date.TourId)?.TourPriceId;
+        if (pinned is { } priceId && date.TourPriceId != priceId)
+            throw new BusinessRuleException($"The package \"{package.PackageName}\" books a set price of this tour. Choose one of that price's departures.");
     }
 
     private async Task<bool> WasPackPricedAsync(Booking booking, BookingItem item, CancellationToken cancellationToken) =>

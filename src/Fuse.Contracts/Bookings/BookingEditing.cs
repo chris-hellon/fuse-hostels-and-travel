@@ -1,3 +1,4 @@
+using Fuse.Contracts.Dashboard;
 using Fuse.Contracts.Tours;
 
 namespace Fuse.Contracts.Bookings;
@@ -125,6 +126,11 @@ public sealed record BookingLine
     public List<string> GuestIds { get; set; } = [];
     public bool Cancelled { get; set; }
     public bool Refunded { get; set; }
+    /// <summary>
+    /// The saved tour's state as the booking's details show it (its own flags, then the booking's payment); null
+    /// for a tour being added. Paid tours (not Unpaid) can be refunded or cancelled on their own.
+    /// </summary>
+    public BookingState? SavedStatus { get; set; }
 
     /// <summary>As saved: its price, departure, package and whether a pack or package set that price.</summary>
     public decimal? SavedAmount { get; set; }
@@ -146,7 +152,10 @@ public sealed record BookingPackageLine
     public string? TierTitle { get; set; }
     /// <summary>Per guest, for the tier.</summary>
     public decimal Price { get; set; }
-    /// <summary>The tier as saved (a package's tours keep their saved prices until its tier or departures change).</summary>
+    /// <summary>
+    /// The tier as saved. A booked package's tours keep their saved prices until it's picked again in the package
+    /// dialog with another tier or departures; moving one of its tours to another departure doesn't re-price it.
+    /// </summary>
     public DefaultIdType? SavedTierId { get; set; }
     /// <summary>
     /// Picked (or picked again) in the package dialog during this edit. As legacy, only then is a booked package's
@@ -198,6 +207,54 @@ public sealed record BookingEditor
 [Get("bookings/{Id}"), Permission(FuseAction.View, FuseResource.TourBookings)]
 public sealed record GetBookingEditor(DefaultIdType Id) : IQuery<BookingEditor>;
 
+/// <summary>
+/// A booking's concurrency version and a few of its figures, for an open booking editor to notice (cheaply, every so often)
+/// that someone else changed it, and roughly what: payments, refunds, cancellations or attendance.
+/// </summary>
+public sealed record BookingVersion
+{
+    public int Version { get; set; }
+    public BookingState State { get; set; }
+    public decimal Outstanding { get; set; }
+    public int Payments { get; set; }
+    public int RefundedPayments { get; set; }
+    /// <summary>Tours on the booking, cancelled ones included.</summary>
+    public int Tours { get; set; }
+    public int CancelledTours { get; set; }
+    public int RefundedTours { get; set; }
+    /// <summary>Guests (lead and additional, on every tour) the manifest has checked in.</summary>
+    public int CheckedIn { get; set; }
+    public int NoShows { get; set; }
+    /// <summary>Additional guests cancelled (a cancelled lead guest cancels the tour).</summary>
+    public int CancelledGuests { get; set; }
+
+    /// <summary>What changed between two reads of the same booking, for the editor's warning (empty when nothing it can tell).</summary>
+    public static IReadOnlyList<string> Changes(BookingVersion before, BookingVersion now)
+    {
+        var changes = new List<string>();
+        if (now.State != before.State)
+            changes.Add($"it's now {BookingStates.Label(now.State)}");
+        if (now.Payments > before.Payments)
+            changes.Add(now.Payments - before.Payments == 1 ? "a payment was added" : "payments were added");
+        else if (now.Outstanding != before.Outstanding)
+            changes.Add($"{now.Outstanding:$#,##0.00} is now outstanding");
+        if (now.RefundedPayments > before.RefundedPayments || now.RefundedTours > before.RefundedTours)
+            changes.Add("something was refunded");
+        if (now.CancelledTours > before.CancelledTours)
+            changes.Add(now.CancelledTours - before.CancelledTours == 1 ? "a tour was cancelled" : "tours were cancelled");
+        if (now.Tours != before.Tours)
+            changes.Add("its tours changed");
+        // (A cancelled tour cancels its guests too: that's said above.)
+        if (now.CheckedIn != before.CheckedIn || now.NoShows != before.NoShows
+            || (now.CancelledGuests != before.CancelledGuests && now.CancelledTours == before.CancelledTours))
+            changes.Add("guests were checked in, marked no show or cancelled");
+        return changes;
+    }
+}
+
+[Get("bookings/{Id}/version"), Permission(FuseAction.View, FuseResource.TourBookings)]
+public sealed record GetBookingVersion(DefaultIdType Id) : IQuery<BookingVersion>;
+
 /// <summary>What to do when saving changes the total of a booking that's already paid.</summary>
 public enum PaidTotalChange
 {
@@ -241,8 +298,9 @@ public sealed class SaveBookingValidator : AbstractValidator<SaveBooking>
 /// <list type="number">
 /// <item>A pack incentive the booking qualifies for charges its tier price, split evenly across the pack's
 /// tours on the booking (packages and cancelled tours included, as legacy: the pack wins).</item>
-/// <item>A package's tours cost their price in the package for its tier (a booked package's tours keep their
-/// saved price until its tier or their departure changes, as legacy).</item>
+/// <item>A package's tours cost their price in the package for its tier. A booked package's tours keep their
+/// saved price until it's picked again (<see cref="BookingPackageLine.Edited"/>) with another tier or departures,
+/// as legacy; a tour moved to another departure on its own keeps its price.</item>
 /// <item>A saved tour keeps its saved price while its departure (and whether a pack or package priced it) is unchanged.</item>
 /// <item>Anything else costs its departure's price.</item>
 /// </list>
@@ -297,8 +355,10 @@ public static class BookingPricing
             var packageLine = line.PackageKey is { } key ? packageLines.FirstOrDefault(p => p.Key == key) : null;
             if (packageLine is not null)
             {
-                // As legacy: a booked package's tours keep their price until its tier or their departure changes.
-                if (sameDeparture && line.SavedPackageKey == packageLine.Key && packageLine.TierId == packageLine.SavedTierId)
+                // As legacy: a booked package's tours keep their price until the package is picked again with another
+                // tier or departures. Moving one of its tours to another departure doesn't re-price the package.
+                var booked = !line.IsNew && line.SavedAmount is not null && line.SavedPackageKey == packageLine.Key;
+                if (booked && packageLine.TierId == packageLine.SavedTierId && (sameDeparture || !packageLine.Edited))
                 {
                     line.Amount = line.SavedAmount!.Value;
                     continue;

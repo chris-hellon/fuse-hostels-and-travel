@@ -121,24 +121,21 @@ else if (Draft.SuggestedPack is { } suggested && Draft.CanChangeTours)
                 <td>@line.PickupLocation</td>
                 <td>@(line.WaiverSigned ? "Signed" : "N/A")</td>
                 <td class="booking-lines__actions">
-                    @* As legacy: package tours are changed through their package. *@
-                    @if (CanEdit(line) != CanRemove(line))
+                    @* As legacy: package tours are changed through their package, except that each can move to another departure;
+                       paid tours already on the booking can also be refunded or cancelled on their own (straight away). *@
+                    @{ var actions = Actions(line); }
+                    @if (actions.Count == 1)
                     {
                         @* One action only: an icon button rather than a menu of one. *@
-                        var edit = CanEdit(line);
-                        <RowIconButton Icon="@(edit ? Icons.Material.Outlined.Edit : Icons.Material.Outlined.Delete)" Label="@(edit ? "Edit" : "Delete")" Danger="!edit"
-                                       OnClick="() => edit ? EditLineAsync(line) : RemoveLineAsync(line)" />
+                        var only = actions[0];
+                        <RowIconButton Icon="@only.Icon" Label="@only.Label" Danger="only.Danger" OnClick="only.Run" />
                     }
-                    else if (CanEdit(line))
+                    else if (actions.Count > 1)
                     {
                         <RowMenu>
-                            @if (CanEdit(line))
+                            @foreach (var action in actions)
                             {
-                                <MudMenuItem OnClick="() => AfterMenuCloses(() => EditLineAsync(line))">Edit</MudMenuItem>
-                            }
-                            @if (CanRemove(line))
-                            {
-                                <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => RemoveLineAsync(line))">Delete</MudMenuItem>
+                                <MudMenuItem Class="@(action.Danger ? "row-menu__danger" : null)" OnClick="() => AfterMenuCloses(action.Run)">@action.Label</MudMenuItem>
                             }
                         </RowMenu>
                     }
@@ -150,6 +147,8 @@ else if (Draft.SuggestedPack is { } suggested && Draft.CanChangeTours)
 
 @code {
     [Parameter, EditorRequired] public BookingDraft Draft { get; set; } = null!;
+    /// <summary>A tour was refunded or cancelled on the server (the draft has taken the booking's new state).</summary>
+    [Parameter] public EventCallback OnSavedChange { get; set; }
 
     private BookingEditor E => Draft.Editor;
 
@@ -170,11 +169,88 @@ else if (Draft.SuggestedPack is { } suggested && Draft.CanChangeTours)
         return true;
     }
 
-    /// <summary>Package tours are changed through their package; cancelled ones not at all. As legacy, a paid booking's too (what may change is up to the dialog).</summary>
-    private bool CanEdit(BookingLine line) => Draft.CanEditTours && !line.Cancelled && line.PackageKey is null;
+    /// <summary>
+    /// Any tour that isn't cancelled, a paid booking's too (what may change is up to the dialog). A package's tours
+    /// are otherwise changed through their package: on their own they can only move to another departure, so not
+    /// once the booking is refunded.
+    /// </summary>
+    private bool CanEdit(BookingLine line) => !line.Cancelled && (line.PackageKey is null ? Draft.CanEditTours : Draft.CanChangeDeparture);
 
     /// <summary>New tours, and tours of an unpaid booking (their spaces are freed on save).</summary>
     private bool CanRemove(BookingLine line) => Draft.CanChangeTours && !line.Cancelled && line.PackageKey is null;
+
+    private sealed record LineAction(string Label, string Icon, bool Danger, Func<Task> Run);
+
+    /// <summary>What can be done to a tour, in menu order.</summary>
+    private List<LineAction> Actions(BookingLine line)
+    {
+        var actions = new List<LineAction>();
+        if (CanEdit(line))
+            actions.Add(line.PackageKey is null
+                ? new("Edit", Icons.Material.Outlined.Edit, false, () => EditLineAsync(line))
+                : new("Change departure", Icons.Material.Outlined.EditCalendar, false, () => EditLineAsync(line)));
+        if (Draft.CanRefundOrCancel(line))
+        {
+            if (!line.Refunded)
+                actions.Add(new("Refund", Icons.Material.Outlined.CurrencyExchange, true, () => RefundOrCancelAsync(line, cancelling: false)));
+            actions.Add(new("Cancel", Icons.Material.Outlined.EventBusy, true, () => RefundOrCancelAsync(line, cancelling: true)));
+        }
+        if (CanRemove(line))
+            actions.Add(new("Delete", Icons.Material.Outlined.Delete, true, () => RemoveLineAsync(line)));
+        return actions;
+    }
+
+    /// <summary>
+    /// As legacy (and the booking's details): refunds or cancels the saved tour on the server straight away, then
+    /// takes the booking's new state into the draft without losing any other unsaved change. The most that can be
+    /// refunded is the tour's saved total (its saved price × its saved guests), read fresh from the server.
+    /// </summary>
+    private async Task RefundOrCancelAsync(BookingLine line, bool cancelling)
+    {
+        BookingEditor? saved = null;
+        if (!await Snackbar.TryAsync(async () => saved = await Api.Send(new GetBookingEditor(E.Id!.Value))) || saved is null)
+            return;
+        if (saved.Lines.FirstOrDefault(l => l.Key == line.Key) is not { } savedLine || savedLine.Cancelled)
+        {
+            Snackbar.Add("This tour has changed since the booking was opened. Close the booking and open it again.", Severity.Warning);
+            return;
+        }
+
+        // A cancelled tour doesn't change on Save, so unsaved changes to this tour (not the rest) would be lost.
+        if (cancelling && Edited(line, savedLine) && !await Dialogs.ConfirmAsync("Discard changes to this tour?",
+                $"{line.TourName} has unsaved changes. Cancelling it keeps it as saved, so they'll be lost. Your other changes stay until you save.",
+                "Continue", "Keep editing"))
+            return;
+
+        var dialog = await Dialogs.ShowAsync<RefundDialog>(null, new DialogParameters<RefundDialog>
+        {
+            { d => d.Title, cancelling ? "Cancel Tour" : "Refund Tour" },
+            { d => d.Subject, "tour" },
+            { d => d.Cancelling, cancelling },
+            { d => d.MaxAmount, savedLine.Total },
+            {
+                d => d.Submit, async amount =>
+                {
+                    var message = cancelling
+                        ? await Api.Send(new CancelBookingItem(line.Key, amount))
+                        : await Api.Send(new RefundBookingItem(line.Key, amount));
+                    // Saved (the booking's version moved on): this wizard's own change mustn't stop its Save.
+                    Draft.SavedOwnChange();
+                    return message;
+                }
+            },
+        }, RefundDialog.Options);
+        if (await dialog.Result is not { Canceled: false })
+            return;
+
+        await Snackbar.TryAsync(async () => Draft.ApplySavedState(await Api.Send(new GetBookingEditor(E.Id!.Value))));
+        await OnSavedChange.InvokeAsync();
+    }
+
+    /// <summary>Whether the draft changed this saved tour (its departure, pick up, waiver or guests).</summary>
+    private static bool Edited(BookingLine line, BookingLine saved) =>
+        line.TourDateId != saved.TourDateId || (line.PickupLocation ?? "") != (saved.PickupLocation ?? "") || line.WaiverSigned != saved.WaiverSigned
+        || !line.GuestIds.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(saved.GuestIds);
 
     private bool HasSavedCancelled(BookingPackageLine package) => E.Lines.Any(l => l.PackageKey == package.Key && l.Cancelled);
 

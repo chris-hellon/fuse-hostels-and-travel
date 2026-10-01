@@ -24,6 +24,7 @@
         }
         else
         {
+            @BannerContent
             @* While saving, the step is locked and faded (not covered): the Save button shows the progress. *@
             <div class="@($"modal-wizard__body{(Saving ? " is-saving" : "")}")" inert="@Saving" aria-busy="@(Saving ? "true" : null)">
                 <Wizard TModel="TModel" @ref="_wizard" Model="Model" OnFinished="Finished" OnStateChanged="Refresh">
@@ -66,6 +67,8 @@
     [Parameter] public bool Loading { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public RenderFragment? TitleContent { get; set; }
+    /// <summary>Shown above every step (e.g. a warning that the record changed elsewhere).</summary>
+    [Parameter] public RenderFragment? BannerContent { get; set; }
     [Parameter] public string CancelText { get; set; } = "Cancel";
     [Parameter] public string FinishText { get; set; } = "Save";
     [Parameter] public bool CanSave { get; set; } = true;
@@ -77,7 +80,7 @@
     [Parameter] public Func<Task<bool>>? OnCancel { get; set; }
 
     private Wizard<TModel>? _wizard;
-    private bool _stepsShown;
+    private Wizard<TModel>? _stepsShown;
 
     /// <summary>
     /// MudBlazor draws the title in the dialog's container, which doesn't re-render with this
@@ -89,12 +92,15 @@
         Dialog.StateHasChanged();
     }
 
-    /// <summary>The Wizard's @ref is only set after its first render (after its steps registered): refresh once then.</summary>
+    /// <summary>
+    /// The Wizard's @ref is only set after its first render (after its steps registered): refresh once then, and again
+    /// for a new Wizard (the model loaded again behind the spinner).
+    /// </summary>
     protected override void OnAfterRender(bool firstRender)
     {
-        if (_wizard is not null && !_stepsShown)
+        if (_wizard is not null && _wizard != _stepsShown)
         {
-            _stepsShown = true;
+            _stepsShown = _wizard;
             Refresh();
         }
     }

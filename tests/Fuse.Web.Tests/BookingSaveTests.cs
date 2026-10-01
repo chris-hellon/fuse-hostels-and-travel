@@ -314,6 +314,266 @@ public sealed class BookingSaveTests(TestApp app)
         (await SnapshotAsync()).ShouldBe((name + " renamed", 47m, 9m, (bool?)true));
     }
 
+    /// <summary>A two-tour package ($15 + $12 for Adult, $5 commission) booked on the first departures; the lead guest only.</summary>
+    private async Task<(DefaultIdType BookingId, DefaultIdType PackageId, string Name)> BookPackageAsync(IApi api, DefaultIdType tourA, DepartureOption departureA,
+        DefaultIdType tourB, DepartureOption departureB, BookingPaymentMethod method = BookingPaymentMethod.Stripe)
+    {
+        var adult = Guid.NewGuid();
+        var name = $"Combo {Guid.NewGuid():N}";
+        var packageId = await api.Send(new SavePackage(null, new PackageChanges
+        {
+            Details = new PackageInput { Name = name, CommissionAmount = 5 },
+            Tiers = [new() { Key = adult, Title = "Adult" }],
+            Items =
+            [
+                new() { TourId = tourA, Quantity = 1, Prices = new() { [adult] = 15 } },
+                new() { TourId = tourB, Quantity = 1, Prices = new() { [adult] = 12 } },
+            ],
+        }, null, false), Ct);
+        var package = (await api.Send(new GetBookingCatalog(), Ct)).Packages.Single(p => p.Id == packageId);
+        var key = Guid.NewGuid();
+        var lines = new[] { Line(tourA, departureA), Line(tourB, departureB) };
+        foreach (var line in lines)
+            line.PackageKey = key;
+        var id = await api.Send(new SaveBooking(NewBooking(await GuestAsync(api), method, lines) with
+        {
+            Packages = [new BookingPackageLine { Key = key, PackageId = packageId, PackageName = package.Name, TierId = package.Tiers.Single().Id, Edited = true }],
+        }), Ct);
+        return (id, packageId, name);
+    }
+
+    private async Task<(string Name, decimal Price, decimal? Commission)> PackageSnapshotAsync(DefaultIdType bookingId)
+    {
+        await using var scope = TestBookings.TenantScope(app);
+        var saved = await scope.ServiceProvider.GetRequiredService<AppDbContext>().BookingPackages.AsNoTracking().SingleAsync(p => p.BookingId == bookingId, Ct);
+        return (saved.PackageName, saved.PackagePrice, saved.CommissionAmount);
+    }
+
+    [Fact]
+    public async Task A_package_tour_moves_to_another_departure_keeping_the_packages_price_and_snapshot()
+    {
+        var api = await app.AdminApiAsync();
+        var (tourA, departuresA) = await TourAsync(api, 30, 2, Day(30), Day(31), Day(32));
+        var (tourB, departuresB) = await TourAsync(api, 35, 10, Day(30));
+        var (id, packageId, name) = await BookPackageAsync(api, tourA, departuresA[0], tourB, departuresB[0]);
+
+        // The package changes in the catalog afterwards (a re-price would show).
+        var definition = await api.Send(new GetPackageEditor(packageId), Ct);
+        await api.Send(new SavePackage(packageId, new PackageChanges
+        {
+            Details = definition.Details with { Name = name + " renamed", CommissionAmount = 9 },
+            Tiers = [.. definition.Tiers],
+            Items = [.. definition.Items.Select(i => new PackageItemEdit { Id = i.Id, TourId = i.TourId, Quantity = i.Quantity, Prices = i.Prices.ToDictionary(p => p.Key, p => p.Value + 10) })],
+        }, null, false), Ct);
+
+        // Another booking fills the second departure: moving there is refused, as for any tour.
+        await api.Send(new SaveBooking(NewBooking(await GuestAsync(api), BookingPaymentMethod.Stripe, Line(tourA, departuresA[1], await GuestAsync(api)))), Ct);
+        var editor = await api.Send(new GetBookingEditor(id), Ct);
+        editor.Lines.Single(l => l.TourId == tourA).TourDateId = departuresA[1].Id;
+        (await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new SaveBooking(editor), Ct).AsTask())).Message.ShouldContain("space");
+        (await SpacesAsync(departuresA[0].Id), await SpacesAsync(departuresA[1].Id)).ShouldBe((1, 0));
+
+        // Nor can it become another tour on its own (that's editing the package).
+        editor = await api.Send(new GetBookingEditor(id), Ct);
+        var (other, otherDepartures) = await TourAsync(api, 20, 10, Day(31));
+        var moving = editor.Lines.Single(l => l.TourId == tourA);
+        (moving.TourId, moving.TourDateId) = (other, otherDepartures[0].Id);
+        (await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new SaveBooking(editor), Ct).AsTask())).Message.ShouldContain("same tour");
+
+        // Another departure with space: the spaces move, the price, total and package snapshot don't.
+        editor = await api.Send(new GetBookingEditor(id), Ct);
+        editor.Lines.Single(l => l.TourId == tourA).TourDateId = departuresA[2].Id;
+        BookingPricing.Apply(editor.Lines, null, null, editor.Packages, (await api.Send(new GetBookingCatalog(), Ct)).Packages);
+        editor.Total.ShouldBe(27); // the wizard's preview agrees
+        await api.Send(new SaveBooking(editor), Ct);
+
+        (await SpacesAsync(departuresA[0].Id), await SpacesAsync(departuresA[2].Id)).ShouldBe((2, 1));
+        var saved = await api.Send(new GetBookingEditor(id), Ct);
+        var moved = saved.Lines.Single(l => l.TourId == tourA);
+        (moved.StartDate, moved.Amount, moved.PackageKey).ShouldBe((Day(32), 15m, saved.Packages.Single().Key));
+        saved.Lines.Single(l => l.TourId == tourB).Amount.ShouldBe(12);
+        saved.SavedTotal.ShouldBe(27);
+        (await PackageSnapshotAsync(id)).ShouldBe((name, 27m, (decimal?)5m));
+        (await api.Send(new GetBookingOverview(id), Ct)).Items.ShouldAllBe(i => i.PackageName == name);
+    }
+
+    [Fact]
+    public async Task On_a_paid_booking_staff_move_a_package_tour_and_nobody_does_once_refunded()
+    {
+        var admin = await app.AdminApiAsync();
+        var staff = await StaffApiAsync();
+        var (tourA, departuresA) = await TourAsync(admin, 30, 10, Day(33), Day(34), Day(35));
+        var (tourB, departuresB) = await TourAsync(admin, 35, 10, Day(33));
+        var (id, _, name) = await BookPackageAsync(admin, tourA, departuresA[0], tourB, departuresB[0], BookingPaymentMethod.Cash);
+        (await admin.Send(new GetBookingEditor(id), Ct)).IsPaid.ShouldBeTrue();
+
+        // Paid: staff move it (no total change, so no paid-total decision).
+        var editor = await staff.Send(new GetBookingEditor(id), Ct);
+        editor.Lines.Single(l => l.TourId == tourA).TourDateId = departuresA[1].Id;
+        await staff.Send(new SaveBooking(editor), Ct);
+        (await SpacesAsync(departuresA[0].Id), await SpacesAsync(departuresA[1].Id)).ShouldBe((10, 9));
+        var saved = await admin.Send(new GetBookingEditor(id), Ct);
+        (saved.SavedTotal, saved.IsPaid).ShouldBe((27m, true));
+        (await PackageSnapshotAsync(id)).ShouldBe((name, 27m, (decimal?)5m));
+
+        // Refunded: nobody moves it, administrators included.
+        await using (var scope = TestBookings.TenantScope(app))
+            await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.ExecuteSqlRawAsync(
+                "UPDATE Catalog.Bookings SET Refunded = 1 WHERE Id = {0}", new object[] { id }, Ct);
+        foreach (var api in new[] { staff, admin })
+        {
+            editor = await api.Send(new GetBookingEditor(id), Ct);
+            editor.Lines.Single(l => l.TourId == tourA).TourDateId = departuresA[2].Id;
+            (await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new SaveBooking(editor), Ct).AsTask())).Message.ShouldContain("refunded");
+        }
+        (await SpacesAsync(departuresA[1].Id), await SpacesAsync(departuresA[2].Id)).ShouldBe((9, 10));
+    }
+
+    [Fact]
+    public async Task A_paid_package_tour_is_refunded_and_cancelled_on_its_own_keeping_the_package_and_total()
+    {
+        var api = await app.AdminApiAsync();
+        var (tourA, departuresA) = await TourAsync(api, 30, 10, Day(38));
+        var (tourB, departuresB) = await TourAsync(api, 35, 10, Day(39));
+        var (id, _, name) = await BookPackageAsync(api, tourA, departuresA[0], tourB, departuresB[0], BookingPaymentMethod.Cash);
+        var draft = new BookingDraft(await api.Send(new GetBookingEditor(id), Ct), await api.Send(new GetBookingCatalog(), Ct), await api.Send(new GetBookingAbilities(), Ct));
+        draft.Reprice();
+        draft.Editor.Lines.ShouldAllBe(l => l.SavedStatus == BookingState.Paid);
+        draft.Editor.Lines.ShouldAllBe(l => draft.CanRefundOrCancel(l));
+
+        // Unsaved edits in the wizard meanwhile (kept through the refund and cancellation).
+        draft.Editor.AdditionalNotes = "Unsaved note";
+        draft.Editor.Lines.Single(l => l.TourId == tourB).PickupLocation = "Other";
+
+        // The most a package tour refunds is its own line total.
+        var lineA = draft.Editor.Lines.Single(l => l.TourId == tourA);
+        (await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new RefundBookingItem(lineA.Key, 15.01m), Ct).AsTask())).Message.ShouldContain("$15.00");
+        // As the wizard: each is saved straight away and counted as its own change (so it doesn't stop its Save).
+        await api.Send(new RefundBookingItem(lineA.Key, 15), Ct);
+        draft.SavedOwnChange();
+        await api.Send(new CancelBookingItem(lineA.Key, 0), Ct);
+        draft.SavedOwnChange();
+        (await SpacesAsync(departuresA[0].Id), await SpacesAsync(departuresB[0].Id)).ShouldBe((10, 9));
+
+        draft.ApplySavedState(await api.Send(new GetBookingEditor(id), Ct));
+        var cancelled = draft.Editor.Lines.Single(l => l.TourId == tourA);
+        (cancelled.Cancelled, cancelled.Refunded, cancelled.Amount, cancelled.PackageKey).ShouldBe((true, true, 15m, draft.Editor.Packages.Single().Key));
+        draft.CanRefundOrCancel(cancelled).ShouldBeFalse();
+        var other = draft.Editor.Lines.Single(l => l.TourId == tourB);
+        (other.Cancelled, other.Refunded, other.Amount, other.PickupLocation).ShouldBe((false, false, 12m, "Other"));
+        draft.CanRefundOrCancel(other).ShouldBeTrue();
+        (draft.Editor.AdditionalNotes, draft.Editor.Cancelled, draft.Editor.IsPaid).ShouldBe(("Unsaved note", false, true));
+        draft.Editor.Total.ShouldBe(27); // the cancelled tour keeps its share: nothing re-prices, no paid-total decision
+        draft.Editor.SavedTotal.ShouldBe(27);
+
+        // Saving the draft afterwards keeps the package, its snapshot, the prices and the total.
+        await api.Send(new SaveBooking(draft.Editor), Ct);
+        var saved = await api.Send(new GetBookingEditor(id), Ct);
+        (saved.SavedTotal, saved.IsPaid, saved.AdditionalNotes).ShouldBe((27m, true, "Unsaved note"));
+        saved.Lines.Single(l => l.TourId == tourA).ShouldSatisfyAllConditions(l => l.Cancelled.ShouldBeTrue(), l => l.Amount.ShouldBe(15), l => l.SavedStatus.ShouldBe(BookingState.Cancelled));
+        saved.Lines.Single(l => l.TourId == tourB).ShouldSatisfyAllConditions(l => l.Cancelled.ShouldBeFalse(), l => l.Amount.ShouldBe(12), l => l.PickupLocation.ShouldBe("Other"));
+        saved.Packages.ShouldHaveSingleItem();
+        (await PackageSnapshotAsync(id)).ShouldBe((name, 27m, (decimal?)5m));
+        (await api.Send(new GetBookingOverview(id), Ct)).Items.ShouldAllBe(i => i.PackageName == name);
+
+        // Cancelling the last tour cancels the booking; the draft takes that too.
+        await api.Send(new CancelBookingItem(other.Key, 0), Ct);
+        draft.SavedOwnChange();
+        draft.ApplySavedState(await api.Send(new GetBookingEditor(id), Ct));
+        draft.Editor.Cancelled.ShouldBeTrue();
+        draft.Editor.Lines.ShouldAllBe(l => l.Cancelled && !draft.CanRefundOrCancel(l));
+    }
+
+    [Fact]
+    public async Task Only_saved_paid_tours_can_be_refunded_or_cancelled_from_the_wizard()
+    {
+        var api = await app.AdminApiAsync();
+        var (tour, departures) = await TourAsync(api, 30, 10, Day(40));
+        var id = await api.Send(new SaveBooking(NewBooking(await GuestAsync(api), BookingPaymentMethod.Stripe, Line(tour, departures[0]))), Ct);
+        var catalog = await api.Send(new GetBookingCatalog(), Ct);
+        var abilities = await api.Send(new GetBookingAbilities(), Ct);
+        abilities.CanRefund.ShouldBeTrue();
+
+        var unpaid = new BookingDraft(await api.Send(new GetBookingEditor(id), Ct), catalog, abilities);
+        unpaid.Editor.Lines.Single().SavedStatus.ShouldBe(BookingState.Unpaid);
+        unpaid.CanRefundOrCancel(unpaid.Editor.Lines.Single()).ShouldBeFalse();
+
+        var paidId = await api.Send(new SaveBooking(NewBooking(await GuestAsync(api), BookingPaymentMethod.Cash, Line(tour, departures[0]))), Ct);
+        var paid = new BookingDraft(await api.Send(new GetBookingEditor(paidId), Ct), catalog, abilities);
+        paid.Editor.Lines.Single().SavedStatus.ShouldBe(BookingState.Paid);
+        paid.CanRefundOrCancel(paid.Editor.Lines.Single()).ShouldBeTrue();
+        paid.CanRefundOrCancel(paid.NewLine(catalog.Tours.Single(t => t.Id == tour), departures[0], null, [])).ShouldBeFalse();
+        new BookingDraft(paid.Editor, catalog, abilities with { CanRefund = false }).CanRefundOrCancel(paid.Editor.Lines.Single()).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_package_tour_at_a_set_price_moves_only_to_that_prices_departures()
+    {
+        var api = await app.AdminApiAsync();
+        var draft = TourDraft.New();
+        draft.Details.Name = $"Two price tour {Guid.NewGuid():N}";
+        draft.Details.Description = "<p>Tour</p>";
+        draft.Details.HourDuration = "2";
+        draft.Details.MaxCapacity = 10;
+        draft.Details.LocationIds = [(await api.Send(new ListLocations(), Ct))[0].Id];
+        draft.Details.PickupPropertyIds = [Guid.Parse((await api.Send(new ListPickupProperties(), Ct)).Single(p => p.Name == TestApp.SeedPropertyName).Id)];
+        draft.SavePrice(null, new TourPriceInput { Title = "Standard", Price = 30, HourDuration = 2, PublishToWebsite = true });
+        draft.SavePrice(null, new TourPriceInput { Title = "Private", Price = 90, HourDuration = 2, PublishToWebsite = true });
+        draft.AddDates([Day(36), Day(37)], [.. draft.Prices.Select(p => p.Key)], null);
+        var tourA = await api.Send(new CreateTour(draft.ToChanges()), Ct);
+        var departuresA = await api.Send(new ListTourDepartures(tourA), Ct);
+        var (standard, @private) = (departuresA.Where(d => d.PriceTitle == "Standard").ToList(), departuresA.Where(d => d.PriceTitle == "Private").ToList());
+        var (tourB, departuresB) = await TourAsync(api, 35, 10, Day(36));
+        var (id, packageId, _) = await BookPackageAsync(api, tourA, standard[0], tourB, departuresB[0]);
+
+        // As legacy data can: the package books the tour's Standard price.
+        await using (var scope = TestBookings.TenantScope(app))
+            await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.ExecuteSqlRawAsync(
+                "UPDATE Catalog.PackageItems SET TourPriceId = {0} WHERE PackageId = {1} AND TourId = {2}", new object[] { standard[0].PriceId!.Value, packageId, tourA }, Ct);
+
+        var editor = await api.Send(new GetBookingEditor(id), Ct);
+        editor.Lines.Single(l => l.TourId == tourA).TourDateId = @private[1].Id;
+        (await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new SaveBooking(editor), Ct).AsTask())).Message.ShouldContain("set price");
+
+        editor = await api.Send(new GetBookingEditor(id), Ct);
+        editor.Lines.Single(l => l.TourId == tourA).TourDateId = standard[1].Id;
+        await api.Send(new SaveBooking(editor), Ct);
+        var saved = await api.Send(new GetBookingEditor(id), Ct);
+        (saved.Lines.Single(l => l.TourId == tourA).StartDate, saved.SavedTotal).ShouldBe((Day(37), 27m));
+        // Siblings share capacity: the other price's departures follow.
+        (await SpacesAsync(@private[0].Id), await SpacesAsync(@private[1].Id)).ShouldBe((10, 9));
+    }
+
+    [Fact]
+    public void A_moved_package_tour_keeps_its_price_until_the_package_is_picked_again()
+    {
+        var tier = Guid.NewGuid();
+        var tourId = Guid.NewGuid();
+        var package = new PackageOption
+        {
+            Id = Guid.NewGuid(), Name = "Combo", Tiers = [new(tier, "Adult", 0)],
+            Items = [new PackageItemOption { Id = Guid.NewGuid(), TourId = tourId, Prices = new Dictionary<DefaultIdType, decimal> { [tier] = 25 } }],
+        };
+        var packageLine = new BookingPackageLine { Key = Guid.NewGuid(), PackageId = package.Id, TierId = tier, SavedTierId = tier };
+        var line = new BookingLine
+        {
+            Key = Guid.NewGuid(), TourId = tourId, TourDateId = Guid.NewGuid(), DeparturePrice = 40, PackageKey = packageLine.Key,
+            SavedAmount = 15, SavedPackageKey = packageLine.Key, SavedSpecialPrice = true,
+        };
+        line.SavedTourDateId = line.TourDateId;
+        List<BookingLine> lines = [line];
+
+        line.TourDateId = Guid.NewGuid(); // moved on its own
+        BookingPricing.Apply(lines, null, null, [packageLine], [package]);
+        line.Amount.ShouldBe(15);
+        BookingPricing.Apply(lines, null, null, [packageLine], []); // even with the package gone from the catalog
+        line.Amount.ShouldBe(15);
+
+        packageLine.Edited = true; // picked again in the package dialog with a new departure: today's package price
+        BookingPricing.Apply(lines, null, null, [packageLine], [package]);
+        line.Amount.ShouldBe(25);
+    }
+
     [Fact]
     public async Task Changing_the_lead_guest_to_one_without_an_email_stores_their_placeholder_as_legacy()
     {

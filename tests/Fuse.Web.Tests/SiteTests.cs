@@ -199,20 +199,29 @@ public sealed class SiteTests(TestApp app)
     public async Task Visitors_only_see_published_hostels_tours_and_events()
     {
         var anonymous = new Fuse.Web.Client.Api.HttpApi(app.Anonymous());
-        var chrome = await anonymous.Send(new GetSiteChrome(), Ct);
-        var hostels = await anonymous.Send(new ListSiteHostels(), Ct);
-        var tours = await anonymous.Send(new ListSiteTours(), Ct);
-        var events = await anonymous.Send(new ListSiteEvents(), Ct);
-
         await using var scope = TestBookings.TenantScope(app);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var hostelIds = chrome.Hostels.Select(h => h.Id).Concat(hostels.Select(h => h.Id)).ToList();
-        var tourIds = chrome.Tours.Select(t => t.Id).Concat(tours.Select(t => t.Id)).ToList();
-        var eventIds = events.Select(e => e.Id).ToList();
 
-        (await db.Properties.IgnoreQueryFilters().Where(p => hostelIds.Contains(p.Id)).AllAsync(p => p.PublishToSite == true, Ct)).ShouldBeTrue();
-        (await db.Tours.IgnoreQueryFilters().Where(t => tourIds.Contains(t.Id)).AllAsync(t => t.PublishToSite == true, Ct)).ShouldBeTrue();
-        (await db.Events.IgnoreQueryFilters().Where(e => eventIds.Contains(e.Id)).AllAsync(e => e.PublishToSite != false, Ct)).ShouldBeTrue();
+        // Other tests unpublish tours they've just made (in parallel), which can land between reading the site and
+        // checking the database: a leak fails every attempt, that race only one.
+        SiteChrome chrome = null!;
+        var allPublished = false;
+        for (var attempt = 0; attempt < 3 && !allPublished; attempt++)
+        {
+            chrome = await anonymous.Send(new GetSiteChrome(), Ct);
+            var hostels = await anonymous.Send(new ListSiteHostels(), Ct);
+            var tours = await anonymous.Send(new ListSiteTours(), Ct);
+            var events = await anonymous.Send(new ListSiteEvents(), Ct);
+            var hostelIds = chrome.Hostels.Select(h => h.Id).Concat(hostels.Select(h => h.Id)).ToList();
+            var tourIds = chrome.Tours.Select(t => t.Id).Concat(tours.Select(t => t.Id)).ToList();
+            var eventIds = events.Select(e => e.Id).ToList();
+
+            allPublished = await db.Properties.IgnoreQueryFilters().Where(p => hostelIds.Contains(p.Id)).AllAsync(p => p.PublishToSite == true, Ct)
+                && await db.Tours.IgnoreQueryFilters().Where(t => tourIds.Contains(t.Id)).AllAsync(t => t.PublishToSite == true, Ct)
+                && await db.Events.IgnoreQueryFilters().Where(e => eventIds.Contains(e.Id)).AllAsync(e => e.PublishToSite != false, Ct);
+        }
+
+        allPublished.ShouldBeTrue();
         chrome.BookableHostels.ShouldAllBe(h => chrome.Hostels.Any(p => p.Id == h.Id));
         chrome.Hostels.ShouldAllBe(h => h.Slug.Length > 0);
         chrome.Seo.Indexable.ShouldBeFalse();

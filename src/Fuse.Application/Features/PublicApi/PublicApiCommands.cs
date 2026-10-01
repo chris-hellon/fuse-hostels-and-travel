@@ -417,12 +417,14 @@ internal sealed class FlagApiBookingAsPaidHandler(IAppDbContext db, PaidBookingN
                           .FirstOrDefaultAsync(b => b.Id == command.Id, cancellationToken)
                       ?? throw new NotFoundException("Booking not found.");
         var wasPaid = booking.IsPaid;
-        // Exactly what legacy's FlagBookingAsPaid procedure sets.
+        // Exactly what legacy's FlagBookingAsPaid procedure sets, plus the concurrency version (as Booking.Touch) so an
+        // open booking editor can't save over it.
         await db.Bookings.Where(b => b.Id == command.Id).ExecuteUpdateAsync(set => set
             .SetProperty(b => b.IsPaid, true)
             .SetProperty(b => b.BookingConfirmed, true)
             .SetProperty(b => b.AmountOutstanding, 0m)
-            .SetProperty(b => b.StripeSessionId, command.StripeSessionId), cancellationToken);
+            .SetProperty(b => b.StripeSessionId, command.StripeSessionId)
+            .SetProperty(b => b.ConcurrencyVersion, b => b.ConcurrencyVersion + 1), cancellationToken);
         if (!wasPaid)
             await notifications.EnqueueAsync(booking, cancellationToken);
         return Unit.Value;

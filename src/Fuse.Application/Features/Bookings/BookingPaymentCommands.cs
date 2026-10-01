@@ -46,7 +46,7 @@ internal sealed class AddBookingPaymentHandler(IAppDbContext db, SupplierScope s
             PaymentDate = clock.Now,
         };
         db.BookingPayments.Add(payment);
-        booking.ApplyManualPayment(command.Amount);
+        booking.ApplyManualPayment(command.Amount).Touch();
         await db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }
@@ -65,7 +65,7 @@ internal sealed class FlagBookingAsPaidHandler(IAppDbContext db, SupplierScope s
         if (booking.Cancelled == true || booking.Refunded == true)
             throw new BusinessRuleException("Cancelled and refunded bookings can't be marked as paid.");
         var wasPaid = booking.IsPaid;
-        booking.FlagBookingAsPaid();
+        booking.FlagBookingAsPaid().Touch();
         await db.SaveChangesAsync(cancellationToken);
         if (!wasPaid)
             await notifications.EnqueueAsync(booking, cancellationToken);
@@ -109,6 +109,7 @@ internal sealed class CancelBookingHandler(IAppDbContext db, SupplierScope scope
         foreach (var item in booking.Items.Where(i => i.Cancelled != true))
             await capacity.ReleaseAsync(item.TourDateId, BookingStatuses.GuestCount(item), cancellationToken);
         booking.Cancel();
+        booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
         return refunded is null ? "Booking cancelled." : $"Booking cancelled. {refunded}";
     }
@@ -125,6 +126,7 @@ internal sealed class RefundBookingHandler(IAppDbContext db, SupplierScope scope
             throw new BusinessRuleException("Only paid bookings can be refunded.");
 
         var message = await refunds.RefundBookingAsync(booking, command.Amount, partial: command.Amount < booking.TotalAmount, cancellationToken);
+        booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
         return message;
     }
@@ -148,6 +150,7 @@ internal sealed class CancelBookingItemHandler(IAppDbContext db, SupplierScope s
         // The last tour cancelled cancels the booking.
         if (booking.Items.All(i => i.Cancelled == true))
             booking.Cancel();
+        booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
         return refunded is null ? "Tour cancelled." : $"Tour cancelled. {refunded}";
     }
@@ -164,6 +167,7 @@ internal sealed class RefundBookingItemHandler(IAppDbContext db, SupplierScope s
             throw new BusinessRuleException("Only paid bookings can be refunded.");
 
         var message = await refunds.RefundItemAsync(booking, item, command.Amount, cancellationToken);
+        booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
         return message;
     }
@@ -184,6 +188,7 @@ internal sealed class RefundBookingPaymentHandler(IAppDbContext db, SupplierScop
             throw new BusinessRuleException("This booking is cancelled.");
 
         var message = await refunds.RefundPaymentAsync(booking, payment, command.Amount, cancellationToken);
+        booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
         return message;
     }
@@ -202,7 +207,7 @@ internal static class BookingItems
 
 /// <summary>
 /// Refunds through Stripe (for bookings paid by Stripe checkout) and the flags that record them. Card
-/// refunds happen first, so a refund that Stripe refuses records nothing.
+/// refunds happen first, so a refund that Stripe refuses records nothing. Callers <see cref="Booking.Touch"/> the booking.
 /// </summary>
 internal sealed class BookingRefunds(IPaymentGateway payments)
 {

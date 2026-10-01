@@ -44,6 +44,12 @@
                     <ul class="navbar-nav mb-2 mb-lg-0 d-flex align-items-lg-center">
                         <AuthorizeView>
                             <Authorized>
+                                @if (DevelopmentAdminLink && context.User.IsStaff())
+                                {
+                                    @* Development only: a quick way from the site to the back office for staff. A full page load
+                                       (target="_top"): the admin has its own stylesheets, which the server picks per area. *@
+                                    <li class="nav-item mt-4 mt-lg-0"><a class="@LinkClass" href="/admin" target="_top">Admin</a></li>
+                                }
                                 <li class="@($"nav-item dropdown mt-4 mt-lg-0 mb-lg-0{(_hovered == "account" ? " show" : "")}")"
                                     @onmouseenter="@(() => _hovered = "account")" @onmouseleave="@(() => _hovered = null)">
                                     <a class="nav-link d-none d-lg-block dropdown-toggle" role="button" aria-expanded="@(_hovered == "account" ? "true" : "false")" aria-haspopup="true">MY ACCOUNT</a>
@@ -105,6 +111,14 @@
     /// <summary>Past legacy's 86px: the header turns white with a shadow.</summary>
     [Parameter] public bool Scrolled { get; set; }
 
+    [Inject] private IServiceProvider Services { get; set; } = null!;
+
+    /// <summary>
+    /// Development only: an "Admin" link for signed-in staff. Worked out on the server (the host's environment) and
+    /// carried to the browser with the prerendered page, where there's no host environment to ask.
+    /// </summary>
+    [PersistentState] public bool DevelopmentAdminLink { get; set; }
+
     private bool _menuOpen;
     private string? _hovered, _expanded;
 
@@ -140,6 +154,8 @@
 
     protected override void OnInitialized()
     {
+        if (Services.GetService(typeof(Microsoft.Extensions.Hosting.IHostEnvironment)) is Microsoft.Extensions.Hosting.IHostEnvironment environment)
+            DevelopmentAdminLink = environment.EnvironmentName == "Development";
         Navigation.LocationChanged += Closed;
         Basket.Changed += BasketChanged;
     }

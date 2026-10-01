@@ -1,18 +1,26 @@
 @* Legacy BookingItemDialog: change one tour on the booking (tour, price, departure, pick up, waiver) and
    its additional guests. Changes go back into the booking's draft; nothing is saved until the booking is.
    As legacy, once paid or refunded only administrators change the tour and guests, and a refunded booking's
-   departure and pick up are fixed. *@
+   departure and pick up are fixed. A package's tour only moves to another departure of the same tour (at the
+   package's set price of it, if any): its price, tour and guests are the package's. *@
 
 <ModalWizard TModel="BookingDraft" Model="Draft" OnSave="SaveAsync" FinishText="Done" Loading="_loading">
     <TitleContent>
-        <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-3 mb-n1" />Edit Tour
+        @if (InPackage)
+        {
+            <MudIcon Icon="@Icons.Material.Filled.EditCalendar" Class="mr-3 mb-n1" />@("Change Departure")
+        }
+        else
+        {
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-3 mb-n1" />@("Edit Tour")
+        }
     </TitleContent>
     <ChildContent>
         <WizardStep TModel="BookingDraft" Title="Tour Details" OnLeaveAsync="_ => Task.FromResult(LeaveDetails())">
             <MudGrid Spacing="3">
                 <MudItem xs="12" md="6">
                     <MudSelect T="DefaultIdType?" Label="Category" Value="_categoryId" ValueChanged="SetCategory" Clearable="true" Variant="Variant.Outlined"
-                               HelperText="Select a Category" Disabled="@(!Draft.CanChangeTourAndGuests)">
+                               HelperText="Select a Category" Disabled="@(!CanChangeTourAndGuests)">
                         @foreach (var category in Draft.Catalog.Categories)
                         {
                             <MudSelectItem T="DefaultIdType?" Value="@DefaultIdType.Parse(category.Id)">@category.Name</MudSelectItem>
@@ -21,7 +29,7 @@
                 </MudItem>
                 <MudItem xs="12" md="6">
                     <MudSelect T="DefaultIdType" Label="Tour" Value="_tourId" ValueChanged="SetTourAsync" Variant="Variant.Outlined" HelperText="Select a Tour"
-                               Required="true" RequiredError="Please select a Tour." Disabled="@(!Draft.CanChangeTourAndGuests)">
+                               Required="true" RequiredError="Please select a Tour." Disabled="@(!CanChangeTourAndGuests)">
                         @foreach (var tour in Draft.Catalog.Tours.Where(t => _categoryId is null || t.CategoryId == _categoryId || t.Id == _tourId))
                         {
                             <MudSelectItem T="DefaultIdType" Value="@tour.Id">@tour.Name</MudSelectItem>
@@ -30,7 +38,7 @@
                 </MudItem>
                 <MudItem xs="12">
                     <DeparturePicker @key="_tourId" TourName="@(Tour?.Name ?? "")" Departures="_departures" Loading="_departuresLoading" @bind-DepartureId="_departureId"
-                                     PriceLocked="@(PackPrice is not null)" PriceNote="@(PackPrice is { } price ? $"Pack price — {price:$#,##0.00}" : null)"
+                                     PriceLocked="@(InPackage || PackPrice is not null)" PriceNote="@PriceNote"
                                      Disabled="@(!Draft.CanChangeDeparture)" />
                 </MudItem>
                 @if (Tour is { } chosen)
@@ -51,7 +59,7 @@
 
         <WizardStep TModel="BookingDraft" Title="Additional Guests">
             <GuestListPicker GuestIds="_guests" NameOf="Draft.NameOf" Remember="Draft.Remember" LeadGuestId="@Draft.Editor.GuestId" OnChanged="StateHasChanged"
-                             Disabled="@(!Draft.CanChangeTourAndGuests)">
+                             Disabled="@(!CanChangeTourAndGuests)">
                 <Toolbar>
                     @if (Tour?.WaiverRequired == true)
                     {
@@ -80,6 +88,19 @@
     private List<string> _guests = [];
 
     private BookableTour? Tour => Draft.Tour(_tourId);
+
+    /// <summary>A tour booked in a package: it only moves to another departure (the package keeps its price, tour and guests).</summary>
+    private bool InPackage => Line.PackageKey is not null;
+
+    private bool CanChangeTourAndGuests => Draft.CanChangeTourAndGuests && !InPackage;
+
+    /// <summary>The package's set price of the tour, if it books one: only that price's departures.</summary>
+    private DefaultIdType? PackagePriceId => Line.PackageKey is { } key && Draft.Editor.Packages.FirstOrDefault(p => p.Key == key) is { } package
+        ? Draft.Package(package.PackageId)?.Items.FirstOrDefault(i => i.TourId == Line.TourId)?.TourPriceId
+        : null;
+
+    private string? PriceNote => InPackage ? $"{Draft.PackageName(Line)} — {Line.Amount:$#,##0.00}"
+        : PackPrice is { } price ? $"Pack price — {price:$#,##0.00}" : null;
 
     /// <summary>What the booking's pack charges for this tour (as <see cref="BookingPricing"/> will), or null when it doesn't set the price.</summary>
     private decimal? PackPrice
@@ -113,6 +134,8 @@
         _departuresLoading = true;
         IReadOnlyList<DepartureOption> departures = [];
         await Snackbar.TryAsync(async () => departures = await Api.Send(new ListTourDepartures(_tourId)));
+        if (InPackage && PackagePriceId is { } priceId)
+            departures = [.. departures.Where(d => d.PriceId == priceId)];
         // The booked departure stays choosable even when it's now full or past.
         if (_tourId == Line.TourId && departures.All(d => d.Id != Line.TourDateId))
             departures = [.. departures.Prepend(new DepartureOption
