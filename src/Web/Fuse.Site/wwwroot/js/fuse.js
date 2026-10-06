@@ -325,50 +325,7 @@ function pages(track) {
     return Math.max(1, Math.round((track.scrollWidth + gap) / pageWidth(track)));
 }
 
-// ---- Events calendar (FullCalendar, as legacy) -------------------------------------------------------------
-
-const FullCalendarScript = 'https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js';
-let fullCalendarLoading = null;
-const calendars = new Map();
-
-function loadFullCalendar() {
-    if (window.FullCalendar) return Promise.resolve();
-    return fullCalendarLoading ??= new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = FullCalendarScript;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-    });
-}
-
-/** Legacy's hostel calendar: month and list views; Blazor supplies each range's events and handles clicks. */
-export async function mountCalendar(element, dotnet) {
-    await loadFullCalendar();
-    unmountCalendar(element);
-    const calendar = new FullCalendar.Calendar(element, {
-        initialView: 'dayGridMonth',
-        firstDay: 1,
-        height: 'auto',
-        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' },
-        buttonText: { today: 'Today', month: 'Month', list: 'List' },
-        displayEventTime: true,
-        events: (info, success, failure) => {
-            dotnet.invokeMethodAsync('LoadEvents', info.startStr, info.endStr).then(success, failure);
-        },
-        eventClick: info => {
-            info.jsEvent.preventDefault();
-            dotnet.invokeMethodAsync('ShowEvent', info.event.extendedProps.key);
-        },
-    });
-    calendar.render();
-    calendars.set(element, calendar);
-}
-
-export function unmountCalendar(element) {
-    calendars.get(element)?.destroy();
-    calendars.delete(element);
-}
+// ---- Events ------------------------------------------------------------------------------------------------
 
 /** Legacy's Share button: the device's share sheet, else copy the link, else open it. */
 export async function share(title, url) {

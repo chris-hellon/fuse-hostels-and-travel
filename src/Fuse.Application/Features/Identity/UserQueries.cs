@@ -24,7 +24,7 @@ internal sealed record UserSearchRow
     public UserSummary ToSummary() => new()
     {
         Id = Id,
-        FullName = FullName ?? $"{FirstName} {LastName}".Trim(),
+        FullName = PersonNames.Display(FirstName, LastName, FullName),
         UserName = UserName,
         Email = PlaceholderEmails.Visible(Email),
         PhoneNumber = PhoneNumber,
@@ -123,7 +123,7 @@ internal static class UserProjection
     {
         Id = u.Id,
         UserName = u.UserName,
-        FullName = u.FullName,
+        FullName = PersonNames.Display(u.FirstName, u.LastName, u.FullName),
         ImageUrl = u.ImageUrl,
         IsActive = u.IsActive,
         SignUpDate = u.SignUpDate,
@@ -154,7 +154,7 @@ internal static class UserProjection
     {
         user.FirstName = profile.FirstName.Trim();
         user.LastName = profile.LastName.Trim();
-        user.FullName = $"{user.FirstName} {user.LastName}";
+        user.SyncFullName();
         // No email: keep (or make) a placeholder, since accounts need one (PlaceholderEmails).
         user.Email = !string.IsNullOrWhiteSpace(profile.Email) ? profile.Email.Trim()
             : PlaceholderEmails.Is(user.Email) ? user.Email

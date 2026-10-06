@@ -5,7 +5,9 @@
 
 @* Reports › In House, No Tours Booked: hostel guests staying now (or arriving today or tomorrow) with no tour booked
    during their stay, leaving (arriving) soonest first, so reception knows who to talk to. In house / Arriving beside
-   the title; the table with search, a hostel filter, sorting and pages. From Cloudbeds. *@
+   the title; the table with search, a hostel filter, sorting and pages. From Cloudbeds. New booking books a guest who's
+   our customer on tours during their stay (the list is kept a couple of minutes, so a guest just booked is marked
+   until it catches up). *@
 
 <AdminPageHeader Title="In House, No Tours Booked" Description="Hostel guests with no tour booked during their stay.">
     <ViewSwitch TView="bool" Options="StayOptions" Value="_arriving" ValueChanged="SwitchAsync" />
@@ -27,6 +29,17 @@
         </MudSelect>
     </AdvancedSearchContent>
     <RowButtons>
+        @if (context.GuestId is { } bookedId && _booked.Contains(bookedId))
+        {
+            <MudTooltip Text="Booked just now: this list catches up within a couple of minutes">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="mx-1 mb-n1" />
+            </MudTooltip>
+        }
+        else
+        {
+            <NewBookingButton GuestId="@context.GuestId" GuestName="@context.Name" Hostel="@context.Hostel" StayFrom="context.CheckIn" StayTo="context.CheckOut"
+                              OnSaved="() => BookedAsync(context)" />
+        }
         @if (context.ReservationUrl is { } url)
         {
             <RowIconButton Icon="@Icons.Material.Filled.OpenInNew" Label="Open in Cloudbeds" Href="@url" Target="_blank" />
@@ -62,6 +75,8 @@
     private GuestsWithoutToursHostels? _hostels;
     private bool _arriving;
     private string? _hostel;
+    /// <summary>Guests booked from here (the list catches up within a couple of minutes).</summary>
+    private readonly HashSet<string> _booked = new(StringComparer.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
@@ -81,6 +96,12 @@
     private async Task SwitchAsync(bool arriving)
     {
         _arriving = arriving;
+        await _table!.ReloadAsync();
+    }
+
+    private async Task BookedAsync(GuestWithoutToursRow row)
+    {
+        _booked.Add(row.GuestId!);
         await _table!.ReloadAsync();
     }
 

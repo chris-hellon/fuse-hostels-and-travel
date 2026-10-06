@@ -1,16 +1,103 @@
-// Legacy's hostel events calendar (inline styles on its page): the FullCalendar box and the event card.
-// Scoped to .events-calendar (legacy used #events, which the What's On section now has).
+// The events calendar (Components/Events/EventsCalendar.razor): a quiet month (day numbers and a coloured dot per
+// event), the events on every night as chips above it, and the chosen day's events below; then the event card.
+// Same markup and styles as legacy's (wwwroot/css/events-calendar.css there).
 
 .events-calendar .calendar-wrap { background: #fff; border-radius: 16px; box-shadow: 0 12px 34px rgba(0, 0, 0, .10); padding: 1.5rem; }
-.events-calendar #calendar { max-width: 1100px; margin: 0 auto; }
-.events-calendar .fc a { color: inherit; text-decoration: none; }
-.events-calendar .fc .fc-toolbar-title { font-size: 1.3rem; }
-.events-calendar .fc-event { cursor: pointer; }
+.evcal { color: #090511; }
+.evcal > * { max-width: 880px; margin-left: auto; margin-right: auto; }
+.evcal__nav, .evcal__chip, .evcal__cell, .evcal__row-open { font: inherit; }
+
+/* Month heading: previous / next and Today */
+.evcal__head { display: flex; align-items: center; gap: .25rem; margin-bottom: 1rem; }
+.evcal__month {
+  margin: 0 .5rem; min-width: 9.5em; text-align: center; white-space: nowrap; color: #090511;
+  font-family: var(--mdb-font-din-2014-narrow-bold), sans-serif; font-size: 1.6rem; letter-spacing: .02em; text-transform: uppercase;
+}
+.evcal__nav {
+  flex: none; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%;
+  background: transparent; color: #090511; cursor: pointer; transition: background .15s;
+}
+.evcal__nav:hover { background: #f4f1f8; }
+.evcal__today { margin-left: auto; }
+
+/* Every night: the events on every day of a run, as chips (not in the grid) */
+.evcal__nightly {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+  padding-bottom: 1rem; margin-bottom: .75rem; border-bottom: 1px solid rgba(9, 5, 17, .08);
+}
+.evcal__nightly-label {
+  margin-right: .25rem; color: rgba(9, 5, 17, .55);
+  font-family: var(--mdb-font-din-2014-narrow-bold), sans-serif; font-size: .85rem; letter-spacing: .12em; text-transform: uppercase;
+}
+.evcal__chip {
+  display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .8rem; border: 0; border-radius: 999px;
+  background: #f4f1f8; color: #090511; font-size: .875rem; line-height: 1.4; cursor: pointer; transition: background .15s;
+}
+.evcal__chip:hover { background: #ebe2f6; }
+.evcal__chip-time { font-weight: 600; font-variant-numeric: tabular-nums; }
+.evcal__chip-price { color: rgba(9, 5, 17, .6); }
+
+/* The quiet month: day numbers and a dot per event */
+.evcal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.evcal__weekday {
+  padding-bottom: .35rem; text-align: center; color: rgba(9, 5, 17, .5);
+  font-family: var(--mdb-font-din-2014-narrow-bold), sans-serif; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase;
+}
+.evcal__cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: .4rem;
+  height: 64px; padding: .55rem .25rem; border: 0; border-radius: 10px;
+  background: transparent; color: #090511; font-size: .95rem; cursor: pointer; transition: background .15s;
+}
+.evcal__cell:hover:not(:disabled) { background: #f6f3fa; }
+.evcal__cell:disabled { cursor: default; opacity: 1; }
+.evcal__cell.is-out { color: rgba(9, 5, 17, .22); }
+.evcal__cell.is-today .evcal__num { color: var(--mdb-primary, #ab3dff); font-weight: 700; }
+.evcal__cell.is-selected { box-shadow: inset 0 0 0 2px #090511; }
+.evcal__num { line-height: 1.2; font-variant-numeric: tabular-nums; }
+.evcal__dots { display: flex; align-items: center; gap: 3px; max-width: 100%; }
+.evcal__dot { display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--mdb-primary, #ab3dff); }
+.evcal__more { font-size: .75rem; line-height: 1; color: rgba(9, 5, 17, .55); }
+
+/* The chosen day's events */
+.evcal__agenda { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid rgba(9, 5, 17, .08); }
+.evcal__day-title {
+  margin: 0 0 .5rem; color: #090511;
+  font-family: var(--mdb-font-din-2014-narrow-bold), sans-serif; font-size: 1.3rem; text-transform: uppercase;
+}
+.evcal__list { margin: 0; padding: 0; list-style: none; }
+.evcal__row { display: flex; align-items: center; gap: 1rem; padding: .7rem 0; border-bottom: 1px solid rgba(9, 5, 17, .06); }
+.evcal__row:last-child { border-bottom: 0; }
+.evcal__row-open {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 1rem; padding: 0;
+  border: 0; background: none; color: inherit; text-align: left; cursor: pointer;
+}
+.evcal__row-open:hover .evcal__name { color: var(--mdb-primary, #ab3dff); }
+.evcal__time { flex: none; width: 3.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.evcal__what { min-width: 0; display: flex; flex-direction: column; }
+.evcal__name { display: flex; align-items: center; gap: .5rem; font-weight: 600; transition: color .15s; }
+.evcal__where { padding-left: calc(7px + .5rem); color: rgba(9, 5, 17, .55); font-size: .85rem; }
+.evcal__action { flex: none; white-space: nowrap; }
+.evcal__empty { margin: 0; color: rgba(9, 5, 17, .55); }
 
 @media (max-width: 575px) {
-  .events-calendar .calendar-wrap { padding: .75rem; }
+  .events-calendar .calendar-wrap { padding: 1rem .75rem; }
+  .evcal__head { gap: 0; }
+  .evcal__month { flex: none; min-width: 0; margin: 0 .15rem; font-size: 1.15rem; }
+  .evcal__nav { width: 2rem; height: 2rem; }
+  .evcal__today { padding-left: .6rem; padding-right: .6rem; }
+  .evcal__grid { gap: 2px; }
+  .evcal__weekday { font-size: .7rem; letter-spacing: .04em; }
+  .evcal__cell { height: 46px; padding: .35rem .1rem; gap: .25rem; border-radius: 8px; font-size: .875rem; }
+  .evcal__dots { gap: 2px; }
+  .evcal__dot { width: 5px; height: 5px; }
+  .evcal__more { font-size: .65rem; }
+  .evcal__where { padding-left: calc(5px + .5rem); }
+  .evcal__row { gap: .75rem; }
+  .evcal__row-open { gap: .6rem; }
+  .evcal__time { width: 2.9rem; font-size: .9rem; }
 }
 
+// The event card (opened from a chip, a day's row or View).
 .ev-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .55); z-index: 1080; display: none; }
 .ev-backdrop.open { display: block; }
 .ev-card {

@@ -1,3 +1,4 @@
+using Fuse.Domain.Identity;
 using Microsoft.Extensions.Options;
 using Fuse.Application.Common.Jobs;
 using Fuse.Application.Common.Mail;
@@ -23,8 +24,8 @@ internal static class BookingEmailLoader
         var items = booking.Items.Where(i => i.TourId != null && i.Cancelled != true).OrderBy(i => i.StartDate).ToList();
         var guestIds = items.SelectMany(i => i.Guests ?? []).Where(g => g.DeletedOn == null).Select(g => g.GuestId.ToString()).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => guestIds.Contains(u.Id))
-            .Select(u => new { u.Id, Name = u.FullName ?? (u.FirstName + " " + u.LastName) })
-            .ToDictionaryAsync(u => u.Id, u => u.Name, StringComparer.OrdinalIgnoreCase, cancellationToken);
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.FullName })
+            .ToDictionaryAsync(u => u.Id, u => PersonNames.Display(u.FirstName, u.LastName, u.FullName), StringComparer.OrdinalIgnoreCase, cancellationToken);
 
         return new BookingEmail
         {

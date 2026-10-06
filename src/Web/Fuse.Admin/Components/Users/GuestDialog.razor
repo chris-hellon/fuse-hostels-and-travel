@@ -43,7 +43,7 @@
                 </MudTabPanel>
                 @* Only asked for (Cloudbeds included) when opened. *@
                 <MudTabPanel Text="Bookings">
-                    <GuestBookings GuestId="@GuestId" BeforeOpen="() => Dialog.Cancel()" />
+                    <GuestBookings GuestId="@GuestId" GuestName="@($"{_guest.Profile.FirstName} {_guest.Profile.LastName}".Trim())" BeforeOpen="() => Dialog.Cancel()" />
                 </MudTabPanel>
             </MudTabs>
         }

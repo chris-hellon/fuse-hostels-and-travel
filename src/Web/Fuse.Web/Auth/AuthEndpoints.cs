@@ -84,7 +84,7 @@ public static class AuthEndpoints
         {
             FirstName = request.FirstName.Trim(),
             LastName = request.Surname.Trim(),
-            FullName = $"{request.FirstName.Trim()} {request.Surname.Trim()}",
+            FullName = PersonNames.Display(request.FirstName, request.Surname),
             PhoneNumber = request.PhoneNumber.Trim(),
             Gender = request.Gender,
             Nationality = request.Nationality,

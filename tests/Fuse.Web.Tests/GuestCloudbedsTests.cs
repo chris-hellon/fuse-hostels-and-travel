@@ -17,13 +17,30 @@ public sealed class FakeCloudbeds : ICloudbedsClient
     /// <summary>property id → status → its reservations (filtered by check-in dates as Cloudbeds does).</summary>
     public System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, IReadOnlyList<CloudbedsReservation>>> ByStatus { get; } = new();
 
-    public Task<IReadOnlyList<CloudbedsReservation>> ListReservationsAsync(string propertyId, string apiKey, string? status, DateOnly? checkInFrom,
-        DateOnly? checkInTo, CancellationToken cancellationToken) =>
-        propertyId == "cb-down" ? throw new HttpRequestException("Cloudbeds is down")
-        : Task.FromResult<IReadOnlyList<CloudbedsReservation>>(ByStatus.TryGetValue(propertyId, out var byStatus)
-            ? [.. byStatus.Where(s => status is null || s.Key == status).SelectMany(s => s.Value)
-                .Where(r => (checkInFrom is null || r.StartDate >= checkInFrom) && (checkInTo is null || r.StartDate <= checkInTo))]
-            : []);
+    /// <summary>
+    /// property id → how many times its reservations were listed without rooms (the Tour Attach Rate's fetch; the other
+    /// panels' lists, from tests running alongside, ask with rooms).
+    /// </summary>
+    public System.Collections.Concurrent.ConcurrentDictionary<string, int> ReservationListCalls { get; } = new();
+
+    /// <summary>property id → a task its lists without rooms wait for (to hold a fetch open).</summary>
+    public System.Collections.Concurrent.ConcurrentDictionary<string, Task> HoldReservations { get; } = new();
+
+    public async Task<IReadOnlyList<CloudbedsReservation>> ListReservationsAsync(string propertyId, string apiKey, string? status, DateOnly? checkInFrom,
+        DateOnly? checkInTo, CancellationToken cancellationToken, bool includeRooms = true)
+    {
+        if (!includeRooms)
+        {
+            ReservationListCalls.AddOrUpdate(propertyId, 1, (_, n) => n + 1);
+            if (HoldReservations.TryGetValue(propertyId, out var hold))
+                await hold;
+        }
+        return propertyId == "cb-down" ? throw new HttpRequestException("Cloudbeds is down")
+            : ByStatus.TryGetValue(propertyId, out var byStatus)
+                ? [.. byStatus.Where(s => status is null || s.Key == status).SelectMany(s => s.Value)
+                    .Where(r => (checkInFrom is null || r.StartDate >= checkInFrom) && (checkInTo is null || r.StartDate <= checkInTo))]
+                : [];
+    }
 
     /// <summary>property id → guest id → their reservations there.</summary>
     public System.Collections.Concurrent.ConcurrentDictionary<string, Dictionary<string, IReadOnlyList<CloudbedsReservation>>> Reservations { get; } = new();

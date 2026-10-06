@@ -1,6 +1,7 @@
 @using Fuse.Contracts.Bookings
 @* A tour's price and departure (legacy Add Tour(s) "Departures"). With the price set by a pack or
-   package, any departure time can be chosen. *@
+   package, any departure time can be chosen. Given the guest's stay, only departures during it are offered (with a note
+   saying so) until staff choose Show all dates; when there are none then, all of them. *@
 
 <MudPaper Outlined="true" Elevation="0" Class="pa-3 mb-3">
     <MudText Typo="Typo.subtitle2" Class="mb-2">@TourName</MudText>
@@ -34,12 +35,33 @@
             <MudItem xs="12" md="6">
                 <MudSelect T="DefaultIdType?" Label="Departure" Value="DepartureId" ValueChanged="DepartureIdChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
                            Disabled="@(Disabled || (!PriceLocked && _priceId is null))" Placeholder="Select a departure">
-                    @foreach (var departure in Upcoming(Choices))
+                    @foreach (var departure in Upcoming(Shown))
                     {
                         <MudSelectItem T="DefaultIdType?" Value="@departure.Id">@Label(departure)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
+            @if (HasStay)
+            {
+                <MudItem xs="12" Class="pt-0">
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                        @if (_allDates)
+                        {
+                            <text>All dates. </text>
+                            <MudLink Typo="Typo.caption" OnClick="() => _allDates = false">Only during their stay (@During(StayFrom!.Value, StayTo!.Value))</MudLink>
+                        }
+                        else if (Choices.Any() && !InStay(Choices).Any())
+                        {
+                            <text>None during their stay (@During(StayFrom!.Value, StayTo!.Value)): showing all dates.</text>
+                        }
+                        else
+                        {
+                            <text>@During(StayFrom!.Value, StayTo!.Value). </text>
+                            <MudLink Typo="Typo.caption" OnClick="() => _allDates = true">Show all dates</MudLink>
+                        }
+                    </MudText>
+                </MudItem>
+            }
         </MudGrid>
     }
 </MudPaper>
@@ -57,6 +79,38 @@
     [Parameter] public DefaultIdType? OnlyPriceId { get; set; }
     [Parameter] public DefaultIdType? DepartureId { get; set; }
     [Parameter] public EventCallback<DefaultIdType?> DepartureIdChanged { get; set; }
+    /// <summary>The guest's hostel stay (check-in to check-out): departures during it are offered first.</summary>
+    [Parameter] public DateOnly? StayFrom { get; set; }
+    [Parameter] public DateOnly? StayTo { get; set; }
+
+    private bool _allDates;
+
+    private bool HasStay => StayFrom is not null && StayTo is not null;
+
+    private IEnumerable<DepartureOption> InStay(IEnumerable<DepartureOption> departures) => departures.Where(d =>
+        DateOnly.FromDateTime(d.StartDate) >= StayFrom && DateOnly.FromDateTime(d.StartDate) <= StayTo);
+
+    /// <summary>The choices, during the stay unless all dates are asked for (or none are then); the chosen one always.</summary>
+    private IEnumerable<DepartureOption> Shown
+    {
+        get
+        {
+            if (!HasStay || _allDates)
+                return Choices;
+            var choices = Choices.ToList();
+            var during = InStay(choices).ToList();
+            return during.Count == 0 ? choices : choices.Where(d => during.Contains(d) || d.Id == DepartureId);
+        }
+    }
+
+    /// <summary>"During their stay: Tue 22 → Sun 27 Sep".</summary>
+    public static string During(DateOnly from, DateOnly to)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var thisYear = to.Year == DateTime.Today.Year && from.Year == to.Year;
+        var start = from.ToString(from.Month == to.Month && from.Year == to.Year ? "ddd d" : thisYear ? "ddd d MMM" : "ddd d MMM yyyy", culture);
+        return $"During their stay: {start} → {to.ToString(thisYear ? "ddd d MMM" : "ddd d MMM yyyy", culture)}";
+    }
 
     private DefaultIdType? _priceId;
 

@@ -1,3 +1,4 @@
+using Fuse.Domain.Identity;
 using Fuse.Application.Features.Identity;
 using System.Globalization;
 using Microsoft.Extensions.Options;
@@ -186,7 +187,7 @@ internal sealed class GetBookingOverviewHandler(IAppDbContext db, SupplierScope 
             return new BookingGuestView
             {
                 GuestId = id,
-                Name = u is null ? fallbackName : u.FullName ?? $"{u.FirstName} {u.LastName}".Trim(),
+                Name = u is null ? fallbackName : PersonNames.Display(u.FirstName, u.LastName, u.FullName),
                 DateOfBirth = u?.DateOfBirth,
                 Nationality = u?.Nationality,
                 Gender = u?.Gender,
@@ -204,11 +205,11 @@ internal sealed class GetBookingOverviewHandler(IAppDbContext db, SupplierScope 
             Id = booking.Id,
             AdditionalNotes = booking.AdditionalNotes,
             AmountOutstanding = booking.AmountOutstanding,
-            BookedBy = direct || staff is null ? null : staff.FullName ?? $"{staff.FirstName} {staff.LastName}".Trim(),
+            BookedBy = direct || staff is null ? null : PersonNames.Display(staff.FirstName, staff.LastName, staff.FullName),
             BookingSource = booking.BookingSource,
             GuestId = booking.GuestId,
             GuestName = booking.GuestId is { } guestId && users.TryGetValue(guestId, out var lead)
-                ? lead.FullName ?? $"{lead.FirstName} {lead.LastName}".Trim()
+                ? PersonNames.Display(lead.FirstName, lead.LastName, lead.FullName)
                 : booking.GuestName,
             GuestDetail = booking.GuestId is { } leadGuestId && users.TryGetValue(leadGuestId, out var leadGuest)
                 ? string.Join(" - ", new[]

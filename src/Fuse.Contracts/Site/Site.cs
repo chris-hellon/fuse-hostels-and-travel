@@ -234,6 +234,9 @@ public sealed record SiteEventOccurrence
     /// <summary>Booked as a tour: the tour, and this date's departure (<see cref="Date"/>).</summary>
     public SiteEventBooking? Booking { get; init; }
     public SiteEventDate? Date { get; init; }
+    /// <summary>On at every hostel; otherwise at <see cref="Hostels"/> (their names, A–Z).</summary>
+    public bool AllHostels { get; init; }
+    public IReadOnlyList<string> Hostels { get; init; } = [];
 }
 
 /// <summary>

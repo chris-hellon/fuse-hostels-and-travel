@@ -1,7 +1,8 @@
 @* Create / edit a tour booking (legacy Booking Details + Tours + summary). Everything is held in the
    draft and saved together on Save. While an existing booking is open, it's checked every so often for
    changes made elsewhere (payments, refunds, the manifest…), which would stop the Save: a banner says so
-   and offers to reload it. *@
+   and offers to reload it. A new booking can start from a hostel guest (GuestId, with their stay): they're the primary
+   guest, and Add Tours offers departures during the stay and picks up from their hostel. *@
 @implements IDisposable
 
 <ModalWizard TModel="BookingDraft" Model="_draft!" Loading="_draft is null" OnSave="SaveAsync" OnCancel="CloseAsync" CanSave="@(_draft?.Editor.Cancelled != true)"
@@ -47,6 +48,25 @@
     public static readonly DialogOptions Options = new() { MaxWidth = MaxWidth.Large, FullWidth = true, BackdropClick = false, CloseOnEscapeKey = false };
 
     [Parameter] public DefaultIdType? BookingId { get; set; }
+
+    /// <summary>A new booking for this guest (our customer), as the primary guest.</summary>
+    [Parameter] public string? GuestId { get; set; }
+    [Parameter] public string? GuestName { get; set; }
+    /// <summary>Their hostel stay (Cloudbeds), for Add Tours: the pick up and the departures offered first.</summary>
+    [Parameter] public string? Hostel { get; set; }
+    [Parameter] public DateOnly? StayFrom { get; set; }
+    [Parameter] public DateOnly? StayTo { get; set; }
+
+    /// <summary>A new booking for a hostel guest (see <see cref="GuestId"/>); true once it's created.</summary>
+    public static async Task<bool> NewForGuestAsync(IDialogService dialogs, string guestId, string? guestName, string? hostel, DateOnly? stayFrom, DateOnly? stayTo)
+    {
+        var dialog = await dialogs.ShowAsync<BookingWizard>(null, new DialogParameters<BookingWizard>
+        {
+            { w => w.BookingId, null }, { w => w.GuestId, guestId }, { w => w.GuestName, guestName },
+            { w => w.Hostel, hostel }, { w => w.StayFrom, stayFrom }, { w => w.StayTo, stayTo },
+        }, Options);
+        return await dialog.Result is { Canceled: false };
+    }
 
     private bool IsCreate => BookingId is null;
     private BookingDraft? _draft;
@@ -128,6 +148,13 @@
         var version = IsCreate ? Task.FromResult<BookingVersion?>(null) : ReadVersionAsync(_closed.Token);
         await Task.WhenAll(catalog, abilities, editor, version);
         var draft = new BookingDraft(editor.Result, catalog.Result, abilities.Result);
+        if (IsCreate && !string.IsNullOrEmpty(GuestId))
+        {
+            draft.Editor.GuestId = GuestId;
+            draft.Editor.GuestName = string.IsNullOrWhiteSpace(GuestName) ? "Guest" : GuestName;
+            if (StayFrom is { } from && StayTo is { } to)
+                draft.Stay = new BookingDraft.GuestStay(GuestId, Hostel, from, to);
+        }
         draft.Reprice();
         draft.MarkUnchanged();
         // Read alongside the booking: only a match describes the draft (otherwise the banner says so generically).

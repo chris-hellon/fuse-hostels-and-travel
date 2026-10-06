@@ -17,6 +17,18 @@ public sealed class BookingDraft(BookingEditor editor, BookingCatalog catalog, B
 
     public bool IsCreate => Editor.Id is null;
 
+    /// <summary>A hostel stay the booking is for (a new booking started from a hostel guest).</summary>
+    public sealed record GuestStay(string GuestId, string? Hostel, DateOnly CheckIn, DateOnly CheckOut);
+
+    /// <summary>
+    /// The stay a new booking was started from: while its guest is still the primary guest, Add Tours offers departures
+    /// during it first and picks up from its hostel.
+    /// </summary>
+    public GuestStay? Stay { get; set; }
+
+    /// <summary><see cref="Stay"/>, while it's still the primary guest's.</summary>
+    public GuestStay? PrimaryGuestStay => Stay is { } stay && string.Equals(stay.GuestId, Editor.GuestId, StringComparison.OrdinalIgnoreCase) ? stay : null;
+
     /// <summary>Changes this wizard saved straight away (a tour refunded or cancelled) not yet taken into <see cref="BookingEditor.ConcurrencyVersion"/>.</summary>
     private int _ownChanges;
 

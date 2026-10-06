@@ -91,6 +91,7 @@ public sealed class BackgroundJobTests(TestApp app)
         var created = (await UserAsync(u => u.CloudbedsGuestId == $"n{run}")).ShouldNotBeNull();
         (created.User.FirstName, created.User.LastName, created.User.Email, created.User.Nationality)
             .ShouldBe(("Nina", "New", $"new-{run}@tests.invalid", "United Kingdom"));
+        created.User.FullName.ShouldBe("Nina New"); // kept in step with the names (PersonNames)
         created.Roles.ShouldBe([FuseRoles.Guest]);
 
         var known = (await UserAsync(u => u.Email == knownEmail)).ShouldNotBeNull().User;

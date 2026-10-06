@@ -141,6 +141,61 @@ public sealed class HostelStayTests(TestApp app)
     }
 
     [Fact]
+    public async Task Hostel_bookings_filter_by_source_and_balance_due_and_export_the_view_as_filtered()
+    {
+        var run = Guid.NewGuid().ToString("N")[..8];
+        var hostel = $"Export Hostel {run}";
+        await HostelAsync(hostel, $"cb-{run}");
+        var (email, _) = await GuestAsync($"hx-guest-{run}");
+        CloudbedsReservation Stay(string id, string guest, string name, decimal balance, string? source, int from) =>
+            new(id, "confirmed", Today.AddDays(from), Today.AddDays(from + 2), balance, source, [new("6 Bed Dorm", "R1 - Bed 2")], guest, name);
+        Cloudbeds.ByStatus[$"cb-{run}"] = new()
+        {
+            ["confirmed"] =
+            [
+                Stay("X1", $"hx-guest-{run}", "Owen Owing", 12.5m, "Hostelworld", 1),
+                Stay("X2", $"hx-paid-{run}", "Pat Paid", 0, "Hostelworld", 2),
+                Stay("X3", $"hx-direct-{run}", "Dee Direct", 30, "Direct", 3),
+                Stay("X4", $"hx-none-{run}", "Nat None", 0, null, 4),
+            ],
+        };
+        // A range no other test asks for: Cloudbeds' answer is kept per view and dates.
+        var (from, to) = (Today.AddDays(-9), Today.AddDays(9));
+        app.Services.GetRequiredService<IMemoryCache>().Remove(Application.Features.Bookings.HostelBookings.CacheKey(HostelBookingsView.All, from, to));
+        var api = await app.AdminApiAsync();
+        var search = new SearchHostelBookings { View = HostelBookingsView.All, Hostel = hostel, CheckInFrom = from, CheckInTo = to, PageSize = 50 };
+
+        (await api.Send(new GetHostelBookingHostels { View = HostelBookingsView.All, CheckInFrom = from, CheckInTo = to }, Ct)).Sources
+            .ShouldContain("Hostelworld");
+        (await api.Send(search with { Source = "hostelworld" }, Ct)).Items.Select(r => r.ReservationId).ShouldBe(["X1", "X2"]);
+        (await api.Send(search with { BalanceDue = true }, Ct)).Items.Select(r => r.ReservationId).ShouldBe(["X1", "X3"]);
+        (await api.Send(search with { Source = "Hostelworld", BalanceDue = true }, Ct)).Items.ShouldHaveSingleItem().ReservationId.ShouldBe("X1");
+
+        // Every page, as filtered and sorted (newest check-in first here).
+        var file = await api.Send(new ExportHostelBookings(search with { BalanceDue = true, OrderBy = ["CheckIn desc"], PageSize = 1 }), Ct);
+        file.FileName.ShouldBe($"Hostel Bookings {TestBookings.BusinessNow:yyyy-MM-dd}.xlsx");
+        using var workbook = new ClosedXML.Excel.XLWorkbook(new MemoryStream(file.Content));
+        var sheet = workbook.Worksheet("table");
+        string[] headers = ["Reservation", "Guest", "Email", "Phone", "Hostel", "Check In", "Check Out", "Nights", "Room", "Source", "Tours during stay", "Balance", "Status"];
+        Enumerable.Range(1, headers.Length).Select(c => sheet.Cell(1, c).GetString()).ShouldBe(headers);
+        sheet.Cell(1, headers.Length + 1).IsEmpty().ShouldBeTrue();
+        var rows = sheet.RowsUsed().Skip(1).ToList();
+        rows.Select(r => r.Cell(1).GetString()).ShouldBe(["X3", "X1"]);
+        var owen = rows[1];
+        (owen.Cell(2).GetString(), owen.Cell(3).GetString(), owen.Cell(5).GetString()).ShouldBe(("Owen Owing", email, hostel));
+        owen.Cell(6).GetDateTime().ShouldBe(Today.AddDays(1).ToDateTime(TimeOnly.MinValue));
+        owen.Cell(7).GetDateTime().ShouldBe(Today.AddDays(3).ToDateTime(TimeOnly.MinValue));
+        (owen.Cell(8).GetDouble(), owen.Cell(9).GetString(), owen.Cell(10).GetString(), owen.Cell(11).GetDouble(), owen.Cell(12).GetDouble(), owen.Cell(13).GetString())
+            .ShouldBe((2d, "6 Bed Dorm · R1 - Bed 2", "Hostelworld", 0d, 12.5d, "Confirmed"));
+        rows[0].Cell(3).IsEmpty().ShouldBeTrue(); // not a customer here yet
+
+        // The search applies too.
+        var searched = await api.Send(new ExportHostelBookings(search with { Keyword = "dee" }), Ct);
+        new ClosedXML.Excel.XLWorkbook(new MemoryStream(searched.Content)).Worksheet("table").RowsUsed().Skip(1).Select(r => r.Cell(1).GetString()).ShouldBe(["X3"]);
+        Cloudbeds.ByStatus.TryRemove($"cb-{run}", out _);
+    }
+
+    [Fact]
     public async Task A_hostel_whose_Cloudbeds_cant_be_reached_says_so()
     {
         await HostelAsync($"Down Hostel {Guid.NewGuid():N}", "cb-down");

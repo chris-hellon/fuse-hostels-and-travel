@@ -2,7 +2,8 @@
 @attribute [RequirePermission(FuseAction.View, FuseResource.Dashboard)]
 
 @* Legacy dashboard: today's figures, totals for a chosen range, departures (today / tomorrow) and
-   today's tour bookings. Revenue is for administrators; suppliers only see departures. *@
+   today's tour bookings. Revenue is for administrators; suppliers only see departures. With View Reports: who to sell
+   a tour to today, and the tour attach rate (both from Cloudbeds). *@
 
 <AdminPageHeader Title="Dashboard">
     @if (!_isSupplier)
@@ -46,6 +47,13 @@
         </MudItem>
     }
 
+    @if (_canReports)
+    {
+        <MudItem xs="12">
+            <SellATourPanel @ref="_sellATour" />
+        </MudItem>
+    }
+
     <MudItem xs="12">
         <MudPaper Elevation="25" Class="dashboard-card">
             <div class="dashboard-card__head">
@@ -77,6 +85,7 @@
             </MudPaper>
         </MudItem>
     }
+
 </MudGrid>
 
 @code {
@@ -92,7 +101,7 @@
         new(true, Icons.Material.Filled.Event, "Tomorrow"),
     ];
 
-    private bool _isAdmin, _isSupplier, _tomorrow;
+    private bool _isAdmin, _isSupplier, _canReports, _tomorrow;
     private Range _range = Range.Last30Days;
     private DateRange _custom = new(DateTime.Today.AddDays(-30), DateTime.Today);
     private DashboardStats? _stats;   // today's figures
@@ -100,6 +109,7 @@
     private IReadOnlyList<LookupItem> _tours = [];
     private DeparturesTable? _today, _tomorrowTable;
     private TodaysActivityTable? _activity;
+    private SellATourPanel? _sellATour;
 
     private string RangeLabel => _range == Range.Custom ? $"{_custom.Start:d MMM yyyy} – {_custom.End:d MMM yyyy}" : Label(_range);
 
@@ -136,6 +146,7 @@
         var user = (await AuthState).User;
         _isAdmin = user.IsInRole(FuseRoles.Admin);
         _isSupplier = user.IsInRole(FuseRoles.Supplier) && !_isAdmin;
+        _canReports = !_isSupplier && user.HasPermission(FuseAction.View, FuseResource.Reports);
         var tours = Api.Send(new ListDashboardTours()).AsTask();
         await Task.WhenAll(LoadStatsAsync(), tours);
         _tours = tours.Result;
@@ -182,7 +193,8 @@
         _stats = _totals = null;
         StateHasChanged();
         await Task.WhenAll(LoadStatsAsync(), _today?.ReloadAsync() ?? Task.CompletedTask,
-            _tomorrowTable?.ReloadAsync() ?? Task.CompletedTask, _activity?.ReloadAsync() ?? Task.CompletedTask);
+            _tomorrowTable?.ReloadAsync() ?? Task.CompletedTask, _activity?.ReloadAsync() ?? Task.CompletedTask,
+            _sellATour?.ReloadAsync() ?? Task.CompletedTask);
     }
 
     private static string? Money(decimal? value) => value is { } v ? $"$ {v:N2}" : null;

@@ -1,3 +1,4 @@
+using Fuse.Domain.Identity;
 using Fuse.Application.Common.Files;
 using Fuse.Contracts.Tours;
 using Fuse.Domain.Catalog.Tours;
@@ -190,14 +191,17 @@ internal sealed class DeleteTourHandler(IAppDbContext db) : ICommandHandler<Dele
 
 internal sealed class ListSuppliersHandler(IAppDbContext db) : IQueryHandler<ListSuppliers, IReadOnlyList<LookupItem>>
 {
-    public async ValueTask<IReadOnlyList<LookupItem>> Handle(ListSuppliers query, CancellationToken cancellationToken) =>
-        await (from user in db.Users
-               join userRole in db.UserRoles on user.Id equals userRole.UserId
-               join role in db.Roles on userRole.RoleId equals role.Id
-               where role.Name == FuseRoles.Supplier && user.IsActive
-               orderby user.FullName
-               select new LookupItem(user.Id, user.FullName ?? user.Email ?? user.UserName!))
+    public async ValueTask<IReadOnlyList<LookupItem>> Handle(ListSuppliers query, CancellationToken cancellationToken)
+    {
+        var suppliers = await (from user in db.Users
+                               join userRole in db.UserRoles on user.Id equals userRole.UserId
+                               join role in db.Roles on userRole.RoleId equals role.Id
+                               where role.Name == FuseRoles.Supplier && user.IsActive
+                               orderby user.FullName
+                               select new { user.Id, user.FirstName, user.LastName, user.FullName, user.Email, user.UserName })
             .ToListAsync(cancellationToken);
+        return [.. suppliers.Select(u => new LookupItem(u.Id, PersonNames.Display(u.FirstName, u.LastName, u.FullName) is { Length: > 0 } name ? name : u.Email ?? u.UserName!))];
+    }
 }
 
 internal sealed class ListPickupPropertiesHandler(IAppDbContext db) : IQueryHandler<ListPickupProperties, IReadOnlyList<LookupItem>>

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Caching.Memory;
 using Fuse.Application.Common.Cloudbeds;
+using Fuse.Application.Common.Files;
 using Fuse.Application.Common.Time;
 using Fuse.Application.Features.Identity;
 using Fuse.Contracts.Bookings;
@@ -104,11 +105,17 @@ internal sealed class HostelBookings(IAppDbContext db, HostelStays stays, ICloud
 
 internal sealed class SearchHostelBookingsHandler(HostelBookings bookings) : IQueryHandler<SearchHostelBookings, PagedResult<HostelBookingRow>>
 {
-    public async ValueTask<PagedResult<HostelBookingRow>> Handle(SearchHostelBookings query, CancellationToken cancellationToken)
+    public async ValueTask<PagedResult<HostelBookingRow>> Handle(SearchHostelBookings query, CancellationToken cancellationToken) =>
+        Matching((await bookings.GetAsync(query.View, query.CheckInFrom, query.CheckInTo, cancellationToken)).Rows, query).ToPage(query);
+
+    /// <summary>The view's reservations the filters and search keep, sorted as asked (the table and its export).</summary>
+    public static IQueryable<HostelBookingRow> Matching(IEnumerable<HostelBookingRow> all, SearchHostelBookings query)
     {
         var keyword = query.Keyword?.Trim();
-        var rows = (await bookings.GetAsync(query.View, query.CheckInFrom, query.CheckInTo, cancellationToken)).Rows
+        var rows = all
             .Where(r => string.IsNullOrWhiteSpace(query.Hostel) || r.Hostel.Equals(query.Hostel, StringComparison.OrdinalIgnoreCase))
+            .Where(r => string.IsNullOrWhiteSpace(query.Source) || string.Equals(r.Source?.Trim(), query.Source.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(r => !query.BalanceDue || r.Balance > 0)
             .Where(r => string.IsNullOrWhiteSpace(keyword)
                 || r.GuestName.Contains(keyword, StringComparison.OrdinalIgnoreCase)
                 || r.ReservationId.Contains(keyword, StringComparison.OrdinalIgnoreCase)
@@ -116,8 +123,27 @@ internal sealed class SearchHostelBookingsHandler(HostelBookings bookings) : IQu
                 || (r.GuestEmail?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false));
         // In house: leaving soonest first. Otherwise: arriving soonest first.
         return rows.AsQueryable()
-            .OrderBy(query.OrderBy, query.View == HostelBookingsView.InHouse ? r => r.CheckOut : r => r.CheckIn)
-            .ToPage(query);
+            .OrderBy(query.OrderBy, query.View == HostelBookingsView.InHouse ? r => r.CheckOut : r => r.CheckIn);
+    }
+}
+
+/// <summary>Every reservation the table would show for the same view, filters, search and sort, one row each.</summary>
+internal sealed class ExportHostelBookingsHandler(HostelBookings bookings, ISpreadsheetWriter spreadsheets, IBusinessClock clock)
+    : IQueryHandler<ExportHostelBookings, FileDownload>
+{
+    public async ValueTask<FileDownload> Handle(ExportHostelBookings query, CancellationToken cancellationToken)
+    {
+        var search = query.Search;
+        var rows = SearchHostelBookingsHandler.Matching(
+            (await bookings.GetAsync(search.View, search.CheckInFrom, search.CheckInTo, cancellationToken)).Rows, search).ToList();
+        const string Day = "dd/mm/yyyy";
+        return spreadsheets.Write($"Hostel Bookings {clock.Today:yyyy-MM-dd}.xlsx", rows,
+        [
+            new("Reservation", r => r.ReservationId), new("Guest", r => r.GuestName), new("Email", r => r.GuestEmail), new("Phone", r => r.GuestPhone),
+            new("Hostel", r => r.Hostel), new("Check In", r => r.CheckIn.ToDateTime(TimeOnly.MinValue), Day),
+            new("Check Out", r => r.CheckOut.ToDateTime(TimeOnly.MinValue), Day), new("Nights", r => r.Nights), new("Room", r => r.Rooms),
+            new("Source", r => r.Source), new("Tours during stay", r => r.Tours), new("Balance", r => r.Balance, "#,##0.00"), new("Status", r => r.Status),
+        ]);
     }
 }
 
@@ -126,6 +152,10 @@ internal sealed class GetHostelBookingHostelsHandler(HostelBookings bookings) : 
     public async ValueTask<HostelBookingHostels> Handle(GetHostelBookingHostels query, CancellationToken cancellationToken)
     {
         var snapshot = await bookings.GetAsync(query.View, query.CheckInFrom, query.CheckInTo, cancellationToken);
-        return new(snapshot.Hostels, snapshot.Unreachable);
+        return new(snapshot.Hostels, snapshot.Unreachable)
+        {
+            Sources = [.. snapshot.Rows.Select(r => r.Source?.Trim()).OfType<string>().Where(s => s != "")
+                .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)],
+        };
     }
 }

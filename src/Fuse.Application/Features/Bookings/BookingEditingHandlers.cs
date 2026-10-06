@@ -1,3 +1,4 @@
+using Fuse.Domain.Identity;
 using Fuse.Application.Features.Identity;
 using Microsoft.Extensions.Options;
 using Fuse.Application.Common.Time;
@@ -144,7 +145,7 @@ internal sealed class FindBookingStaffHandler(IAppDbContext db) : IQueryHandler<
             .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
             .Take(20)
             .ToListAsync(cancellationToken);
-        return [.. staff.Select(s => new LookupItem(s.Id, $"{s.FirstName} {s.LastName}".Trim() + (string.IsNullOrEmpty(s.Email) ? "" : $" ({s.Email})")))];
+        return [.. staff.Select(s => new LookupItem(s.Id, PersonNames.Display(s.FirstName, s.LastName) + (string.IsNullOrEmpty(s.Email) ? "" : $" ({s.Email})")))];
     }
 }
 
@@ -173,15 +174,15 @@ internal sealed class GetBookingEditorHandler(IAppDbContext db, SupplierScope sc
 
         var userIds = new[] { booking.GuestId, booking.CreatedBy.ToString() }.Where(id => id is not null).ToList();
         var names = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))
-            .Select(u => new { u.Id, Name = u.FullName ?? (u.FirstName + " " + u.LastName) })
-            .ToDictionaryAsync(u => u.Id, u => u.Name, StringComparer.OrdinalIgnoreCase, cancellationToken);
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.FullName })
+            .ToDictionaryAsync(u => u.Id, u => PersonNames.Display(u.FirstName, u.LastName, u.FullName), StringComparer.OrdinalIgnoreCase, cancellationToken);
 
         var lines = booking.Items.Where(i => i.TourId != null).OrderBy(i => i.StartDate).ToList();
         var guestIds = lines.SelectMany(i => i.Guests ?? []).Where(g => g.DeletedOn == null).Select(g => g.GuestId.ToString()).Distinct().ToList();
         var guestNames = (await db.Users.AsNoTracking().Where(u => guestIds.Contains(u.Id))
                 .Select(u => new { u.Id, u.FirstName, u.LastName, u.FullName, u.DateOfBirth, u.Gender, u.Nationality, u.Email })
                 .ToListAsync(cancellationToken))
-            .ToDictionary(u => u.Id, u => GuestNames.Of(u.FullName ?? $"{u.FirstName} {u.LastName}".Trim(), u.DateOfBirth, u.Gender, u.Nationality, PlaceholderEmails.Visible(u.Email)),
+            .ToDictionary(u => u.Id, u => GuestNames.Of(PersonNames.Display(u.FirstName, u.LastName, u.FullName), u.DateOfBirth, u.Gender, u.Nationality, PlaceholderEmails.Visible(u.Email)),
                 StringComparer.OrdinalIgnoreCase);
         var packagesInUse = lines.Where(i => i.BookingPackageId != null).Select(i => i.BookingPackageId!.Value).ToHashSet();
         var direct = booking.GuestId is not null && booking.CreatedBy.ToString().Equals(booking.GuestId, StringComparison.OrdinalIgnoreCase)
@@ -304,7 +305,8 @@ internal sealed class SaveBookingHandler(
     BookingRefunds refunds,
     ICurrentUser user,
     IOptions<BookingOptions> options,
-    IBusinessClock clock) : ICommandHandler<SaveBooking, DefaultIdType>
+    IBusinessClock clock,
+    Microsoft.Extensions.Caching.Memory.IMemoryCache cache) : ICommandHandler<SaveBooking, DefaultIdType>
 {
     public async ValueTask<DefaultIdType> Handle(SaveBooking command, CancellationToken cancellationToken)
     {
@@ -314,7 +316,7 @@ internal sealed class SaveBookingHandler(
         var userId = user.UserId ?? DefaultIdType.Empty;
 
         var guest = await db.Users.AsNoTracking().Where(u => u.Id == input.GuestId)
-            .Select(u => new { u.Id, u.Email, Name = u.FullName ?? (u.FirstName + " " + u.LastName) })
+            .Select(u => new { u.Id, u.Email, Name = PersonNames.Display(u.FirstName, u.LastName, u.FullName) })
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new BusinessRuleException("The primary guest no longer exists. Choose another guest.");
 
@@ -559,6 +561,8 @@ internal sealed class SaveBookingHandler(
         ApplyPaymentMethod(booking, input, creating, abilities);
         booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
+        // Reception's lists of hostel guests with no tours (In House report, dashboard) catch up now, not when their cache expires.
+        cache.Remove(Dashboard.GuestsWithoutTours.CacheKey);
         return booking.Id;
     }
 

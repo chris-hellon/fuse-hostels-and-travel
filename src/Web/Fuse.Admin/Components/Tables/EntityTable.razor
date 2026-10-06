@@ -131,8 +131,12 @@
     </ChildRowContent>
 
     <NoRecordsContent>
-        <MudText>No matching records found</MudText>
+        <MudText>@(_loading ? "Loading…" : "No matching records found")</MudText>
     </NoRecordsContent>
+
+    <LoadingContent>
+        <MudText>Loading…</MudText>
+    </LoadingContent>
 
     <PagerContent>
         <MudTablePager RowsPerPageString="Rows Per Page" />
@@ -244,8 +248,14 @@
         await ReloadAsync();
     }
 
+    // A reload while one is still running cancels it: loading shows until the last one finishes, and a cancelled load keeps
+    // what's on screen rather than flashing "No matching records".
+    private int _pending;
+    private TableData<T>? _last;
+
     private async Task<TableData<T>> LoadAsync(TableState state, CancellationToken cancellationToken)
     {
+        _pending++;
         _loading = true;
         try
         {
@@ -256,11 +266,11 @@
                 string.IsNullOrEmpty(state.SortLabel) || state.SortDirection == SortDirection.None
                     ? null
                     : [$"{state.SortLabel}{(state.SortDirection == SortDirection.Descending ? " desc" : "")}"]), cancellationToken);
-            return new TableData<T> { Items = page.Items, TotalItems = page.TotalCount };
+            return _last = new TableData<T> { Items = page.Items, TotalItems = page.TotalCount };
         }
         catch (OperationCanceledException)
         {
-            return new TableData<T> { Items = [], TotalItems = 0 };
+            return _last ?? new TableData<T> { Items = [], TotalItems = 0 };
         }
         catch (AppException failure)
         {
@@ -269,7 +279,7 @@
         }
         finally
         {
-            _loading = false;
+            _loading = --_pending > 0;
         }
     }
 }

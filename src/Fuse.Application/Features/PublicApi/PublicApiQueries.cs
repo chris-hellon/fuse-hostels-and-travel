@@ -343,7 +343,7 @@ internal static class ApiUsers
         UserName = u.UserName,
         FirstName = u.FirstName,
         LastName = u.LastName,
-        FullName = u.FullName,
+        FullName = u.FullName, // as legacy's API: the stored column (staff screens show PersonNames)
         Email = u.Email,
         IsActive = u.IsActive,
         EmailConfirmed = u.EmailConfirmed,

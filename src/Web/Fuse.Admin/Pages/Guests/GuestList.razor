@@ -5,11 +5,27 @@
 
 <AdminPageHeader Title="Guests" Description="Manage Guests." />
 
-<EntityTable T="UserSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Guests" Resource="@FuseResource.Guests"
+@* Each guest: book them a tour, open their profile, or show their trips (hostel stays from Cloudbeds with the tours booked
+   during each, and any tours outside a stay) under the row, as the guest popup's Bookings tab. *@
+<EntityTable @ref="_table" T="UserSummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Guests" Resource="@FuseResource.Guests"
              OnCreate="CreateAsync">
     <RowButtons>
+        <NewBookingButton GuestId="@context.Id" GuestName="@context.FullName" OnSaved="() => Booked(context)" />
         <RowIconButton Icon="@Icons.Material.Outlined.Person" Label="View profile" Href="@($"/admin/guests/{context.Id}/profile")" />
+        <DetailsToggle Open="@_expanded.Contains(context.Id)" OnToggle="() => ToggleDetails(context)" />
     </RowButtons>
+    <ChildRowContent>
+        @if (_expanded.Contains(context.Id))
+        {
+            <MudTr>
+                <td colspan="@_table!.ColumnCount" class="booking-details">
+                    <div class="booking-details__body booking-details--compact">
+                        <GuestBookings @key="@($"{context.Id}#{_versions.GetValueOrDefault(context.Id)}")" GuestId="@context.Id" GuestName="@context.FullName" />
+                    </div>
+                </td>
+            </MudTr>
+        }
+    </ChildRowContent>
 </EntityTable>
 
 @code {
@@ -23,6 +39,22 @@
         new(u => u.Email, "Email", nameof(UserSummary.Email)),
         new(u => u.PhoneNumber, "Phone Number"),
     ];
+
+    private EntityTable<UserSummary>? _table;
+    private readonly HashSet<string> _expanded = [];
+    /// <summary>Bumped when a guest is booked from their row: their trips reload if they're open (they only load when shown).</summary>
+    private readonly Dictionary<string, int> _versions = [];
+
+    private void ToggleDetails(UserSummary guest)
+    {
+        if (!_expanded.Remove(guest.Id))
+            _expanded.Add(guest.Id);
+    }
+
+    private void Booked(UserSummary guest)
+    {
+        _versions[guest.Id] = _versions.GetValueOrDefault(guest.Id) + 1;
+    }
 
     private async Task<PagedResult<UserSummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken) =>
         await Api.Send(request.Apply(new SearchGuests()), cancellationToken);

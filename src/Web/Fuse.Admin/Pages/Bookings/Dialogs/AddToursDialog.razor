@@ -8,6 +8,14 @@
     <ChildContent>
         <WizardStep TModel="BookingDraft" Title="Tours" OnLeaveAsync="_ => LeaveToursAsync()">
             <MudGrid Spacing="3">
+                @if (Draft.PrimaryGuestStay is { } guestStay)
+                {
+                    <MudItem xs="12" Class="pb-0">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            <MudIcon Icon="@Icons.Material.Filled.Hotel" Size="Size.Small" Class="mr-1 mb-n1" />@DeparturePicker.During(guestStay.CheckIn, guestStay.CheckOut)@(guestStay.Hostel is { } stayHostel ? $" at {stayHostel}" : ""). Departures during it are offered first.
+                        </MudText>
+                    </MudItem>
+                }
                 <MudItem xs="12" md="4">
                     <MudSelect T="DefaultIdType?" Label="Category" @bind-Value="_categoryId" Clearable="true" Variant="Variant.Outlined"
                                Margin="Margin.Dense" Placeholder="All categories">
@@ -127,6 +135,7 @@
                 <DeparturePicker @key="tour.Id" TourName="@tour.Name" Departures="Departures(tour.Id)" Loading="_loading.Contains(tour.Id)"
                                  PriceLocked="@(_packageApplied || (_packApplied && IsPackTour(tour.Id)))"
                                  PriceNote="@PickerNote(tour.Id)"
+                                 StayFrom="Draft.PrimaryGuestStay?.CheckIn" StayTo="Draft.PrimaryGuestStay?.CheckOut"
                                  @bind-DepartureId="_departureByTour[tour.Id]" />
             }
             @foreach (var late in LateDepartures)
@@ -196,6 +205,12 @@
         if (_stayAsked || Draft.Editor.GuestId is not { } guestId)
             return;
         _stayAsked = true;
+        // Started from a hostel stay: that one (it may not be their current or next).
+        if (Draft.PrimaryGuestStay is { } started)
+        {
+            _stay = new GuestCurrentStay(new GuestHostelStay { Hostel = started.Hostel ?? "", CheckIn = started.CheckIn, CheckOut = started.CheckOut }, false);
+            return;
+        }
         try
         {
             _stay = await Api.Send(new GetGuestCurrentStay(guestId));
@@ -345,14 +360,18 @@
         if (_selected.All(id => Chosen(id) is not null))
         {
             // Picked up from the hostel they're staying at, when the tours pick up there (staff can change it).
-            if (string.IsNullOrWhiteSpace(_pickup) && _stay?.Stay?.Hostel is { } hostel
-                && Pickups.FirstOrDefault(p => p.Equals(hostel, StringComparison.OrdinalIgnoreCase)) is { } pickup)
+            if (string.IsNullOrWhiteSpace(_pickup) && _stay?.Stay?.Hostel is { Length: > 0 } hostel
+                && (Pickups.FirstOrDefault(p => p.Equals(hostel, StringComparison.OrdinalIgnoreCase))
+                    ?? OnlyOne(Pickups.Where(p => p.Contains(hostel, StringComparison.OrdinalIgnoreCase) || hostel.Contains(p, StringComparison.OrdinalIgnoreCase)))) is { } pickup)
                 _pickup = pickup;
             return true;
         }
         Snackbar.Add("Choose a departure for every tour.", Severity.Warning);
         return false;
     }
+
+    /// <summary>A pick up named like the hostel ("Fuse Old Town" for "Old Town"), when just one is.</summary>
+    private static string? OnlyOne(IEnumerable<string> pickups) => pickups.Take(2).ToList() is [var one] ? one : null;
 
     private bool LeaveGuests()
     {

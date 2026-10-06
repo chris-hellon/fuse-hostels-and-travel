@@ -49,11 +49,23 @@ public sealed record SearchHostelBookings : PagedQuery, IQuery<PagedResult<Hoste
     /// <summary>For <see cref="HostelBookingsView.All"/>: checking in from / to (a week either side of today when not set).</summary>
     public DateOnly? CheckInFrom { get; init; }
     public DateOnly? CheckInTo { get; init; }
+    /// <summary>Only reservations from this booking source (Cloudbeds' source, e.g. "Hostelworld", "Direct").</summary>
+    public string? Source { get; init; }
+    /// <summary>Only reservations with a balance still due.</summary>
+    public bool BalanceDue { get; init; }
 }
+
+/// <summary>The current view and filters (search and sort included, not the page) as an Excel file.</summary>
+[Post("bookings/hostel-bookings/export"), Permission(FuseAction.Export, FuseResource.TourBookings)]
+public sealed record ExportHostelBookings(SearchHostelBookings Search) : IQuery<FileDownload>;
 
 /// <param name="Hostels">Hostels connected to Cloudbeds (the filter).</param>
 /// <param name="Unreachable">Hostels whose Cloudbeds couldn't be asked for this view just now (their reservations are missing).</param>
-public sealed record HostelBookingHostels(IReadOnlyList<string> Hostels, IReadOnlyList<string> Unreachable);
+public sealed record HostelBookingHostels(IReadOnlyList<string> Hostels, IReadOnlyList<string> Unreachable)
+{
+    /// <summary>The booking sources of this view's reservations (the source filter).</summary>
+    public IReadOnlyList<string> Sources { get; init; } = [];
+}
 
 [Post("bookings/hostel-bookings/hostels"), Permission(FuseAction.View, FuseResource.TourBookings)]
 public sealed record GetHostelBookingHostels : IQuery<HostelBookingHostels>

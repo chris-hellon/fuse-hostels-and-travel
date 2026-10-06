@@ -3,7 +3,8 @@
 @using Fuse.Contracts.Identity
 @* What a hostel booking row shows when expanded: the guest and their reservation in one compact panel, then every tour
    booking the guest has with a tour during the stay (as the lead booker or a guest on a tour), each opening in the Booking Details dialog so
-   this page keeps its place. Read-only: nothing is booked or changed here. *@
+   this page keeps its place. Nothing is changed here; New booking (our customer, a stay not over) opens the booking
+   wizard for them over the page. *@
 
 <MudTr>
     <td colspan="@Columns" class="booking-details">
@@ -25,12 +26,19 @@
                             @(Row.GuestId is null ? "Not a customer here yet: the Cloudbeds guest import brings them in." : Contact)
                         </div>
                     </div>
-                    @if (Row.Url is { } url)
-                    {
-                        <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@url" Target="_blank" EndIcon="@Icons.Material.Filled.OpenInNew">
-                            Cloudbeds @Row.ReservationId
-                        </MudButton>
-                    }
+                    <div class="d-flex align-center gap-2">
+                        @if (Bookable)
+                        {
+                            <NewBookingButton GuestId="@Row.GuestId" GuestName="@Row.GuestName" Hostel="@Row.Hostel" StayFrom="Row.CheckIn" StayTo="Row.CheckOut"
+                                              OnSaved="OnBooked" />
+                        }
+                        @if (Row.Url is { } url)
+                        {
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@url" Target="_blank" EndIcon="@Icons.Material.Filled.OpenInNew">
+                                Cloudbeds @Row.ReservationId
+                            </MudButton>
+                        }
+                    </div>
                 </div>
                 <div class="hostel-details__fields">
                     <div>
@@ -125,6 +133,10 @@
 @code {
     [Parameter, EditorRequired] public HostelBookingRow Row { get; set; } = null!;
     [Parameter] public int Columns { get; set; } = 7;
+    /// <summary>Tours can be booked for this stay (New booking).</summary>
+    [Parameter] public bool Bookable { get; set; }
+    /// <summary>A booking was made from here.</summary>
+    [Parameter] public EventCallback OnBooked { get; set; }
 
     private IReadOnlyList<GuestTourBooking>? _tours;
 

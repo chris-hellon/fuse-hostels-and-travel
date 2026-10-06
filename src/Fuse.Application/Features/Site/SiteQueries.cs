@@ -287,6 +287,16 @@ internal sealed class ListSiteEventOccurrencesHandler(IAppDbContext db) : IQuery
         var tourOf = await db.Events.AsNoTracking().Where(e => eventIds.Contains(e.Id) && e.TourId != null)
             .ToDictionaryAsync(e => e.Id, e => e.TourId, cancellationToken);
         var booking = await EventTours.LoadAsync(db, tourOf.Values, query.From.Date, query.To.Date.AddDays(1), cancellationToken);
+        // Where each is on (the calendar's day list): every hostel, else its published hostels' names.
+        var where = await db.Events.AsNoTracking().Where(e => eventIds.Contains(e.Id))
+            .Select(e => new
+            {
+                e.Id,
+                All = e.AllProperties == true,
+                Hostels = e.EventPropertyLookups.Where(l => l.Property.PublishToSite == true)
+                    .OrderBy(l => l.Property.Name).Select(l => l.Property.Name).ToList(),
+            })
+            .ToDictionaryAsync(e => e.Id, cancellationToken);
 
         return [.. occurrences
             .Select(o => new SiteEventOccurrence
@@ -303,6 +313,8 @@ internal sealed class ListSiteEventOccurrencesHandler(IAppDbContext db) : IQuery
                 Url = $"/events/{Slugs.From(o.Name)}",
                 Booking = booking.For(tourOf.GetValueOrDefault(o.EventId)),
                 Date = tourOf.GetValueOrDefault(o.EventId) is { } tour ? booking.Date(tour, o.Start, o.End) : null,
+                AllHostels = where.GetValueOrDefault(o.EventId)?.All == true,
+                Hostels = [.. where.GetValueOrDefault(o.EventId)?.Hostels.Select(h => h ?? "") ?? []],
             })];
     }
 }

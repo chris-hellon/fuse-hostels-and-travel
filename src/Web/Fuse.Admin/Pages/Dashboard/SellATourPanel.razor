@@ -1,0 +1,140 @@
+@* Sell a Tour Today: reception's morning list. Guests checking in today or in house now with no tour booked during their
+   stay (the In House, No Tours report's guests), a hostel's tabs when there's more than one, the counts, then the shared
+   table (search by name or room, sorting, pages): by default in house leaving soonest, then today's arrivals. From
+   Cloudbeds: the counts are asked first (the slow part, kept two minutes), so the table's pages read the same snapshot. *@
+
+<MudPaper Elevation="25" Class="dashboard-card">
+    <div class="dashboard-card__head">
+        <MudText Typo="Typo.h4">Sell a Tour Today</MudText>
+        @if (_summary is { Hostels.Count: > 1 } withHostels)
+        {
+            <ViewSwitch TView="string" Options="HostelOptions(withHostels.Hostels)" Value="_hostel" ValueChanged="SwitchAsync" />
+        }
+        <MudButton Variant="Variant.Text" Color="Color.Secondary" Href="/admin/reports/in-house" EndIcon="@Icons.Material.Filled.ChevronRight"
+                   Class="dashboard-card__link">See all</MudButton>
+    </div>
+    <div class="dashboard-card__body">
+        @if (_loading)
+        {
+            <div class="dashboard-loading" role="status">
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" />
+                <span>Fetching guests from Cloudbeds…</span>
+            </div>
+        }
+        else if (_summary is { } summary)
+        {
+            @if (summary.Unreachable.Count > 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                    Cloudbeds couldn't be reached for @string.Join(", ", summary.Unreachable) just now, so their guests are missing. Reload in a couple of minutes.
+                </MudAlert>
+            }
+            <div class="dashboard-summary">
+                @if (summary.ArrivingToday + summary.InHouse == 0)
+                {
+                    <span>Everyone staying has a tour booked.</span>
+                }
+                else
+                {
+                    <b>@summary.ArrivingToday</b> <span>arriving today ·</span> <b>@summary.InHouse</b> <span>in house · no tours booked</span>
+                }
+            </div>
+        }
+        @* Mounted once the first counts are in (so its first page reads the snapshot they fetched), then kept. *@
+        @if (_showTable)
+        {
+            <EntityTable @ref="_table" T="SellATourRow" Fields="Fields" Load="LoadPageAsync" EntityNamePlural="Guests" Dense="true" Elevation="0"
+                         ShowMenu="_ => false">
+                <RowButtons>
+                    <NewBookingButton GuestId="@context.GuestId" GuestName="@context.Name" Hostel="@context.Hostel" StayFrom="context.CheckIn"
+                                      StayTo="context.CheckOut" OnSaved="LoadAsync" />
+                </RowButtons>
+            </EntityTable>
+        }
+    </div>
+</MudPaper>
+
+@code {
+    private static readonly EntityField<SellATourRow> GuestField = new(g => g.Name, "Guest", nameof(SellATourRow.Name), g => @<span>
+        @if (g.GuestId is not null)
+        {
+            <GuestLink GuestId="@g.GuestId" Name="@g.Name" />
+        }
+        else
+        {
+            <span title="Not imported from Cloudbeds yet">@g.Name</span>
+        }
+    </span>);
+
+    private static readonly EntityField<SellATourRow> HostelField = new(g => g.Hostel, "Hostel", nameof(SellATourRow.Hostel));
+
+    private static readonly IReadOnlyList<EntityField<SellATourRow>> StayFields =
+    [
+        new(g => g.InHouse ? "In house" : "Arriving today", "Stay", nameof(SellATourRow.InHouse)) { Width = "1%" },
+        new(g => g.CheckOut.ToString("ddd dd/MM"), "Check Out", nameof(SellATourRow.CheckOut)) { Width = "1%" },
+        new(g => g.NightsLeft, "Nights Left", nameof(SellATourRow.NightsLeft)) { Width = "1%" },
+    ];
+
+    private static readonly IReadOnlyList<EntityField<SellATourRow>> AllHostelsFields = [GuestField, HostelField, .. StayFields];
+    private static readonly IReadOnlyList<EntityField<SellATourRow>> OneHostelFields = [GuestField, .. StayFields];
+
+    /// <summary>The Hostel column only while every hostel is shown.</summary>
+    private IReadOnlyList<EntityField<SellATourRow>> Fields => string.IsNullOrEmpty(_hostel) ? AllHostelsFields : OneHostelFields;
+
+    private SellATourSummary? _summary;
+    private EntityTable<SellATourRow>? _table;
+    private string _hostel = "";
+    private bool _loading, _showTable;
+    private IReadOnlyList<ViewSwitch<string>.Option>? _options;
+    private IReadOnlyList<string>? _optionsFor;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    /// <summary>"All" then each hostel (kept while the hostels are the same, so the tabs don't re-render needlessly).</summary>
+    private IReadOnlyList<ViewSwitch<string>.Option> HostelOptions(IReadOnlyList<string> hostels)
+    {
+        if (_options is null || _optionsFor is null || !_optionsFor.SequenceEqual(hostels))
+        {
+            _options = [new("", Icons.Material.Filled.Apartment, "All"), .. hostels.Select(h => new ViewSwitch<string>.Option(h, Icons.Material.Filled.Hotel, h))];
+            _optionsFor = hostels;
+        }
+        return _options;
+    }
+
+    private string? Hostel => string.IsNullOrEmpty(_hostel) ? null : _hostel;
+
+    private Task<PagedResult<SellATourRow>> LoadPageAsync(GridRequest request, CancellationToken cancellationToken) =>
+        Api.Send(request.Apply(new SearchSellATourToday { Hostel = Hostel }), cancellationToken).AsTask();
+
+    /// <summary>The counts (asking Cloudbeds when the snapshot's stale), then the table from the same snapshot.</summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            await Snackbar.TryAsync(async () => _summary = await Api.Send(new GetSellATourSummary(Hostel)));
+        }
+        finally
+        {
+            _loading = false;
+        }
+        if (!_showTable)
+        {
+            _showTable = true; // loads its first page as it mounts
+            StateHasChanged();
+        }
+        else if (_table is not null)
+        {
+            await _table.ReloadAsync();
+        }
+    }
+
+    private async Task SwitchAsync(string hostel)
+    {
+        _hostel = hostel;
+        await LoadAsync();
+    }
+
+    public Task ReloadAsync() => LoadAsync();
+}

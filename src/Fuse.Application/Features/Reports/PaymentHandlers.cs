@@ -1,3 +1,4 @@
+using Fuse.Domain.Identity;
 using System.Globalization;
 using Fuse.Application.Common.Files;
 using Fuse.Application.Common.Time;
@@ -102,7 +103,9 @@ internal sealed class ExportPaymentsHandler(IAppDbContext db, IBusinessClock clo
             from u in users.DefaultIfEmpty()
             orderby d.StartDate, t.Name
             select new Item(i.BookingId, t.Name, d.StartDate, d.EndDate, i.PickupLocation,
-                i.Amount * (db.BookingItemGuests.Count(g => g.BookingItemId == i.Id) + 1), i.Booking.BookingSource, u.FullName))
+                i.Amount * (db.BookingItemGuests.Count(g => g.BookingItemId == i.Id) + 1), i.Booking.BookingSource,
+                // Who made it as legacy showed people: first + last name (the stored FullName is stale for some).
+                u == null ? null : PersonNames.Display(u.FirstName, u.LastName, u.FullName)))
             .ToListAsync(cancellationToken);
 
         // Item-major, then a stable sort by payment date, as legacy built it. (Legacy's proc listed a booking's items once

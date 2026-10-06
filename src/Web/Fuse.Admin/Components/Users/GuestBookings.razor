@@ -1,11 +1,13 @@
 @using System.Globalization
 @using Fuse.Contracts.Dashboard
 @using Fuse.Admin.Pages.Bookings.Dialogs
+@using Fuse.Admin.Components.Bookings
 @* A guest's trips (guest profile and the Edit Guest dialog), grouped by hostel stay: figures along the top (stays and
    nights, tours booked, spent on tours, stays with no tours), then each stay from Cloudbeds (newest first, opening in
    Cloudbeds) with the tours they booked during it underneath, then any tours outside a stay. A tour opens in the
    Booking Details dialog over the page. Stays are asked live from each hostel's Cloudbeds, so they arrive a moment
-   after the tours. *@
+   after the tours. A stay that isn't over (nor cancelled) has New booking beside it, for staff who can create bookings:
+   the booking wizard with them as the primary guest and the stay's dates and hostel. *@
 
 <div class="guest-trips">
     <div class="guest-trips__stats">
@@ -56,13 +58,20 @@
         @foreach (var (stay, tours) in grouped.Stays)
         {
             <div class="@($"guest-trips__stay{(Faded(stay) ? " guest-trips__stay--faded" : "")}")" @key="@($"{stay.Hostel}/{stay.ReservationId}")">
-                <a class="guest-trips__stay-head" href="@stay.Url" target="_blank" rel="noopener" title="Open in Cloudbeds">
-                    <MudIcon Icon="@Icons.Material.Filled.Hotel" Size="Size.Small" />
-                    <span class="guest-trips__hostel">@stay.Hostel</span>
-                    <span class="guest-trips__muted">@StayDates(stay) · @Plural(stay.Nights, "night")@(stay.Rooms is { } rooms ? $" · {rooms}" : "")</span>
-                    <span class="@($"status-pill status-pill--{StayTone(stay.Status)} guest-trips__push")">@stay.Status</span>
-                    <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Class="guest-trips__go" />
-                </a>
+                <div class="guest-trips__stay-bar">
+                    <a class="guest-trips__stay-head" href="@stay.Url" target="_blank" rel="noopener" title="Open in Cloudbeds">
+                        <MudIcon Icon="@Icons.Material.Filled.Hotel" Size="Size.Small" />
+                        <span class="guest-trips__hostel">@stay.Hostel</span>
+                        <span class="guest-trips__muted">@StayDates(stay) · @Plural(stay.Nights, "night")@(stay.Rooms is { } rooms ? $" · {rooms}" : "")</span>
+                        <span class="@($"status-pill status-pill--{StayTone(stay.Status)} guest-trips__push")">@stay.Status</span>
+                        <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Class="guest-trips__go" />
+                    </a>
+                    @if (stay.Status == "In house" || (!Faded(stay) && stay.CheckOut >= DateOnly.FromDateTime(DateTime.Today)))
+                    {
+                        <NewBookingButton GuestId="@GuestId" GuestName="@GuestName" Hostel="@stay.Hostel" StayFrom="stay.CheckIn" StayTo="stay.CheckOut"
+                                          OnSaved="BookedAsync" />
+                    }
+                </div>
                 @if (_canViewBookings && tours.Count == 0)
                 {
                     <div class="guest-trips__row guest-trips__muted">No tours booked during this stay</div>
@@ -89,6 +98,8 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
     [Parameter, EditorRequired] public string GuestId { get; set; } = "";
+    /// <summary>Their name, for a new booking's primary guest.</summary>
+    [Parameter] public string? GuestName { get; set; }
     /// <summary>A tour booking's dialog went to Tour Bookings (the Edit Guest dialog closes itself).</summary>
     [Parameter] public EventCallback BeforeOpen { get; set; }
 
@@ -156,6 +167,13 @@
         if (outcome.Left)
             await BeforeOpen.InvokeAsync();
         else if (outcome.Changed && !await Snackbar.TryAsync(async () => _tours = await Api.Send(new ListGuestTourBookings(GuestId))))
+            _tours = [];
+    }
+
+    /// <summary>A booking made for one of their stays: it shows under the stay.</summary>
+    private async Task BookedAsync()
+    {
+        if (_canViewBookings && !await Snackbar.TryAsync(async () => _tours = await Api.Send(new ListGuestTourBookings(GuestId))))
             _tours = [];
     }
 

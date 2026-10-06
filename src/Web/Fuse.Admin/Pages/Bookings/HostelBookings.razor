@@ -1,11 +1,13 @@
 @page "/admin/bookings/hostel-bookings"
 @attribute [RequirePermission(FuseAction.View, FuseResource.TourBookings)]
 @using Fuse.Admin.Components.Bookings
+@inject FileSaver Files
 
 @* Bookings › Hostel Bookings: each hostel's reservations from Cloudbeds (in house, arriving this week, or any status by
    check-in dates, a week either side of today to start), each guest matched to our customer, with their tour bookings
    in the row's details. View only: nothing is booked or changed here. In House / Arriving / By Date (with its dates)
-   beside the title; search and hostel filters, sorting and pages as Tour Bookings. *@
+   beside the title; search, hostel and source filters, a Balance due switch, sorting and pages as Tour Bookings, and
+   Export (the view as filtered). A guest who's our customer can be booked on tours from their row (New booking). *@
 
 <AdminPageHeader Title="Hostel Bookings" Description="Hostel reservations from Cloudbeds, with each guest's tour bookings.">
     <ViewSwitch TView="HostelBookingsView" Options="ViewOptions" Value="_view" ValueChanged="SwitchAsync" />
@@ -31,7 +33,11 @@ else if (_hostels is { Unreachable.Count: > 0 } hostels)
         Cloudbeds couldn't be reached for @string.Join(", ", hostels.Unreachable) just now, so their reservations are missing. Reload in a couple of minutes.
     </MudAlert>
 }
-<EntityTable @ref="_table" T="HostelBookingRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Hostel Bookings" ShowMenu="_ => false">
+<EntityTable @ref="_table" T="HostelBookingRow" Fields="Fields" Load="LoadAsync" EntityNamePlural="Hostel Bookings" ShowMenu="_ => false"
+             Resource="@FuseResource.TourBookings" OnExport="ExportAsync">
+    <ToolbarContent>
+        <MudSwitch T="bool" Value="_balanceDue" ValueChanged="SetBalanceDueAsync" Color="Color.Secondary" Label="Balance due" Class="ml-2 d-inline-flex" />
+    </ToolbarContent>
     <AdvancedSearchContent>
         <MudGrid Spacing="3" Class="mt-1">
             <MudItem xs="12" md="6">
@@ -42,15 +48,28 @@ else if (_hostels is { Unreachable.Count: > 0 } hostels)
                     }
                 </MudSelect>
             </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" Label="Filter by Source" Value="_source" ValueChanged="SetSourceAsync" Clearable="true" AnchorOrigin="Origin.BottomLeft">
+                    @foreach (var source in Sources)
+                    {
+                        <MudSelectItem T="string" Value="source">@source</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
         </MudGrid>
     </AdvancedSearchContent>
     <RowButtons>
+        @if (Bookable(context))
+        {
+            <NewBookingButton GuestId="@context.GuestId" GuestName="@context.GuestName" Hostel="@context.Hostel" StayFrom="context.CheckIn" StayTo="context.CheckOut"
+                              OnSaved="BookedAsync" />
+        }
         <DetailsToggle Open="@_expanded.Contains(Key(context))" OnToggle="() => ToggleDetails(context)" />
     </RowButtons>
     <ChildRowContent>
         @if (_expanded.Contains(Key(context)))
         {
-            <HostelBookingDetailsRow @key="Key(context)" Row="context" Columns="_table!.ColumnCount" />
+            <HostelBookingDetailsRow @key="@($"{Key(context)}#{_booked}")" Row="context" Columns="_table!.ColumnCount" Bookable="Bookable(context)" OnBooked="BookedAsync" />
         }
     </ChildRowContent>
 </EntityTable>
@@ -81,7 +100,7 @@ else if (_hostels is { Unreachable.Count: > 0 } hostels)
         new(r => r.CheckOut.ToString("ddd dd/MM"), "Check Out", nameof(HostelBookingRow.CheckOut)) { Width = "1%" },
         new(r => r.Nights, "Nights", nameof(HostelBookingRow.Nights)) { Width = "1%" },
         new(r => r.Tours, "Tours", nameof(HostelBookingRow.Tours)) { Width = "1%" },
-        new(r => r.Balance, "Balance", nameof(HostelBookingRow.Balance), r => @<span>@(r.Balance > 0 ? $"$ {r.Balance:N2}" : "-")</span>) { Width = "1%" },
+        new(r => r.Balance, "Balance", nameof(HostelBookingRow.Balance), r => @<span class="@(r.Balance > 0 ? "booking-details__owed" : null)">@(r.Balance > 0 ? $"$ {r.Balance:N2}" : "-")</span>) { Width = "1%" },
         new(r => r.Status, "Status", nameof(HostelBookingRow.Status), r => @<span class="@($"status-pill status-pill--{Tone(r.Status)}")">@r.Status</span>) { Width = "1%" },
     ];
 
@@ -89,6 +108,12 @@ else if (_hostels is { Unreachable.Count: > 0 } hostels)
     private HostelBookingHostels? _hostels;
     private HostelBookingsView _view = HostelBookingsView.InHouse;
     private string? _hostel;
+    private string? _source;
+    private bool _balanceDue;
+    /// <summary>Bookings made from this page: each re-creates the open details (their tours load again).</summary>
+    private int _booked;
+    /// <summary>The last search and sort, for Export.</summary>
+    private GridRequest? _request;
     /// <summary>All: checking in a week either side of today until other dates are picked.</summary>
     private DateRange? _checkIn = new(DateTime.Today.AddDays(-7), DateTime.Today.AddDays(7));
     private readonly HashSet<string> _expanded = [];
@@ -119,21 +144,55 @@ else if (_hostels is { Unreachable.Count: > 0 } hostels)
     private DateOnly? To => _view == HostelBookingsView.All && _checkIn?.End is { } end ? DateOnly.FromDateTime(end) : null;
 
     private bool _loading;
+    /// <summary>Loads under way: switching view mid-load cancels the first, so loading shows until the last one is done.</summary>
+    private int _pending;
 
     /// <summary>Asking every hostel's Cloudbeds takes a moment: the page says so above the table meanwhile.</summary>
     private async Task<PagedResult<HostelBookingRow>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
     {
+        _pending++;
         _loading = true;
         await InvokeAsync(StateHasChanged);
         try
         {
-            return await Api.Send(request.Apply(new SearchHostelBookings { View = _view, Hostel = _hostel, CheckInFrom = From, CheckInTo = To }), cancellationToken);
+            _request = request;
+            return await Api.Send(request.Apply(Search), cancellationToken);
         }
         finally
         {
-            _loading = false;
+            _loading = --_pending > 0;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private SearchHostelBookings Search => new()
+    {
+        View = _view, Hostel = _hostel, CheckInFrom = From, CheckInTo = To, Source = _source, BalanceDue = _balanceDue,
+    };
+
+    /// <summary>The source filter's choices: this view's sources (and the chosen one, while another view has none of it).</summary>
+    private IEnumerable<string> Sources => (_hostels?.Sources ?? []).Concat(_source is null ? [] : [_source]).Distinct(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Everything the table shows (all pages), as filtered, searched and sorted.</summary>
+    private Task ExportAsync() => Snackbar.TryAsync(async () =>
+    {
+        var search = _request is { } request ? Search with { Keyword = request.Keyword, OrderBy = request.OrderBy } : Search;
+        await Files.SaveAsync(await Api.Send(new ExportHostelBookings(search)));
+    });
+
+    /// <summary>Tours can be booked for our customer's stay that isn't over, cancelled or a no show.</summary>
+    /// <summary>
+    /// A stay tours can still be booked for: not cancelled, and not over. One Cloudbeds still has in house counts whatever
+    /// its check-out date says (a late check-out or an extension not yet updated there).
+    /// </summary>
+    private static bool Bookable(HostelBookingRow row) =>
+        row.Status == "In house" || (row.Status is not ("Cancelled" or "No show") && row.CheckOut >= DateOnly.FromDateTime(DateTime.Today));
+
+    /// <summary>A booking made from a row: its Tours count and any open details catch up.</summary>
+    private async Task BookedAsync()
+    {
+        _booked++;
+        await _table!.ReloadAsync();
     }
 
     private async Task SwitchAsync(HostelBookingsView view)
@@ -143,6 +202,10 @@ else if (_hostels is { Unreachable.Count: > 0 } hostels)
     }
 
     private Task SetHostelAsync(string? hostel) { _hostel = hostel; return _table!.ReloadAsync(); }
+
+    private Task SetSourceAsync(string? source) { _source = source; return _table!.ReloadAsync(); }
+
+    private Task SetBalanceDueAsync(bool due) { _balanceDue = due; return _table!.ReloadAsync(); }
 
     /// <summary>Once both dates are picked (the picker closes itself); a half-picked range waits.</summary>
     private Task SetCheckInAsync(DateRange? range)

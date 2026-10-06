@@ -27,6 +27,13 @@
     @* Day: a plain list, earliest first, with its own toolbar (as the calendar's). *@
     <MudPaper Elevation="0" Class="calendar-panel">
         <div class="day-list__toolbar">
+            @if (_cameFrom is { } from)
+            {
+                @* Opened from a month or week's "+N more": straight back to it. *@
+                <MudButton Variant="Variant.Outlined" Color="Color.Dark" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="GoBack">
+                    Back to @(from == CalendarView.Week ? "week" : "month")
+                </MudButton>
+            }
             <MudButton Variant="Variant.Filled" Color="Color.Dark" Class="day-list__nav" aria-label="Previous day" OnClick="() => MoveDayAsync(-1)">
                 <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
             </MudButton>
@@ -36,8 +43,8 @@
             <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="() => GoToDayAsync(DateTime.Today)">Today</MudButton>
             <span class="day-list__date">@_day.ToString("dddd d MMMM yyyy")</span>
             <MudButtonGroup Variant="Variant.Outlined" Color="Color.Dark" Class="day-list__views">
-                <MudButton OnClick="() => _view = CalendarView.Month">Month</MudButton>
-                <MudButton OnClick="() => _view = CalendarView.Week">Week</MudButton>
+                <MudButton OnClick="() => SwitchTo(CalendarView.Month)">Month</MudButton>
+                <MudButton OnClick="() => SwitchTo(CalendarView.Week)">Week</MudButton>
                 <MudButton Variant="Variant.Filled">Day</MudButton>
             </MudButtonGroup>
         </div>
@@ -114,6 +121,20 @@ else
     private IEnumerable<CalendarDeparture> Known => _departures.Concat(_dayDepartures ?? []);
     private bool _hideRentals;
     private CalendarView _view = CalendarView.Month;
+    /// <summary>The view a "+N more" was clicked in (the day's Back button returns to it).</summary>
+    private CalendarView? _cameFrom;
+
+    private void SwitchTo(CalendarView view)
+    {
+        _cameFrom = null;
+        _view = view;
+    }
+
+    private void GoBack()
+    {
+        _view = _cameFrom ?? CalendarView.Month;
+        _cameFrom = null;
+    }
     private DateTime _day = DateTime.Today;
     private DateRange? _range;
 
@@ -222,7 +243,8 @@ else
     {
         if (item.Departure is not { } departure)
         {
-            // "+N more": that day, every departure.
+            // "+N more": that day, every departure (with a way back to where it was clicked).
+            _cameFrom = _view;
             _day = item.Start.Date;
             _view = CalendarView.Day;
             return;

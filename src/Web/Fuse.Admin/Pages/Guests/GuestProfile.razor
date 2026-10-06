@@ -33,7 +33,7 @@ else
         </MudPaper>
         <MudPaper Class="pa-6 mt-4" Elevation="25">
             <MudText Typo="Typo.h6" Class="mb-2">Bookings</MudText>
-            <GuestBookings GuestId="@Id" />
+            <GuestBookings GuestId="@Id" GuestName="@_user.FullName" />
         </MudPaper>
     </AuthorizeView>
 }

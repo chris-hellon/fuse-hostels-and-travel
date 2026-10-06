@@ -1,13 +1,116 @@
-@* Legacy's hostel events calendar (FullCalendar): published events (a hostel's, or all), month or list view; an event
-   opens in a card with View event and Share. Shown in What's On's
-   View calendar dialog. *@
-@inherits JsComponent
+@* The events calendar: a quiet month (each day's events as coloured dots), the events on every night in one strip
+   above it, and the chosen day's events listed below. An event opens in a card with Book, View event and Share.
+   Published events (a hostel's, or all); on the events page and in What's On's View calendar dialog. *@
 @inject IApi Api
-@inject NavigationManager Navigation
 
 <div class="events-calendar">
-    <div class="calendar-wrap">
-        <div id="calendar" @ref="_calendar"></div>
+    <div class="calendar-wrap evcal">
+        <div class="evcal__head">
+            <button type="button" class="evcal__nav" aria-label="Previous month" @onclick="() => ShowMonth(_month.AddMonths(-1))">
+                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <h5 class="evcal__month" aria-live="polite">@_month.ToString("MMMM yyyy")</h5>
+            <button type="button" class="evcal__nav" aria-label="Next month" @onclick="() => ShowMonth(_month.AddMonths(1))">
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm evcal__today" disabled="@(_month == ThisMonth && _selected == Today)"
+                    @onclick="ShowToday">Today</button>
+        </div>
+
+        @if (Nightly.Count > 0)
+        {
+            <div class="evcal__nightly">
+                <span class="evcal__nightly-label">Every night</span>
+                @foreach (var chip in Nightly)
+                {
+                    <button type="button" class="evcal__chip" @onclick="() => Show(chip.Shown)">
+                        <span class="evcal__dot" style="@Dot(chip.Shown)"></span>
+                        @if (chip.Times.Length > 0)
+                        {
+                            <span class="evcal__chip-time">@chip.Times</span>
+                        }
+                        @chip.Shown.Name
+                        @if (EventDates.PriceText(chip.Shown.Booking, chip.Shown.Date) is { } price)
+                        {
+                            <span class="evcal__chip-price">· @price</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="evcal__grid" aria-busy="@(_loading ? "true" : "false")">
+            @foreach (var weekday in Weekdays)
+            {
+                <span class="evcal__weekday">@weekday</span>
+            }
+            @foreach (var day in GridDays)
+            {
+                var inMonth = day.Month == _month.Month;
+                var events = inMonth ? OnDay(day) : [];
+                var dots = events.Where(o => !_nightly.Contains(o.EventId)).DistinctBy(o => o.EventId).ToList();
+                <button type="button" class="@DayClass(day, inMonth)" disabled="@(events.Count == 0)" aria-pressed="@(day == _selected ? "true" : "false")"
+                        aria-label="@($"{day:dddd d MMMM}{(dots.Count > 0 ? $", {dots.Count} event{(dots.Count == 1 ? "" : "s")}" : "")}")"
+                        @onclick="() => _selected = day">
+                    <span class="evcal__num">@day.Day</span>
+                    @if (dots.Count > 0)
+                    {
+                        <span class="evcal__dots" aria-hidden="true">
+                            @foreach (var o in dots.Take(MaxDots))
+                            {
+                                <span class="evcal__dot" style="@Dot(o)"></span>
+                            }
+                            @if (dots.Count > MaxDots)
+                            {
+                                <span class="evcal__more">+</span>
+                            }
+                        </span>
+                    }
+                </button>
+            }
+        </div>
+
+        <div class="evcal__agenda">
+            @if (_selected is { } selected)
+            {
+                var all = OnDay(selected);
+                var listed = all.Where(o => !_nightly.Contains(o.EventId)).ToList();
+                <h5 class="evcal__day-title">@selected.ToString("ddd d MMM")</h5>
+                @if (listed.Count == 0)
+                {
+                    <p class="evcal__empty">@(all.Count > 0 ? "Just the nightly events." : "Nothing on this day.")</p>
+                }
+                else
+                {
+                    <ul class="evcal__list">
+                        @foreach (var o in listed)
+                        {
+                            <li class="evcal__row">
+                                <button type="button" class="evcal__row-open" @onclick="() => Show(o)">
+                                    <span class="evcal__time">@(o.AllDay ? "All day" : o.Start.ToString("HH:mm"))</span>
+                                    <span class="evcal__what">
+                                        <span class="evcal__name"><span class="evcal__dot" style="@Dot(o)"></span>@o.Name</span>
+                                        <span class="evcal__where">@Where(o)@(Bookable(o) ? "" : EventDates.PriceText(o.Booking, o.Date) is { } price ? $" · {price}" : "")</span>
+                                    </span>
+                                </button>
+                                @if (Bookable(o))
+                                {
+                                    <EventBook Booking="o.Booking" Date="o.Date" Class="btn btn-primary btn-sm evcal__action">@BookText(o)</EventBook>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-primary btn-sm evcal__action" @onclick="() => Show(o)">View</button>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else if (!_loading)
+            {
+                <p class="evcal__empty">Nothing on this month.</p>
+            }
+        </div>
     </div>
 </div>
 
@@ -45,48 +148,96 @@
     /// <summary>Only this hostel's events (and those at every hostel); all of them without.</summary>
     [Parameter] public DefaultIdType? HostelId { get; set; }
 
-    private ElementReference _calendar;
-    private DotNetObjectReference<EventsCalendar>? _self;
-    /// <summary>Everything the calendar has shown, by the key it was handed (it asks again for each range).</summary>
-    private readonly List<SiteEventOccurrence> _loaded = [];
+    private const int MaxDots = 4;
+    private static readonly string[] Weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    private static DateTime Today => EventDates.Now.Date;
+    private static DateTime ThisMonth => new(Today.Year, Today.Month, 1);
+
+    /// <summary>The first of the month shown.</summary>
+    private DateTime _month = ThisMonth;
+    private DateTime? _selected;
+    private IReadOnlyList<SiteEventOccurrence> _occurrences = [];
+    private IReadOnlySet<DefaultIdType> _nightly = new HashSet<DefaultIdType>();
+    private ILookup<DateTime, SiteEventOccurrence> _byDay = Array.Empty<SiteEventOccurrence>().ToLookup(o => o.Start.Date);
+    private bool _loading = true;
+    private DefaultIdType? _loadedFor;
+    private bool _loaded;
+    /// <summary>The month asked for last (an older answer arriving late is dropped).</summary>
+    private int _request;
     private SiteEventOccurrence? _shown;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnParametersSetAsync()
     {
-        if (!firstRender)
+        // Not while prerendering: the browser loads the month once it's running (the grid itself renders either way).
+        if (!RendererInfo.IsInteractive || (_loaded && _loadedFor == HostelId))
             return;
-        _self = DotNetObjectReference.Create(this);
-        await Js.InvokeVoidAsync("mountCalendar", _calendar, _self);
+        await LoadAsync(_month, Today);
     }
 
-    /// <summary>FullCalendar's feed: the events in the range it's showing.</summary>
-    [JSInvokable]
-    public async Task<object[]> LoadEvents(string start, string end)
+    private async Task LoadAsync(DateTime month, DateTime? select)
     {
-        var occurrences = await Api.Send(new ListSiteEventOccurrences(
-            DateTimeOffset.Parse(start).DateTime, DateTimeOffset.Parse(end).DateTime, HostelId));
-        return [.. occurrences.Select(o =>
+        var request = ++_request;
+        (_month, _loading, _loadedFor) = (month, true, HostelId);
+        var occurrences = await Api.Send(new ListSiteEventOccurrences(month, month.AddMonths(1).AddSeconds(-1), HostelId));
+        if (request != _request)
+            return;
+        _occurrences = [.. occurrences.Where(o => o.Start >= month && o.Start < month.AddMonths(1)).OrderBy(o => o.Start)];
+        _nightly = NightlyEvents.In(_occurrences, month);
+        _byDay = _occurrences.ToLookup(o => o.Start.Date);
+        // The day asked for when it has something on, else the month's first day that does.
+        _selected = select is { } day && _byDay.Contains(day) ? day
+            : _occurrences.Count > 0 ? _occurrences[0].Start.Date
+            : null;
+        (_loading, _loaded) = (false, true);
+    }
+
+    private Task ShowMonth(DateTime month) => LoadAsync(month, month == ThisMonth ? Today : null);
+
+    private Task ShowToday() => LoadAsync(ThisMonth, Today);
+
+    /// <summary>Monday on or before the 1st to Sunday on or after the last day: whole weeks.</summary>
+    private IEnumerable<DateTime> GridDays
+    {
+        get
         {
-            _loaded.Add(o);
-            return (object)new
-            {
-                // Its price beside the name, for an event booked as a tour ("Bar Hop · $6.50").
-                title = EventDates.PriceText(o.Booking, o.Date) is { } price ? $"{o.Name} · {price}" : o.Name,
-                start = o.Start.ToString("s"),
-                end = o.End > o.Start ? o.End.ToString("s") : null,
-                allDay = o.AllDay,
-                color = o.Colour,
-                extendedProps = new { key = _loaded.Count - 1 },
-            };
-        })];
+            var start = _month.AddDays(-(((int)_month.DayOfWeek + 6) % 7));
+            var last = _month.AddMonths(1).AddDays(-1);
+            var end = last.AddDays((7 - (int)last.DayOfWeek) % 7);
+            for (var day = start; day <= end; day = day.AddDays(1))
+                yield return day;
+        }
     }
 
-    [JSInvokable]
-    public void ShowEvent(int key)
-    {
-        _shown = key >= 0 && key < _loaded.Count ? _loaded[key] : null;
-        StateHasChanged();
-    }
+    private IReadOnlyList<SiteEventOccurrence> OnDay(DateTime day) => [.. _byDay[day]];
+
+    /// <summary>The strip's chips: each nightly event once, at its times of day, opening its date on the chosen day (else its next).</summary>
+    private IReadOnlyList<(SiteEventOccurrence Shown, string Times)> Nightly =>
+        [.. _occurrences.Where(o => _nightly.Contains(o.EventId)).GroupBy(o => o.EventId)
+            .Select(g => (
+                Shown: g.FirstOrDefault(o => o.Start.Date == _selected) ?? g.FirstOrDefault(o => o.Start.Date >= Today) ?? g.First(),
+                Times: string.Join(", ", g.Where(o => !o.AllDay).Select(o => o.Start.ToString("HH:mm")).Distinct().Order())))
+            .OrderBy(c => c.Times.Length == 0 ? "" : c.Times).ThenBy(c => c.Shown.Name)];
+
+    private string DayClass(DateTime day, bool inMonth) =>
+        "evcal__cell"
+        + (inMonth ? "" : " is-out")
+        + (day == Today ? " is-today" : "")
+        + (day == _selected ? " is-selected" : "");
+
+    private static string Dot(SiteEventOccurrence o) => $"background: {(string.IsNullOrEmpty(o.Colour) ? "var(--mdb-primary)" : o.Colour)}";
+
+    private static string Where(SiteEventOccurrence o) =>
+        o.AllHostels || o.Hostels.Count == 0 ? "All hostels" : string.Join(", ", o.Hostels);
+
+    /// <summary>Booked online as a tour, on a date still to come with a departure that isn't full.</summary>
+    private static bool Bookable(SiteEventOccurrence o) =>
+        o.Booking is { Online: true } && o.Date is { DepartureId: not null, SoldOut: false } && o.Start >= EventDates.Now;
+
+    private static string BookText(SiteEventOccurrence o) =>
+        EventDates.PriceText(o.Booking, o.Date) is { } price ? $"Book · {price}" : "Book";
+
+    private void Show(SiteEventOccurrence o) => _shown = o;
 
     private void Close() => _shown = null;
 
@@ -99,10 +250,4 @@
     /// <summary>Legacy formatWhen: the day in full, with the time unless it's all day.</summary>
     private static string When(SiteEventOccurrence o) =>
         o.AllDay ? o.Start.ToString("dddd d MMMM yyyy") : o.Start.ToString("dddd d MMMM yyyy 'at' HH:mm");
-
-    protected override async Task OnDisposeAsync()
-    {
-        await Js.InvokeVoidAsync("unmountCalendar", _calendar);
-        _self?.Dispose();
-    }
 }

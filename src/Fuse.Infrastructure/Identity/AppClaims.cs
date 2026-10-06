@@ -26,7 +26,7 @@ internal sealed class AppClaimsPrincipalFactory(
         foreach (var role in await UserManager.GetRolesAsync(user))
             identity.AddClaim(new Claim(Options.ClaimsIdentity.RoleClaimType, role));
 
-        identity.AddClaim(new Claim(FuseClaims.Fullname, user.FullName ?? $"{user.FirstName} {user.LastName}".Trim()));
+        identity.AddClaim(new Claim(FuseClaims.Fullname, user.DisplayName()));
         if (!string.IsNullOrEmpty(user.FirstName))
             identity.AddClaim(new Claim(ClaimTypes.Name, user.FirstName));
         if (!string.IsNullOrEmpty(user.LastName))

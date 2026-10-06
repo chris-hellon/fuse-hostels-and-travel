@@ -1,3 +1,4 @@
+using Fuse.Domain.Identity;
 using System.Text.Json;
 using Fuse.Application.Common.Files;
 using Fuse.Application.Common.Time;
@@ -50,10 +51,17 @@ internal static class StaffBookingsReport
             OrderBy = OrderBy(orderBy),
         }, cancellationToken);
 
+        // The proc returns the stored FullName (stale for some accounts): show the page's staff as everywhere else,
+        // by first + last name (PersonNames). The proc still searches and sorts by FullName.
+        var ids = rows.Select(r => r.UserId.ToString()).Distinct().ToList();
+        var names = (await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id))
+                .Select(u => new { u.Id, u.FirstName, u.LastName, u.FullName }).ToListAsync(cancellationToken))
+            .ToDictionary(u => u.Id, u => PersonNames.Display(u.FirstName, u.LastName, u.FullName), StringComparer.OrdinalIgnoreCase);
+
         return new PagedResult<StaffBookingRow>([.. rows.Select(r => new StaffBookingRow
         {
             UserId = r.UserId,
-            FullName = r.FullName?.Trim() ?? "",
+            FullName = names.GetValueOrDefault(r.UserId.ToString()) is { Length: > 0 } name ? name : r.FullName?.Trim() ?? "",
             BookingsMade = r.BookingsMade,
             ItemsCount = r.ItemsCount,
             TotalBookingsAmount = r.TotalBookingsAmount,

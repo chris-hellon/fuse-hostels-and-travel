@@ -1,0 +1,46 @@
+@using Fuse.Admin.Pages.Bookings
+@* "New booking" for a hostel guest (In House report, Hostel Bookings, a guest's stays): the booking wizard for a new
+   booking with them as the primary guest, picked up from their hostel, and the departures offered during their stay.
+   Only for staff who can create bookings; a guest the Cloudbeds import hasn't brought in yet can't be booked (the icon
+   is disabled and says why). OnSaved once the booking is created (the bookings pages reload too). *@
+
+@if (_canCreate)
+{
+    @if (string.IsNullOrEmpty(GuestId))
+    {
+        <RowIconButton Icon="@Icons.Material.Outlined.AddShoppingCart" Label="Not a customer yet: the Cloudbeds import brings them in" Disabled="true" />
+    }
+    else
+    {
+        <RowIconButton Icon="@Icons.Material.Outlined.AddShoppingCart" Label="New booking" OnClick="OpenAsync" />
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [CascadingParameter] private BookingsChanged? BookingsChanged { get; set; }
+
+    /// <summary>Our customer; null when the Cloudbeds import hasn't brought them in yet.</summary>
+    [Parameter, EditorRequired] public string? GuestId { get; set; }
+    [Parameter, EditorRequired] public string? GuestName { get; set; }
+    /// <summary>The hostel they're staying at (the pick up, when their tours pick up there).</summary>
+    [Parameter] public string? Hostel { get; set; }
+    /// <summary>Their stay: departures are offered between these dates first.</summary>
+    [Parameter] public DateOnly? StayFrom { get; set; }
+    [Parameter] public DateOnly? StayTo { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private bool _canCreate;
+
+    protected override async Task OnInitializedAsync() =>
+        _canCreate = AuthState is not null && (await AuthState).User.HasPermission(FuseAction.Create, FuseResource.TourBookings);
+
+    private async Task OpenAsync()
+    {
+        if (!await BookingWizard.NewForGuestAsync(Dialogs, GuestId!, GuestName, Hostel, StayFrom, StayTo))
+            return;
+        if (BookingsChanged is not null)
+            await BookingsChanged.NotifyAsync();
+        await OnSaved.InvokeAsync();
+    }
+}

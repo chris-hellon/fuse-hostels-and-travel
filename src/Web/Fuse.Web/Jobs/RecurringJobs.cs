@@ -3,6 +3,7 @@ using Hangfire;
 using Mediator;
 using Fuse.Application.Common.Jobs;
 using Fuse.Application.Common.Payments;
+using Fuse.Application.Features.Dashboard;
 using Fuse.Application.Features.Identity;
 using Fuse.Application.Features.Manifest;
 using Fuse.Application.Features.Site;
@@ -32,18 +33,24 @@ public sealed class RecurringJobs(IServiceScopeFactory scopes, IBackgroundJobs j
         new("cloudbeds-guest-import", "CloudbedsImport", "0,30 * * * *", _ => true, j => j.ImportCloudbedsGuestsAsync(CancellationToken.None)),
     ];
 
+    /// <summary>Whether the job is switched on (Jobs:{setting}, else its default).</summary>
+    public static bool IsOn(string id, IConfiguration configuration, IHostEnvironment environment) =>
+        Jobs.Single(j => j.Id == id) is var job && (configuration.GetValue<bool?>($"Jobs:{job.Setting}") ?? job.OnByDefault(environment));
+
     /// <summary>Adds (or updates) the switched-on jobs and removes the switched-off ones.</summary>
     public static void Register(IRecurringJobManager manager, IConfiguration configuration, IHostEnvironment environment)
     {
         foreach (var job in Jobs)
         {
-            if (configuration.GetValue<bool?>($"Jobs:{job.Setting}") ?? job.OnByDefault(environment))
+            if (IsOn(job.Id, configuration, environment))
                 manager.AddOrUpdate(job.Id, job.Run, job.Cron, new RecurringJobOptions { TimeZone = Vietnam });
             else
                 manager.RemoveIfExists(job.Id);
         }
         // Retired: as legacy, unpaid website bookings stay Unpaid for staff to delete (it was registered by earlier builds).
         manager.RemoveIfExists("abandoned-checkouts");
+        // Retired: the dashboard's Tour Attach Rate (registered by earlier builds).
+        manager.RemoveIfExists("tour-attach-rate");
     }
 
     [DisableConcurrentExecution(timeoutInSeconds: 10 * 60), AutomaticRetry(Attempts = 0)]

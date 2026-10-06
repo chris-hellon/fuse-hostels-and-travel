@@ -14,9 +14,10 @@ public interface ICloudbedsClient
     Task<IReadOnlyList<CloudbedsReservation>> ListGuestReservationsAsync(string propertyId, string apiKey, string guestId, CancellationToken cancellationToken);
 
     /// <summary>A property's reservations in <paramref name="status"/> (checked_in = in house; confirmed = booked; null = any),
-    /// optionally only those checking in between the two dates.</summary>
+    /// optionally only those checking in between the two dates. Without <paramref name="includeRooms"/> Cloudbeds isn't asked
+    /// for every room (smaller, quicker pages) and <see cref="CloudbedsReservation.Rooms"/> may be empty.</summary>
     Task<IReadOnlyList<CloudbedsReservation>> ListReservationsAsync(string propertyId, string apiKey, string? status, DateOnly? checkInFrom,
-        DateOnly? checkInTo, CancellationToken cancellationToken);
+        DateOnly? checkInTo, CancellationToken cancellationToken, bool includeRooms = true);
 }
 
 /// <summary>The fields of Cloudbeds' <c>getReservations</c> we show. <see cref="Status"/> as Cloudbeds sends it
