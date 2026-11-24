@@ -144,14 +144,14 @@ public sealed class BookingTests(TestApp app)
     }
 
     /// <summary>A booking of a tour run by a new supplier, whose confirmation went out only when <paramref name="confirmed"/>.</summary>
-    private async Task<(IApi Api, BookingRow Booking, string SupplierEmail)> SupplierBookedAsync(bool confirmed)
+    private async Task<(IApi Api, BookingRow Booking, string SupplierEmail)> SupplierBookedAsync(bool confirmed, bool paid = true)
     {
         var api = await app.AdminApiAsync();
         var supplierEmail = $"supplier-{Guid.NewGuid():N}@tests.invalid";
         var supplierId = await api.Send(new CreateSupplier(new UserProfile { FirstName = "Sam", LastName = "Supplier", Email = supplierEmail }, TestApp.Password, TestApp.Password), Ct);
         var start = TestBookings.BusinessNow.Date.AddDays(7).AddHours(9);
         var (tourId, dateId) = await TestBookings.TourWithDepartureAsync(app, api, start, Ct, supplierId);
-        var reference = await TestBookings.BookAsync(app, tourId, dateId, start, TestBookings.BusinessNow, Ct, paid: true);
+        var reference = await TestBookings.BookAsync(app, tourId, dateId, start, TestBookings.BusinessNow, Ct, paid: paid);
         if (confirmed)
         {
             await using var scope = TestBookings.TenantScope(app);
@@ -185,9 +185,29 @@ public sealed class BookingTests(TestApp app)
     }
 
     [Fact]
-    public async Task Suppliers_never_sent_the_confirmation_arent_told_of_a_cancellation()
+    public async Task Suppliers_get_the_confirmation_when_staff_take_the_payment_without_stripe()
     {
-        var (api, row, supplier) = await SupplierBookedAsync(confirmed: false);
+        // Paid in cash in full.
+        var (api, cash, supplier) = await SupplierBookedAsync(confirmed: false, paid: false);
+        await api.Send(new AddBookingPayment(cash.Id, 20, BookingPaymentMethod.Cash, null), Ct);
+        SubjectsTo(supplier).ShouldBeEmpty(); // part paid: not yet
+        await api.Send(new AddBookingPayment(cash.Id, 30, BookingPaymentMethod.Cash, null), Ct);
+        app.Emails.Sent.Single(e => e.To.Contains(supplier)).HtmlBody.ShouldContain("a new Booking has been processed");
+
+        // Already told at checkout: not again.
+        var (_, checkedOut, toldSupplier) = await SupplierBookedAsync(confirmed: true, paid: false);
+        await api.Send(new AddBookingPayment(checkedOut.Id, 50, BookingPaymentMethod.Cash, null), Ct);
+        SubjectsTo(toldSupplier).ShouldBeEmpty();
+
+        // And a cash-paid booking's cancellation reaches its supplier.
+        await api.Send(new CancelBooking(cash.Id, 0), Ct);
+        SubjectsTo(supplier).Count(s => s.EndsWith($"Booking Cancelled - {cash.Reference}")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Suppliers_of_an_unpaid_booking_never_confirmed_arent_told_of_a_cancellation()
+    {
+        var (api, row, supplier) = await SupplierBookedAsync(confirmed: false, paid: false);
         await api.Send(new CancelBooking(row.Id, 0), Ct);
         await api.Send(new UncancelBooking(row.Id), Ct);
         SubjectsTo(supplier).ShouldBeEmpty();

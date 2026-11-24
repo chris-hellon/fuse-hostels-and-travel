@@ -15,6 +15,15 @@ internal sealed class AccountEmails(IServiceProvider services, ILoggerFactory lo
             [nameof(ConfirmEmailChange.Link)] = link,
         }));
 
+    public async Task<EmailMessage> ConfirmEmailAsync(string firstName, string to, string link) =>
+        new([to], "Confirm your email", await EmailRenderer.RenderAsync<ConfirmEmailChange>(services, logs, new()
+        {
+            [nameof(ConfirmEmailChange.Brand)] = brand.Value,
+            [nameof(ConfirmEmailChange.FirstName)] = firstName,
+            [nameof(ConfirmEmailChange.Link)] = link,
+            [nameof(ConfirmEmailChange.Verification)] = true,
+        }));
+
     public async Task<EmailMessage> ResetPasswordAsync(string firstName, string to, string link) =>
         new([to], "Reset your password", await EmailRenderer.RenderAsync<ResetPassword>(services, logs, new()
         {

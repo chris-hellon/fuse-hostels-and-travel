@@ -129,6 +129,7 @@ internal static class UserProjection
         SignUpDate = u.SignUpDate,
         CloudbedsGuestId = u.CloudbedsGuestId,
         HasPassword = u.PasswordHash != null,
+        EmailConfirmed = u.EmailConfirmed,
         Profile = new UserProfile
         {
             FirstName = u.FirstName ?? "",

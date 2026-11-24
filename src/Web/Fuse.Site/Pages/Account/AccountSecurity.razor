@@ -16,6 +16,28 @@
                 <form class="account-card h-100" novalidate @onsubmit="ChangeEmailAsync">
                     <h4 class="tilted display-6 account-card__title">EMAIL</h4>
                     <p class="account-readonly mb-4"><span><i class="fa-solid fa-at me-2" aria-hidden="true"></i>@(me.Profile.Email ?? "No email address")</span></p>
+                    @if (!me.EmailConfirmed && !string.IsNullOrEmpty(me.Profile.Email) && _emailSentTo is null)
+                    {
+                        @* Legacy Manage/Email: "Send verification email" for an address not yet confirmed. *@
+                        @if (_verificationSent)
+                        {
+                            <div class="account-done mb-4" role="status">
+                                <i class="fas fa-envelope-circle-check" aria-hidden="true"></i>
+                                <p>Verification email sent to <strong>@me.Profile.Email</strong>. Please check your email.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-2">Your email address isn't confirmed yet.</p>
+                            @if (_verify.Problem is { } verifyProblem)
+                            {
+                                <p class="text-danger small" role="alert">@verifyProblem</p>
+                            }
+                            <button type="button" class="btn btn-link px-0 mb-4" disabled="@_verify.Busy" @onclick="SendVerificationAsync">
+                                @(_verify.Busy ? "Sending…" : "Send verification email")
+                            </button>
+                        }
+                    }
                     @if (_emailSentTo is { } sentTo)
                     {
                         <div class="account-done" role="status">
@@ -85,9 +107,9 @@
 @code {
     [PersistentState] public UserDetails? Me { get; set; }
 
-    private readonly Sending _email = new(), _password = new();
+    private readonly Sending _email = new(), _password = new(), _verify = new();
     private string? _newEmail, _emailSentTo, _current, _new, _confirm;
-    private bool _passwordDone;
+    private bool _passwordDone, _verificationSent;
 
     protected override async Task LoadAsync() => Me = await Api.Send(new GetMyProfile());
 
@@ -95,6 +117,12 @@
     {
         await Api.Send(new RequestMyEmailChange(_newEmail ?? ""));
         _emailSentTo = _newEmail?.Trim();
+    });
+
+    private Task SendVerificationAsync() => _verify.RunAsync(async () =>
+    {
+        await Api.Send(new SendMyEmailVerification());
+        _verificationSent = true;
     });
 
     private Task PasswordAsync() => _password.RunAsync(async () =>

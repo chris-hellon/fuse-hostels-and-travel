@@ -306,6 +306,7 @@ internal sealed class SaveBookingHandler(
     ICurrentUser user,
     IOptions<BookingOptions> options,
     IBusinessClock clock,
+    SupplierNotices suppliers,
     Microsoft.Extensions.Caching.Memory.IMemoryCache cache) : ICommandHandler<SaveBooking, DefaultIdType>
 {
     public async ValueTask<DefaultIdType> Handle(SaveBooking command, CancellationToken cancellationToken)
@@ -321,6 +322,7 @@ internal sealed class SaveBookingHandler(
             ?? throw new BusinessRuleException("The primary guest no longer exists. Choose another guest.");
 
         Booking booking;
+        var wasPaid = false;
         if (creating)
         {
             if (!user.Principal.HasPermission(FuseAction.Create, FuseResource.Bookings))
@@ -346,6 +348,7 @@ internal sealed class SaveBookingHandler(
             await BookingAccess.EnsureVisibleAsync(booking, scope, cancellationToken);
             if (booking.Cancelled == true)
                 throw new BusinessRuleException("Cancelled bookings can't be changed.");
+            wasPaid = booking.IsPaid;
             if (booking.ConcurrencyVersion != input.ConcurrencyVersion)
                 throw new ConflictException("Someone else changed this booking while you were editing it. Close it and open it again.");
         }
@@ -561,6 +564,7 @@ internal sealed class SaveBookingHandler(
         ApplyPaymentMethod(booking, input, creating, abilities);
         booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
+        await suppliers.ConfirmIfNewlyPaidAsync(booking, wasPaid, cancellationToken);
         // Reception's lists of hostel guests with no tours (In House report, dashboard) catch up now, not when their cache expires.
         cache.Remove(Dashboard.GuestsWithoutTours.CacheKey);
         return booking.Id;

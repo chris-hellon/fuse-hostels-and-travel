@@ -260,15 +260,33 @@ internal sealed class ConfirmCheckoutHandler(
 }
 
 /// <summary>
-/// Emails each supplier with tours on a booking about them: confirmed (at checkout), cancelled or un-cancelled. Only
-/// suppliers who were sent the booking's confirmation hear that it's changed.
+/// Emails each supplier with tours on a booking about them: confirmed (at Stripe checkout, or when staff make it paid
+/// another way), cancelled or un-cancelled. Only suppliers who were told of the booking hear that it's changed.
 /// </summary>
 internal sealed class SupplierNotices(IAppDbContext db, IBookingEmails emails, IBackgroundJobs jobs)
 {
+    /// <summary>
+    /// The suppliers were told of the booking: its Stripe checkout sent the confirmations, or it was made paid another
+    /// way (which tells them too, see <see cref="ConfirmIfNewlyPaidAsync"/>).
+    /// </summary>
+    private static bool SuppliersTold(Booking booking) => booking.ConfirmationEmailSent == true || booking.IsPaid;
+
+    /// <summary>
+    /// A booking staff just made paid without Stripe checkout (cash, a payment recorded or Flag as Paid): its suppliers get
+    /// the confirmation checkout would have sent. ConfirmationEmailSent is left alone: it's the guest's confirmation
+    /// (as legacy, and the partner API reports it).
+    /// </summary>
+    public async Task ConfirmIfNewlyPaidAsync(Booking booking, bool wasPaid, CancellationToken cancellationToken)
+    {
+        if (wasPaid || !booking.IsPaid || booking.ConfirmationEmailSent == true || booking.Cancelled == true)
+            return;
+        await SendAsync(db, emails, jobs, await BookingEmailLoader.LoadAsync(db, booking.Id, cancellationToken), SupplierNotice.Confirmed, cancellationToken);
+    }
+
     /// <summary>Tells the suppliers of <paramref name="itemIds"/> (saved first) that they were cancelled or un-cancelled.</summary>
     public async Task SendAsync(Booking booking, IReadOnlyCollection<DefaultIdType> itemIds, SupplierNotice notice, CancellationToken cancellationToken)
     {
-        if (booking.ConfirmationEmailSent != true || itemIds.Count == 0)
+        if (!SuppliersTold(booking) || itemIds.Count == 0)
             return;
         var email = await BookingEmailLoader.LoadAsync(db, booking.Id, cancellationToken, itemIds);
         await SendAsync(db, emails, jobs, email, notice, cancellationToken);

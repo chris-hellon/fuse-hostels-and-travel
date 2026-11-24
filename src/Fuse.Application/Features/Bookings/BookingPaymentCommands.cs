@@ -23,7 +23,8 @@ internal static class BookingLoader
     }
 }
 
-internal sealed class AddBookingPaymentHandler(IAppDbContext db, SupplierScope scope, IBusinessClock clock) : ICommandHandler<AddBookingPayment>
+internal sealed class AddBookingPaymentHandler(IAppDbContext db, SupplierScope scope, IBusinessClock clock, SupplierNotices suppliers)
+    : ICommandHandler<AddBookingPayment>
 {
     public async ValueTask<Unit> Handle(AddBookingPayment command, CancellationToken cancellationToken)
     {
@@ -47,14 +48,16 @@ internal sealed class AddBookingPaymentHandler(IAppDbContext db, SupplierScope s
             PaymentDate = clock.Now,
         };
         db.BookingPayments.Add(payment);
+        var wasPaid = booking.IsPaid;
         booking.ApplyManualPayment(command.Amount).Touch();
         await db.SaveChangesAsync(cancellationToken);
+        await suppliers.ConfirmIfNewlyPaidAsync(booking, wasPaid, cancellationToken);
         return Unit.Value;
     }
 }
 
 internal sealed class FlagBookingAsPaidHandler(IAppDbContext db, SupplierScope scope, ICurrentUser user, IOptions<BookingOptions> options,
-    PaidBookingNotifications notifications)
+    PaidBookingNotifications notifications, SupplierNotices suppliers)
     : ICommandHandler<FlagBookingAsPaid>
 {
     public async ValueTask<Unit> Handle(FlagBookingAsPaid command, CancellationToken cancellationToken)
@@ -70,6 +73,7 @@ internal sealed class FlagBookingAsPaidHandler(IAppDbContext db, SupplierScope s
         await db.SaveChangesAsync(cancellationToken);
         if (!wasPaid)
             await notifications.EnqueueAsync(booking, cancellationToken);
+        await suppliers.ConfirmIfNewlyPaidAsync(booking, wasPaid, cancellationToken);
         return Unit.Value;
     }
 }

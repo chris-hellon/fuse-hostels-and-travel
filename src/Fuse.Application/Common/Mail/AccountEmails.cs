@@ -6,6 +6,9 @@ public interface IAccountEmails
     /// <summary>Legacy "Confirm your email": the link that makes <paramref name="to"/> the account's email.</summary>
     Task<EmailMessage> ConfirmEmailChangeAsync(string firstName, string to, string link);
 
+    /// <summary>Legacy "Send verification email": the link that confirms the account's current address.</summary>
+    Task<EmailMessage> ConfirmEmailAsync(string firstName, string to, string link);
+
     /// <summary>Legacy "Reset Password": the link to choose a new password.</summary>
     Task<EmailMessage> ResetPasswordAsync(string firstName, string to, string link);
 }

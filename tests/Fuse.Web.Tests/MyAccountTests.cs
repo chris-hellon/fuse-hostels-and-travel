@@ -140,6 +140,33 @@ public sealed partial class MyAccountTests(TestApp app)
     }
 
     [Fact]
+    public async Task A_guest_confirms_their_unconfirmed_email_from_a_verification_email()
+    {
+        var (guest, email) = await GuestAsync();
+        await using (var scope = TestBookings.TenantScope(app))
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = (await users.FindByEmailAsync(email))!;
+            user.EmailConfirmed = false;
+            (await users.UpdateAsync(user)).Succeeded.ShouldBeTrue();
+        }
+        (await guest.Send(new GetMyProfile(), Ct)).EmailConfirmed.ShouldBeFalse();
+
+        await guest.Send(new SendMyEmailVerification(), Ct);
+        var sent = app.Emails.Sent.Single(m => m.To.Contains(email) && m.Subject == "Confirm your email");
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(System.Net.WebUtility.HtmlDecode(Link().Match(sent.HtmlBody).Groups[1].Value)).Query);
+        query["email"].ShouldBe(email);
+
+        var anonymous = new Fuse.Web.Client.Api.HttpApi(app.Anonymous());
+        await Should.ThrowAsync<BusinessRuleException>(() => anonymous.Send(new ConfirmMyEmailChange(query["user"]!, email, "forged"), Ct).AsTask());
+        await anonymous.Send(new ConfirmMyEmailChange(query["user"]!, query["email"]!, query["token"]!), Ct);
+
+        var me = await guest.Send(new GetMyProfile(), Ct);
+        (me.EmailConfirmed, me.Profile.Email).ShouldBe((true, email));
+        await Should.ThrowAsync<BusinessRuleException>(() => guest.Send(new SendMyEmailVerification(), Ct).AsTask()); // nothing left to confirm
+    }
+
+    [Fact]
     public async Task An_account_made_without_a_password_can_set_one_and_one_with_a_password_cannot()
     {
         var (guest, email) = await GuestAsync();

@@ -48,6 +48,7 @@ public sealed record UserDetails
     public string? CloudbedsGuestId { get; init; }
     /// <summary>False for a guest account made at checkout without a password.</summary>
     public bool HasPassword { get; init; }
+    public bool EmailConfirmed { get; init; }
     public UserProfile Profile { get; init; } = new();
 }
 

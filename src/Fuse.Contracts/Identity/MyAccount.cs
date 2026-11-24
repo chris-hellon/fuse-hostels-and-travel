@@ -81,7 +81,11 @@ public sealed record PayMyBooking(DefaultIdType Id) : ICommand<string>;
 [Post("me/email"), Authenticated, RateLimited]
 public sealed record RequestMyEmailChange(string NewEmail) : ICommand;
 
-/// <summary>The link from <see cref="RequestMyEmailChange"/> (works signed in or not: the token is the proof).</summary>
+/// <summary>Legacy "Send verification email": emails a link to the account's (unconfirmed) address that confirms it.</summary>
+[Post("me/email/verification"), Authenticated, RateLimited]
+public sealed record SendMyEmailVerification : ICommand;
+
+/// <summary>The link from <see cref="RequestMyEmailChange"/> or <see cref="SendMyEmailVerification"/> (works signed in or not: the token is the proof).</summary>
 [Post("me/email/confirmation"), Public]
 public sealed record ConfirmMyEmailChange(string UserId, string Email, string Token) : ICommand;
 

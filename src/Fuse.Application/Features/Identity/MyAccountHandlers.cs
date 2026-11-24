@@ -144,6 +144,24 @@ internal sealed class RequestMyEmailChangeHandler(UserManager<ApplicationUser> u
     }
 }
 
+internal sealed class SendMyEmailVerificationHandler(UserManager<ApplicationUser> users, ICurrentUser currentUser, IAccountEmails emails, IBackgroundJobs jobs,
+    IOptions<SiteOptions> site) : ICommandHandler<SendMyEmailVerification>
+{
+    public async ValueTask<Unit> Handle(SendMyEmailVerification command, CancellationToken cancellationToken)
+    {
+        var user = await users.FindByIdAsync(MyBookings.UserId(currentUser)) ?? throw new NotFoundException("Your account could not be found.");
+        if (PlaceholderEmails.Visible(user.Email) is not { Length: > 0 } email)
+            throw new BusinessRuleException("Your account has no email address to confirm. Add one with Change Email.");
+        if (user.EmailConfirmed)
+            throw new BusinessRuleException("Your email address is already confirmed.");
+
+        var token = await users.GenerateEmailConfirmationTokenAsync(user);
+        var link = $"{site.Value.LinksUrl}/my-account/confirm-email?user={Uri.EscapeDataString(user.Id)}&email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
+        jobs.EnqueueEmail(await emails.ConfirmEmailAsync(user.FirstName ?? "", email, link));
+        return Unit.Value;
+    }
+}
+
 internal sealed class ConfirmMyEmailChangeHandler(UserManager<ApplicationUser> users) : ICommandHandler<ConfirmMyEmailChange>
 {
     private const string Expired = "This link has expired or has already been used. Ask for a new one from My Account.";
@@ -152,7 +170,12 @@ internal sealed class ConfirmMyEmailChangeHandler(UserManager<ApplicationUser> u
     {
         var user = await users.FindByIdAsync(command.UserId) ?? throw new BusinessRuleException(Expired);
         if (string.Equals(user.Email, command.Email, StringComparison.OrdinalIgnoreCase))
-            return Unit.Value; // already done (the link was followed twice)
+        {
+            // A verification link (the address is already the account's), or a change link followed twice.
+            if (!user.EmailConfirmed && !(await users.ConfirmEmailAsync(user, command.Token)).Succeeded)
+                throw new BusinessRuleException(Expired);
+            return Unit.Value;
+        }
         var changed = await users.ChangeEmailAsync(user, command.Email, command.Token);
         if (!changed.Succeeded)
             throw new BusinessRuleException(changed.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.DuplicateEmail))
