@@ -1,4 +1,5 @@
 using MailKit.Net.Smtp;
+using MailKit.Security;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,8 +12,10 @@ namespace Fuse.Infrastructure.Mail;
 /// Sends through SMTP (MailKit), or writes .eml files locally. Outside production SMTP only reaches
 /// <see cref="MailOptions.AllowedRecipients"/>, and automated emails (<see cref="EmailMessage.Automated"/>, e.g. the
 /// tour manifests) are never sent at all: only emails someone triggers. As legacy, never emails booking.com relays.
+/// With Mail:GmailOAuth configured it signs in with a Gmail access token and sends as that mailbox (legacy's new provider).
 /// </summary>
-internal sealed class EmailSender(IOptions<MailOptions> options, IHostEnvironment environment, ILogger<EmailSender> logger) : IEmailSender
+internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessTokens tokens, IHostEnvironment environment, ILogger<EmailSender> logger)
+    : IEmailSender
 {
     public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
@@ -26,9 +29,16 @@ internal sealed class EmailSender(IOptions<MailOptions> options, IHostEnvironmen
             return;
         }
 
+        // Gmail OAuth sends only as its own mailbox (or a verified alias), as legacy.
+        var oauth = settings.GmailOAuth;
+        var from = oauth.IsConfigured
+            ? new MailboxAddress(oauth.FromName ?? settings.DisplayName, oauth.FromAddress ?? oauth.AccountEmail)
+            : new MailboxAddress(settings.DisplayName, settings.From);
         var email = new MimeMessage { Subject = message.Subject };
-        email.From.Add(new MailboxAddress(settings.DisplayName, settings.From));
-        email.Sender = new MailboxAddress(settings.DisplayName, settings.From);
+        email.From.Add(from);
+        email.Sender = from;
+        // As legacy: machine-generated, so recipients' auto-replies and out-of-office responders stay quiet.
+        email.Headers.Add("Auto-Submitted", "auto-generated");
         foreach (var address in to)
             email.To.Add(MailboxAddress.Parse(address));
         foreach (var address in bcc)
@@ -53,10 +63,20 @@ internal sealed class EmailSender(IOptions<MailOptions> options, IHostEnvironmen
             return;
         }
 
-        using var smtp = new SmtpClient();
-        await smtp.ConnectAsync(settings.Host, settings.Port, cancellationToken: cancellationToken);
-        if (settings.Port != 25)
-            await smtp.AuthenticateAsync(settings.UserName, settings.Password, cancellationToken);
+        using var smtp = new SmtpClient { CheckCertificateRevocation = settings.CheckCertificateRevocation };
+        if (oauth.IsConfigured)
+        {
+            // As legacy: 465 is TLS from the start, 587 upgrades with STARTTLS.
+            var security = settings.Port switch { 465 => SecureSocketOptions.SslOnConnect, 587 => SecureSocketOptions.StartTls, _ => SecureSocketOptions.Auto };
+            await smtp.ConnectAsync(settings.Host, settings.Port, security, cancellationToken);
+            await smtp.AuthenticateAsync(new SaslMechanismOAuth2(oauth.AccountEmail, await tokens.GetAsync(cancellationToken)), cancellationToken);
+        }
+        else
+        {
+            await smtp.ConnectAsync(settings.Host, settings.Port, cancellationToken: cancellationToken);
+            if (settings.Port != 25)
+                await smtp.AuthenticateAsync(settings.UserName, settings.Password, cancellationToken);
+        }
         var response = await smtp.SendAsync(email, cancellationToken);
         await smtp.DisconnectAsync(true, cancellationToken);
         logger.LogInformation("Email \"{Subject}\" to {To} accepted: {Response}", message.Subject, string.Join(", ", to), response);

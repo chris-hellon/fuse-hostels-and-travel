@@ -248,7 +248,7 @@ hold secrets; [`appsettings.Example.json`](src/Web/Fuse.Web/appsettings.Example.
 | `ConnectionStrings:Database` | SQL Server (the app, Identity and Hangfire). |
 | `Stripe` | Secret and publishable keys, webhook secret, the site URL Stripe returns to. Live keys are refused unless `AllowLiveKeys` is set. |
 | `AzureStorageSettings:ConnectionString` | Blob storage for uploaded images. Without it, files go to a local `.uploads` folder. |
-| `Mail` | SMTP, or `Pickup` to write emails to disk; branding for the email templates. |
+| `Mail` | SMTP (user name and password, or Gmail OAuth under `Mail:GmailOAuth`), or `Pickup` to write emails to disk; branding for the email templates. |
 | `ApiSettings` | JWT signing key and the booking API's clients (the guest app and partners). |
 | `ReCaptcha` | reCAPTCHA v2 keys for the public forms (the example has Google's always-pass test keys). |
 | `Site` | Site name, default SEO text, analytics tags, contact address, hostel booking mode. |

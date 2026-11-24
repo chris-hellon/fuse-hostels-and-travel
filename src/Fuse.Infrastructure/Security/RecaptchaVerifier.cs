@@ -23,7 +23,7 @@ internal sealed class RecaptchaVerifier(HttpClient http, IOptions<CaptchaOptions
                 new FormUrlEncodedContent(new Dictionary<string, string> { ["secret"] = secret, ["response"] = response }), cancellationToken);
             var result = await reply.Content.ReadFromJsonAsync<Result>(cancellationToken);
             if (result?.Success != true)
-                logger.LogInformation("reCAPTCHA refused: {Errors}", string.Join(", ", result?.Errors ?? []));
+                logger.LogWarning("reCAPTCHA refused by Google: {Errors}", string.Join(", ", result?.Errors ?? []));
             return result?.Success == true;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)

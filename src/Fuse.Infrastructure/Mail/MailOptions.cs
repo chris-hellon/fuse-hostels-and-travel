@@ -27,7 +27,40 @@ public sealed class MailOptions
     /// </summary>
     public List<string> AllowedRecipients { get; set; } = [];
 
+    /// <summary>
+    /// TLS certificate revocation checks (OCSP/CRL); legacy MailSettings:CheckCertificateRevocation. False skips only the
+    /// revocation lookup (it can't complete on some machines): the certificate chain is still checked.
+    /// </summary>
+    public bool CheckCertificateRevocation { get; set; } = true;
+
+    /// <summary>Gmail OAuth2 sign-in (legacy GmailOAuth); when configured it replaces <see cref="UserName"/>/<see cref="Password"/>.</summary>
+    public GmailOAuthOptions GmailOAuth { get; set; } = new();
+
     public bool UsesSmtp => string.Equals(Mode, "Smtp", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// The "Mail:GmailOAuth" section (legacy GmailOAuth): signs in to Gmail SMTP with XOAUTH2, an access token minted from
+/// <see cref="RefreshToken"/>, so mail goes out as a Workspace mailbox (contact@) that can't use an App Password.
+/// </summary>
+public sealed class GmailOAuthOptions
+{
+    public string? ClientId { get; set; }
+    public string? ClientSecret { get; set; }
+    public string? RefreshToken { get; set; }
+
+    /// <summary>The Google account the token belongs to: the SMTP login.</summary>
+    public string? AccountEmail { get; set; }
+
+    /// <summary>The From address: the account itself (default) or one of its verified "send mail as" aliases.</summary>
+    public string? FromAddress { get; set; }
+
+    public string? FromName { get; set; }
+
+    /// <summary>Everything needed to sign in is set; otherwise the user name and password are used, as before.</summary>
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret)
+        && !string.IsNullOrWhiteSpace(RefreshToken) && !string.IsNullOrWhiteSpace(AccountEmail);
 }
 
 /// <summary>The "Mail:Brand" section: how emails look (legacy MailSettings colours and logo).</summary>

@@ -81,6 +81,7 @@ public static class DependencyInjection
 
         services.Configure<Mail.MailOptions>(configuration.GetSection(Mail.MailOptions.Section));
         services.Configure<Mail.MailBrand>(configuration.GetSection($"{Mail.MailOptions.Section}:Brand"));
+        services.AddSingleton<Mail.GmailAccessTokens>();
         services.AddScoped<Application.Common.Mail.IEmailSender, Mail.EmailSender>();
         services.AddScoped<Application.Common.Mail.IBookingEmails, Mail.BookingEmails>();
         services.AddScoped<Application.Common.Mail.IEnquiryEmails, Mail.EnquiryEmails>();

@@ -16,9 +16,29 @@ public sealed class EmailSafetyTests : IDisposable
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     /// <summary>SMTP on, in development, with the recipient allowed: as far as settings can go towards sending.</summary>
-    private EmailSender Sender(string environment) => new(
-        Options.Create(new MailOptions { Mode = "Smtp", Host = "smtp.invalid", Port = 465, PickupDirectory = "mail", AllowedRecipients = ["hostel@tests.invalid"] }),
-        new Environment(environment, _root), NullLogger<EmailSender>.Instance);
+    private EmailSender Sender(string environment) => Sender(environment,
+        new MailOptions { Mode = "Smtp", Host = "smtp.invalid", Port = 465, PickupDirectory = "mail", AllowedRecipients = ["hostel@tests.invalid"] });
+
+    private EmailSender Sender(string environment, MailOptions settings)
+    {
+        var options = Options.Create(settings);
+        return new(options, new GmailAccessTokens(options), new Environment(environment, _root), NullLogger<EmailSender>.Instance);
+    }
+
+    [Fact]
+    public async Task With_gmail_oauth_emails_are_from_its_mailbox_and_marked_automatic()
+    {
+        var settings = new MailOptions
+        {
+            PickupDirectory = "mail", From = "admin@travaloud.com", DisplayName = "Travaloud",
+            GmailOAuth = new() { ClientId = "id", ClientSecret = "secret", RefreshToken = "token", AccountEmail = "contact@tests.invalid", FromName = "Fuse Hostels & Travel" },
+        };
+        await Sender("Development", settings).SendAsync(new EmailMessage(["sam@tests.invalid"], "Hello", "<p>Hi</p>"), TestContext.Current.CancellationToken);
+
+        var email = await MimeKit.MimeMessage.LoadAsync(Directory.GetFiles(Path.Combine(_root, "mail"), "*.eml").Single(), TestContext.Current.CancellationToken);
+        email.From.Mailboxes.Single().ToString().ShouldBe("\"Fuse Hostels & Travel\" <contact@tests.invalid>");
+        email.Headers["Auto-Submitted"].ShouldBe("auto-generated");
+    }
 
     private static EmailMessage Manifest() => new(["hostel@tests.invalid"], "Today's Tour Manifests for Bar Hop - 18:00", "<p>Manifest</p>") { Automated = true };
 
