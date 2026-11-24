@@ -13,15 +13,20 @@ namespace Fuse.Application.Features.Bookings;
 
 internal static class BookingEmailLoader
 {
-    /// <summary>A booking as the emails show it: its (not cancelled) tours, guests, supplier and confirmation text.</summary>
-    public static async Task<BookingEmail> LoadAsync(IAppDbContext db, DefaultIdType bookingId, CancellationToken cancellationToken)
+    /// <summary>
+    /// A booking as the emails show it: its (not cancelled) tours, guests, supplier and confirmation text. With
+    /// <paramref name="itemIds"/>, just those tours, cancelled or not (a cancellation email shows what was cancelled).
+    /// </summary>
+    public static async Task<BookingEmail> LoadAsync(IAppDbContext db, DefaultIdType bookingId, CancellationToken cancellationToken,
+        IReadOnlyCollection<DefaultIdType>? itemIds = null)
     {
         var booking = await db.Bookings.AsNoTracking().AsSplitQuery()
             .Include(b => b.Items).ThenInclude(i => i.Guests)
             .Include(b => b.Items).ThenInclude(i => i.Tour)
             .FirstOrDefaultAsync(b => b.Id == bookingId, cancellationToken)
             ?? throw new NotFoundException("Booking not found.");
-        var items = booking.Items.Where(i => i.TourId != null && i.Cancelled != true).OrderBy(i => i.StartDate).ToList();
+        var items = booking.Items.Where(i => i.TourId != null && (itemIds is null ? i.Cancelled != true : itemIds.Contains(i.Id)))
+            .OrderBy(i => i.StartDate).ToList();
         var guestIds = items.SelectMany(i => i.Guests ?? []).Where(g => g.DeletedOn == null).Select(g => g.GuestId.ToString()).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => guestIds.Contains(u.Id))
             .Select(u => new { u.Id, u.FirstName, u.LastName, u.FullName })
@@ -247,14 +252,38 @@ internal sealed class ConfirmCheckoutHandler(
             jobs.EnqueueEmail(websiteCheckout && !string.IsNullOrWhiteSpace(team) ? confirmation with { Bcc = [.. confirmation.Bcc, team] } : confirmation);
         }
 
-        var supplierIds = email.Items.Select(i => i.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-        var suppliers = await db.Users.AsNoTracking().Where(u => supplierIds.Contains(u.Id) && u.Email != null)
-            .Select(u => new { u.Id, u.Email }).ToListAsync(cancellationToken);
-        foreach (var supplier in suppliers)
-            jobs.EnqueueEmail(await emails.SupplierConfirmationAsync(email, supplier.Id, supplier.Email!));
+        await SupplierNotices.SendAsync(db, emails, jobs, email, SupplierNotice.Confirmed, cancellationToken);
 
         booking.FlagConfirmationEmailSent();
         await db.SaveChangesAsync(cancellationToken);
+    }
+}
+
+/// <summary>
+/// Emails each supplier with tours on a booking about them: confirmed (at checkout), cancelled or un-cancelled. Only
+/// suppliers who were sent the booking's confirmation hear that it's changed.
+/// </summary>
+internal sealed class SupplierNotices(IAppDbContext db, IBookingEmails emails, IBackgroundJobs jobs)
+{
+    /// <summary>Tells the suppliers of <paramref name="itemIds"/> (saved first) that they were cancelled or un-cancelled.</summary>
+    public async Task SendAsync(Booking booking, IReadOnlyCollection<DefaultIdType> itemIds, SupplierNotice notice, CancellationToken cancellationToken)
+    {
+        if (booking.ConfirmationEmailSent != true || itemIds.Count == 0)
+            return;
+        var email = await BookingEmailLoader.LoadAsync(db, booking.Id, cancellationToken, itemIds);
+        await SendAsync(db, emails, jobs, email, notice, cancellationToken);
+    }
+
+    public static async Task SendAsync(IAppDbContext db, IBookingEmails emails, IBackgroundJobs jobs, BookingEmail email, SupplierNotice notice,
+        CancellationToken cancellationToken)
+    {
+        var supplierIds = email.Items.Select(i => i.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+        if (supplierIds.Count == 0)
+            return;
+        var suppliers = await db.Users.AsNoTracking().Where(u => supplierIds.Contains(u.Id) && u.Email != null)
+            .Select(u => new { u.Id, u.Email }).ToListAsync(cancellationToken);
+        foreach (var supplier in suppliers)
+            jobs.EnqueueEmail(await emails.SupplierConfirmationAsync(email, supplier.Id, supplier.Email!, notice));
     }
 }
 

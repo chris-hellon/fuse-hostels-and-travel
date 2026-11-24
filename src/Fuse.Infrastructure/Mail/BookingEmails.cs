@@ -24,12 +24,18 @@ internal sealed class BookingEmails(IServiceProvider services, ILoggerFactory lo
             [nameof(BookingConfirmation.Booking)] = booking,
         }));
 
-    public async Task<EmailMessage> SupplierConfirmationAsync(BookingEmail booking, string supplierId, string to) =>
-        new([to], $"{brand.Value.TenantName} Booking Confirmation", await RenderAsync<SupplierBookingConfirmation>(new()
+    public async Task<EmailMessage> SupplierConfirmationAsync(BookingEmail booking, string supplierId, string to, SupplierNotice notice = SupplierNotice.Confirmed) =>
+        new([to], notice switch
+        {
+            SupplierNotice.Cancelled => $"{brand.Value.TenantName} Booking Cancelled - {booking.Reference}",
+            SupplierNotice.Reinstated => $"{brand.Value.TenantName} Booking Reinstated - {booking.Reference}",
+            _ => $"{brand.Value.TenantName} Booking Confirmation",
+        }, await RenderAsync<SupplierBookingConfirmation>(new()
         {
             [nameof(SupplierBookingConfirmation.Brand)] = brand.Value,
             [nameof(SupplierBookingConfirmation.Booking)] = booking,
             [nameof(SupplierBookingConfirmation.SupplierId)] = supplierId,
+            [nameof(SupplierBookingConfirmation.Notice)] = notice,
         }));
 
     public async Task<EmailMessage> TourManifestAsync(TourManifest manifest, string to) =>

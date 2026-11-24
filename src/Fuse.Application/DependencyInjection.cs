@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<Features.Tours.SupplierScope>();
         services.AddScoped<Features.Bookings.TourCapacity>();
         services.AddScoped<Features.Bookings.BookingRefunds>();
+        services.AddScoped<Features.Bookings.SupplierNotices>();
         services.AddScoped<Features.Bookings.BookingCheckouts>();
         services.AddScoped<Features.Bookings.PaidBookingNotifications>();
         services.AddScoped<Features.Site.UnpaidCheckouts>();

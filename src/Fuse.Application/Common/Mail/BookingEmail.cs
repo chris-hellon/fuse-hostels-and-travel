@@ -42,10 +42,21 @@ public interface IBookingEmails
 {
     Task<EmailMessage> PaymentReminderAsync(BookingEmail booking, string to, string checkoutUrl);
     Task<EmailMessage> ConfirmationAsync(BookingEmail booking, string to);
-    Task<EmailMessage> SupplierConfirmationAsync(BookingEmail booking, string supplierId, string to);
+    Task<EmailMessage> SupplierConfirmationAsync(BookingEmail booking, string supplierId, string to, SupplierNotice notice = SupplierNotice.Confirmed);
 
     /// <summary>Legacy "Today's Tour Manifests": a departure's manifest for a hostel, 1 hour before it leaves.</summary>
     Task<EmailMessage> TourManifestAsync(TourManifest manifest, string to);
+}
+
+/// <summary>What a supplier's email tells them about their tours on a booking.</summary>
+public enum SupplierNotice
+{
+    /// <summary>Legacy's "New Booking Confirmed".</summary>
+    Confirmed,
+    /// <summary>The tours were cancelled: the guests aren't coming.</summary>
+    Cancelled,
+    /// <summary>A cancelled booking was un-cancelled: the guests are coming after all.</summary>
+    Reinstated,
 }
 
 /// <summary>What the manifest email says about a departure (the spreadsheet is attached).</summary>

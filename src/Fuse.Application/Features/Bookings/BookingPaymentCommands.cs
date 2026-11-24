@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Fuse.Application.Common.Mail;
 using Fuse.Application.Common.Payments;
 using Fuse.Application.Common.Time;
 using Fuse.Application.Features.Tours;
@@ -92,7 +93,7 @@ internal sealed class DeleteBookingHandler(IAppDbContext db, SupplierScope scope
     }
 }
 
-internal sealed class CancelBookingHandler(IAppDbContext db, SupplierScope scope, TourCapacity capacity, BookingRefunds refunds)
+internal sealed class CancelBookingHandler(IAppDbContext db, SupplierScope scope, TourCapacity capacity, BookingRefunds refunds, SupplierNotices suppliers)
     : ICommandHandler<CancelBooking, string>
 {
     public async ValueTask<string> Handle(CancelBooking command, CancellationToken cancellationToken)
@@ -106,12 +107,37 @@ internal sealed class CancelBookingHandler(IAppDbContext db, SupplierScope scope
             ? await refunds.RefundBookingAsync(booking, command.RefundAmount, partial: true, cancellationToken)
             : null;
 
-        foreach (var item in booking.Items.Where(i => i.Cancelled != true))
+        var live = booking.Items.Where(i => i.Cancelled != true).ToList();
+        foreach (var item in live)
             await capacity.ReleaseAsync(item.TourDateId, BookingStatuses.GuestCount(item), cancellationToken);
         booking.Cancel();
         booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
+        // Suppliers hear about the tours that were still on (any cancelled before were told then).
+        await suppliers.SendAsync(booking, [.. live.Select(i => i.Id)], SupplierNotice.Cancelled, cancellationToken);
         return refunded is null ? "Booking cancelled." : $"Booking cancelled. {refunded}";
+    }
+}
+
+internal sealed class UncancelBookingHandler(IAppDbContext db, SupplierScope scope, TourCapacity capacity, SupplierNotices suppliers)
+    : ICommandHandler<UncancelBooking>
+{
+    public async ValueTask<Unit> Handle(UncancelBooking command, CancellationToken cancellationToken)
+    {
+        var booking = await BookingLoader.LoadAsync(db, scope, command.Id, cancellationToken);
+        if (booking.Cancelled != true)
+            throw new BusinessRuleException("This booking isn't cancelled.");
+        if (booking.HasRefunds)
+            throw new BusinessRuleException("This booking has been refunded, so it can't be un-cancelled.");
+
+        // Every tour comes back (cancelling the booking cancelled them all), so each retakes its spaces.
+        foreach (var item in booking.Items.Where(i => i.TourDateId is not null))
+            await capacity.TakeAsync(item.TourDateId!.Value, BookingStatuses.GuestCount(item), cancellationToken);
+        booking.Uncancel();
+        booking.Touch();
+        await db.SaveChangesAsync(cancellationToken);
+        await suppliers.SendAsync(booking, [.. booking.Items.Select(i => i.Id)], SupplierNotice.Reinstated, cancellationToken);
+        return Unit.Value;
     }
 }
 
@@ -132,7 +158,7 @@ internal sealed class RefundBookingHandler(IAppDbContext db, SupplierScope scope
     }
 }
 
-internal sealed class CancelBookingItemHandler(IAppDbContext db, SupplierScope scope, TourCapacity capacity, BookingRefunds refunds)
+internal sealed class CancelBookingItemHandler(IAppDbContext db, SupplierScope scope, TourCapacity capacity, BookingRefunds refunds, SupplierNotices suppliers)
     : ICommandHandler<CancelBookingItem, string>
 {
     public async ValueTask<string> Handle(CancelBookingItem command, CancellationToken cancellationToken)
@@ -152,6 +178,7 @@ internal sealed class CancelBookingItemHandler(IAppDbContext db, SupplierScope s
             booking.Cancel();
         booking.Touch();
         await db.SaveChangesAsync(cancellationToken);
+        await suppliers.SendAsync(booking, [item.Id], SupplierNotice.Cancelled, cancellationToken);
         return refunded is null ? "Tour cancelled." : $"Tour cancelled. {refunded}";
     }
 }

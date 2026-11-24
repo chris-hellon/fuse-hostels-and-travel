@@ -5,6 +5,7 @@ using Fuse.Contracts.Api;
 using Fuse.Contracts.Bookings;
 using Fuse.Contracts.Common;
 using Fuse.Contracts.Dashboard;
+using Fuse.Contracts.Identity;
 using Fuse.Infrastructure.Persistence;
 using Fuse.Shared.Enums;
 
@@ -117,6 +118,79 @@ public sealed class BookingTests(TestApp app)
         cancelled.Status.ShouldBe(BookingState.Cancelled);
         (await api.Send(new GetBookingOverview(row.Id), Ct)).Items.Single().Guests.ShouldAllBe(g => g.Status == BookingState.Cancelled);
         await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new CancelBooking(row.Id, 0), Ct).AsTask());
+    }
+
+    [Fact]
+    public async Task Un_cancelling_retakes_the_spaces_but_refunded_bookings_cant_be_un_cancelled()
+    {
+        var (api, row, _, dateId) = await BookedAsync(paid: true);
+        await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new UncancelBooking(row.Id), Ct).AsTask());
+        var before = await SpacesAsync(dateId);
+
+        await api.Send(new CancelBooking(row.Id, 0), Ct);
+        (await api.Send(new SearchBookings { Keyword = row.Reference.ToString(), PageSize = 100 }, Ct)).Items.Single(r => r.Id == row.Id).Restorable.ShouldBeTrue();
+        await api.Send(new UncancelBooking(row.Id), Ct);
+        (await SpacesAsync(dateId)).ShouldBe(before);
+
+        var restored = (await api.Send(new SearchBookings { Keyword = row.Reference.ToString(), PageSize = 100 }, Ct)).Items.Single(r => r.Id == row.Id);
+        (restored.Status, restored.Cancelled, restored.Restorable).ShouldBe((BookingState.Paid, false, false));
+        (await api.Send(new GetBookingOverview(row.Id), Ct)).Items.Single().Guests.ShouldAllBe(g => g.Status != BookingState.Cancelled);
+
+        // Cancelled with money given back: stays cancelled.
+        var (_, refunded, _, _) = await BookedAsync(paid: true);
+        await api.Send(new CancelBooking(refunded.Id, 10), Ct);
+        (await api.Send(new SearchBookings { Keyword = refunded.Reference.ToString(), PageSize = 100 }, Ct)).Items.Single(r => r.Id == refunded.Id).Restorable.ShouldBeFalse();
+        await Should.ThrowAsync<BusinessRuleException>(() => api.Send(new UncancelBooking(refunded.Id), Ct).AsTask());
+    }
+
+    /// <summary>A booking of a tour run by a new supplier, whose confirmation went out only when <paramref name="confirmed"/>.</summary>
+    private async Task<(IApi Api, BookingRow Booking, string SupplierEmail)> SupplierBookedAsync(bool confirmed)
+    {
+        var api = await app.AdminApiAsync();
+        var supplierEmail = $"supplier-{Guid.NewGuid():N}@tests.invalid";
+        var supplierId = await api.Send(new CreateSupplier(new UserProfile { FirstName = "Sam", LastName = "Supplier", Email = supplierEmail }, TestApp.Password, TestApp.Password), Ct);
+        var start = TestBookings.BusinessNow.Date.AddDays(7).AddHours(9);
+        var (tourId, dateId) = await TestBookings.TourWithDepartureAsync(app, api, start, Ct, supplierId);
+        var reference = await TestBookings.BookAsync(app, tourId, dateId, start, TestBookings.BusinessNow, Ct, paid: true);
+        if (confirmed)
+        {
+            await using var scope = TestBookings.TenantScope(app);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await db.Bookings.SingleAsync(b => b.InvoiceId == reference, Ct)).FlagConfirmationEmailSent();
+            await db.SaveChangesAsync(Ct);
+        }
+        var row = (await api.Send(new SearchBookings { Keyword = reference.ToString(), PageSize = 100 }, Ct)).Items.Single(r => r.Reference == reference);
+        return (api, row, supplierEmail);
+    }
+
+    private IReadOnlyList<string> SubjectsTo(string email) => [.. app.Emails.Sent.Where(e => e.To.Contains(email)).Select(e => e.Subject)];
+
+    [Fact]
+    public async Task Suppliers_are_told_when_their_confirmed_tours_are_cancelled_and_un_cancelled()
+    {
+        var (api, row, supplier) = await SupplierBookedAsync(confirmed: true);
+        await api.Send(new CancelBooking(row.Id, 0), Ct);
+        var cancelled = app.Emails.Sent.Single(e => e.To.Contains(supplier));
+        cancelled.Subject.ShouldEndWith($"Booking Cancelled - {row.Reference}");
+        cancelled.HtmlBody.ShouldContain("will no longer be joining the tour");
+        cancelled.HtmlBody.ShouldContain("Test Guest");
+
+        await api.Send(new UncancelBooking(row.Id), Ct);
+        SubjectsTo(supplier).Count(s => s.EndsWith($"Booking Reinstated - {row.Reference}")).ShouldBe(1);
+
+        // One tour cancelled from the booking's details.
+        var itemId = (await api.Send(new GetBookingOverview(row.Id), Ct)).Items.Single().Id;
+        await api.Send(new CancelBookingItem(itemId, 0), Ct);
+        SubjectsTo(supplier).Count(s => s.EndsWith($"Booking Cancelled - {row.Reference}")).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Suppliers_never_sent_the_confirmation_arent_told_of_a_cancellation()
+    {
+        var (api, row, supplier) = await SupplierBookedAsync(confirmed: false);
+        await api.Send(new CancelBooking(row.Id, 0), Ct);
+        await api.Send(new UncancelBooking(row.Id), Ct);
+        SubjectsTo(supplier).ShouldBeEmpty();
     }
 
     [Fact]

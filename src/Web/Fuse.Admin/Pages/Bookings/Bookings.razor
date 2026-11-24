@@ -55,6 +55,10 @@
             <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => RefundAsync(context))">Refund</MudMenuItem>
             <MudMenuItem Class="row-menu__danger" OnClick="() => AfterMenuCloses(() => CancelAsync(context))">Cancel</MudMenuItem>
         }
+        else if (context.Restorable && _abilities.CanRefund)
+        {
+            <MudMenuItem OnClick="() => AfterMenuCloses(() => UncancelAsync(context))">Un-cancel</MudMenuItem>
+        }
     </ExtraActions>
     <ChildRowContent>
         @if (_expanded.Contains(context.Id))
@@ -245,6 +249,15 @@
                 "Flag as paid", "Cancel"))
             return;
         if (await Snackbar.TryAsync(async () => await Api.Send(new FlagBookingAsPaid(booking.Id)), "Booking flagged as paid."))
+            await ReloadAsync();
+    }
+
+    private async Task UncancelAsync(BookingRow booking)
+    {
+        if (!await Dialogs.ConfirmAsync("Un-cancel this booking?", $"Booking {booking.Reference} for {booking.GuestName} and all its tours will be live again, taking back their spaces.",
+                "Un-cancel booking", "Keep cancelled", destructive: false))
+            return;
+        if (await Snackbar.TryAsync(async () => await Api.Send(new UncancelBooking(booking.Id)), "Booking un-cancelled."))
             await ReloadAsync();
     }
 

@@ -1,9 +1,9 @@
-@* Legacy SupplierBookingConfirmation: tells a supplier who's booked on their tours. *@
-<EmailFrame Brand="Brand" Title="New Booking Confirmed" Preheader="@($"{Brand.TenantName} Booking Confirmation")" ShowTick="true"
+@* Legacy SupplierBookingConfirmation: tells a supplier who's booked on their tours (or, since, that they've been cancelled or un-cancelled). *@
+<EmailFrame Brand="Brand" Title="@Title" Preheader="@($"{Brand.TenantName} {Subject}")" ShowTick="@(Notice != SupplierNotice.Cancelled)"
             ActionIntro="If you have any questions, you can reach out to us below." ActionText="Contact Us" ActionUrl="@Brand.ContactUrl">
     <tr>
         <td align="left" style="@(EmailStyles.Body) padding-top: 10px;">
-            <p style="@EmailStyles.Paragraph">Dear Partner, a new Booking has been processed. Please confirm details of the Booking below.</p>
+            <p style="@EmailStyles.Paragraph">@Intro</p>
         </td>
     </tr>
     <tr>
@@ -32,4 +32,26 @@
     [Parameter, EditorRequired] public MailBrand Brand { get; set; } = null!;
     [Parameter, EditorRequired] public BookingEmail Booking { get; set; } = null!;
     [Parameter, EditorRequired] public string SupplierId { get; set; } = "";
+    [Parameter] public SupplierNotice Notice { get; set; }
+
+    private string Title => Notice switch
+    {
+        SupplierNotice.Cancelled => "Booking Cancelled",
+        SupplierNotice.Reinstated => "Booking Reinstated",
+        _ => "New Booking Confirmed",
+    };
+
+    private string Subject => Notice switch
+    {
+        SupplierNotice.Cancelled => "Booking Cancellation",
+        SupplierNotice.Reinstated => "Booking Reinstated",
+        _ => "Booking Confirmation",
+    };
+
+    private string Intro => Notice switch
+    {
+        SupplierNotice.Cancelled => $"Dear Partner, Booking {Booking.Reference} below has been cancelled. These guests will no longer be joining the tour.",
+        SupplierNotice.Reinstated => $"Dear Partner, Booking {Booking.Reference} below, which we told you had been cancelled, is going ahead after all. Please confirm details of the Booking below.",
+        _ => "Dear Partner, a new Booking has been processed. Please confirm details of the Booking below.",
+    };
 }

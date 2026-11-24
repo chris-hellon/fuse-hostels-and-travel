@@ -22,4 +22,6 @@ public class BookingItemGuest : AuditableEntity, IAggregateRoot
     public void SetAttendance(bool checkedIn, bool noShow, bool cancelled) => (CheckedIn, NoShow, Cancelled) = (checkedIn, noShow, cancelled);
 
     public void Cancel() => Cancelled = true;
+
+    public void Uncancel() => Cancelled = false;
 }

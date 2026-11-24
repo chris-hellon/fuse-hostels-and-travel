@@ -41,6 +41,9 @@ internal sealed class SearchBookingsHandler(IAppDbContext db, SupplierScope scop
                 IsPaid = b.IsPaid,
                 Cancelled = b.Cancelled == true,
                 Refunded = b.Refunded == true,
+                Restorable = b.Cancelled == true && b.Refunded != true && b.PartialRefund != true
+                    && !b.Items.Any(i => i.Refunded == true || i.PartialRefund == true)
+                    && !b.Payments.Any(p => p.Refunded || p.PartialRefund == true),
                 ContainsPackage = b.Items.Any(i => i.BookingPackageId != null),
                 HasPackIncentive = b.PackIncentiveId != null,
             })

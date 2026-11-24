@@ -276,6 +276,20 @@ public class Booking : AuditableEntity, IAggregateRoot
             item.Cancel();
     }
 
+    /// <summary>Anything refunded, wholly or in part: on the booking, one of its tours or one of its payments.</summary>
+    public bool HasRefunds =>
+        Refunded == true || PartialRefund == true
+        || (Items ?? []).Any(i => i.Refunded == true || i.PartialRefund == true)
+        || (Payments ?? []).Any(p => p.Refunded || p.PartialRefund == true);
+
+    /// <summary>Undoes <see cref="Cancel"/>: the booking and every tour and guest on it are live again. Spaces are retaken by the caller.</summary>
+    public void Uncancel()
+    {
+        Cancelled = false;
+        foreach (var item in Items ?? [])
+            item.Uncancel();
+    }
+
     public Booking FlagBookingAsPartialRefund()
     {
         PartialRefund = true;

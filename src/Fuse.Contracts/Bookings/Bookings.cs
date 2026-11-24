@@ -20,6 +20,8 @@ public sealed record BookingRow
     public bool IsPaid { get; init; }
     public bool Cancelled { get; init; }
     public bool Refunded { get; init; }
+    /// <summary>Cancelled with nothing refunded (on the booking, its tours or its payments): can be un-cancelled.</summary>
+    public bool Restorable { get; init; }
     public bool ContainsPackage { get; init; }
     public bool HasPackIncentive { get; init; }
 
@@ -204,6 +206,13 @@ public sealed record DeleteBooking(DefaultIdType Id) : ICommand;
 /// <summary>Cancels the whole booking, freeing its spaces, after refunding <see cref="RefundAmount"/> (0 = no refund).</summary>
 [Put("bookings/{Id}/cancel"), Permission(FuseAction.Delete, FuseResource.TourBookings)]
 public sealed record CancelBooking(DefaultIdType Id, decimal RefundAmount) : ICommand<string>;
+
+/// <summary>
+/// Un-cancels a cancelled booking that hasn't been refunded: it and all its tours and guests are live again, retaking
+/// their spaces (refused if a departure hasn't enough left).
+/// </summary>
+[Put("bookings/{Id}/uncancel"), Permission(FuseAction.Delete, FuseResource.TourBookings)]
+public sealed record UncancelBooking(DefaultIdType Id) : ICommand;
 
 /// <summary>Refunds part or all of a paid booking through Stripe.</summary>
 [Put("bookings/{Id}/refund"), Permission(FuseAction.Delete, FuseResource.TourBookings)]

@@ -201,6 +201,14 @@ public class BookingItem : AuditableEntity, IAggregateRoot
             guest.Cancel();
     }
 
+    /// <summary>Undoes <see cref="Cancel"/> for this tour and its guests.</summary>
+    public void Uncancel()
+    {
+        Cancelled = false;
+        foreach (var guest in Guests ?? [])
+            guest.Uncancel();
+    }
+
     public BookingItem AddGuest(BookingItemGuest guest)
     {
         Guests ??= new List<BookingItemGuest>();
