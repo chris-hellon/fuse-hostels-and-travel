@@ -12,7 +12,8 @@ namespace Fuse.Infrastructure.Mail;
 /// Sends through SMTP (MailKit), or writes .eml files locally. Outside production SMTP only reaches
 /// <see cref="MailOptions.AllowedRecipients"/>, and automated emails (<see cref="EmailMessage.Automated"/>, e.g. the
 /// tour manifests) are never sent at all: only emails someone triggers. As legacy, never emails booking.com relays.
-/// With Mail:GmailOAuth configured it signs in with a Gmail access token and sends as that mailbox (legacy's new provider).
+/// With Mail:GmailOAuth configured it signs in with a Gmail access token and sends as that mailbox (legacy's new provider),
+/// falling back to the user name and password if that sign-in fails. Should both fail, the job fails and Hangfire retries it.
 /// </summary>
 internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessTokens tokens, IHostEnvironment environment, ILogger<EmailSender> logger)
     : IEmailSender
@@ -64,14 +65,31 @@ internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessToke
         }
 
         using var smtp = new SmtpClient { CheckCertificateRevocation = settings.CheckCertificateRevocation };
+        var signedIn = false;
         if (oauth.IsConfigured)
         {
-            // As legacy: 465 is TLS from the start, 587 upgrades with STARTTLS.
-            var security = settings.Port switch { 465 => SecureSocketOptions.SslOnConnect, 587 => SecureSocketOptions.StartTls, _ => SecureSocketOptions.Auto };
-            await smtp.ConnectAsync(settings.Host, settings.Port, security, cancellationToken);
-            await smtp.AuthenticateAsync(new SaslMechanismOAuth2(oauth.AccountEmail, await tokens.GetAsync(cancellationToken)), cancellationToken);
+            try
+            {
+                // As legacy: 465 is TLS from the start, 587 upgrades with STARTTLS.
+                var security = settings.Port switch { 465 => SecureSocketOptions.SslOnConnect, 587 => SecureSocketOptions.StartTls, _ => SecureSocketOptions.Auto };
+                await smtp.ConnectAsync(settings.Host, settings.Port, security, cancellationToken);
+                await smtp.AuthenticateAsync(new SaslMechanismOAuth2(oauth.AccountEmail, await tokens.GetAsync(cancellationToken)), cancellationToken);
+                signedIn = true;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // As legacy: the Google sign-in failed (a revoked or expired refresh token, Google down), so the email goes
+                // with the user name and password instead, from that account (Gmail refuses a From it doesn't own).
+                logger.LogWarning(e, "Gmail OAuth sign-in failed for \"{Subject}\"; sending with the SMTP user name and password instead", message.Subject);
+                if (smtp.IsConnected)
+                    await smtp.DisconnectAsync(true, cancellationToken);
+                var fallback = new MailboxAddress(settings.DisplayName, settings.From);
+                email.From.Clear();
+                email.From.Add(fallback);
+                email.Sender = fallback;
+            }
         }
-        else
+        if (!signedIn)
         {
             await smtp.ConnectAsync(settings.Host, settings.Port, cancellationToken: cancellationToken);
             if (settings.Port != 25)
