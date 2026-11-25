@@ -12,6 +12,12 @@ public sealed record EmailMessage(IReadOnlyList<string> To, string Subject, stri
     public bool Automated { get; init; }
     /// <summary>Files sent with it (e.g. a manifest spreadsheet).</summary>
     public IReadOnlyList<EmailAttachment> Attachments { get; init; } = [];
+    /// <summary>Its Message-ID header (without angle brackets), when it's to be found again (an enquiry's emails); else one is made.</summary>
+    public string? MessageId { get; init; }
+    /// <summary>The Message-ID it answers (In-Reply-To), so mail apps show it in the same conversation.</summary>
+    public string? InReplyTo { get; init; }
+    /// <summary>The conversation's earlier Message-IDs, oldest first (References).</summary>
+    public IReadOnlyList<string> References { get; init; } = [];
 }
 
 public sealed record EmailAttachment(string FileName, string ContentType, byte[] Content);
@@ -22,7 +28,8 @@ public sealed record EmailAttachment(string FileName, string ContentType, byte[]
 /// </summary>
 public interface IEmailSender
 {
-    Task SendAsync(EmailMessage message, CancellationToken cancellationToken);
+    /// <summary>False when none of its recipients may receive email here (outside production's allow-list), so nothing went.</summary>
+    Task<bool> SendAsync(EmailMessage message, CancellationToken cancellationToken);
 }
 
 public static class EmailQueue
@@ -31,7 +38,10 @@ public static class EmailQueue
     public static void EnqueueEmail(this Jobs.IBackgroundJobs jobs, EmailMessage message)
     {
         // Stored with its type names until sent: plain arrays, not the compiler's lists from [..] (which can't be read back).
-        var stored = message with { To = message.To.ToArray(), Bcc = message.Bcc.ToArray(), Attachments = message.Attachments.ToArray() };
+        var stored = message with
+        {
+            To = message.To.ToArray(), Bcc = message.Bcc.ToArray(), Attachments = message.Attachments.ToArray(), References = message.References.ToArray(),
+        };
         jobs.Enqueue<IEmailSender>(sender => sender.SendAsync(stored, CancellationToken.None));
     }
 }

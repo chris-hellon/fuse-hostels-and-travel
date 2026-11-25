@@ -11,7 +11,8 @@ namespace Fuse.Application.Features.Site;
 // team (Site:ContactEmail) with the visitor as the reply-to. Legacy did the same, bar the reply-to.
 
 /// <summary>Shared by the enquiry handlers: the bot checks and the email to the team.</summary>
-internal sealed class SiteEnquiries(ICaptcha captcha, IEnquiryEmails emails, IBackgroundJobs jobs, IOptions<SiteOptions> options, ILogger<SiteEnquiries> logger)
+internal sealed class SiteEnquiries(IAppDbContext db, ICaptcha captcha, IEnquiryEmails emails, IBackgroundJobs jobs, IOptions<SiteOptions> options,
+    ILogger<SiteEnquiries> logger)
 {
     /// <summary>False for a bot that filled the hidden field: it's thanked as usual, and nothing is saved or sent.</summary>
     public async Task<bool> AcceptAsync(string? honeyPot, string response, CancellationToken cancellationToken)
@@ -26,14 +27,23 @@ internal sealed class SiteEnquiries(ICaptcha captcha, IEnquiryEmails emails, IBa
         return true;
     }
 
-    public async Task SendAsync(EnquiryEmail enquiry, string replyTo)
+    /// <summary>
+    /// Emails the enquiry to the team. Its Message-ID is kept with the enquiry's conversation, so replies sent from the inbox
+    /// to it (and the enquirer's answers) show in the admin too.
+    /// </summary>
+    public async Task SendAsync(EnquiryEmail enquiry, string replyTo, EnquiryType type, DefaultIdType enquiryId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(options.Value.ContactEmail))
         {
             logger.LogWarning("Website enquiry \"{Subject}\" saved but not emailed: Site:ContactEmail isn't set", enquiry.Subject);
             return;
         }
-        jobs.EnqueueEmail(await emails.RenderAsync(enquiry, options.Value.ContactEmail, replyTo));
+        var messageId = Enquiries.EnquiryMail.NewMessageId(options.Value);
+        var email = await emails.RenderAsync(enquiry, options.Value.ContactEmail, replyTo) with { MessageId = messageId };
+        jobs.EnqueueEmail(email);
+        db.EnquiryMessages.Add(new EnquiryMessage(type, enquiryId, EnquiryMessageDirection.Notification, options.Value.ContactEmail, null,
+            options.Value.ContactEmail, email.Subject, "", DateTime.UtcNow, messageId));
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     public static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -48,7 +58,8 @@ internal sealed class SendEnquiryHandler(IAppDbContext db, SiteEnquiries enquiri
 
         var (name, email, phone, message) = (command.Name.Trim(), command.Email.Trim(), command.ContactNumber.Trim(), command.Message.Trim());
         // Legacy kept the related hostel and tour in the email only (the enquiry has no place for them).
-        db.GeneralEnquiries.Add(new GeneralEnquiry(name, email, phone, message, false));
+        var enquiry = new GeneralEnquiry(name, email, phone, message, false);
+        db.GeneralEnquiries.Add(enquiry);
         await db.SaveChangesAsync(cancellationToken);
 
         await enquiries.SendAsync(new EnquiryEmail("Website Enquiry", "Website Enquiry",
@@ -59,7 +70,7 @@ internal sealed class SendEnquiryHandler(IAppDbContext db, SiteEnquiries enquiri
             new("Related Hostel", SiteEnquiries.Clean(command.Hostel)),
             new("Related Tour", SiteEnquiries.Clean(command.Tour)),
             new("Message", message),
-        ]), email);
+        ]), email, EnquiryType.General, enquiry.Id, cancellationToken);
         return Unit.Value;
     }
 }
@@ -77,7 +88,8 @@ internal sealed class SendTourEnquiryHandler(IAppDbContext db, SiteEnquiries enq
 
         var (name, email, phone, requests) = (command.Name.Trim(), command.Email.Trim(), command.ContactNumber.Trim(), SiteEnquiries.Clean(command.SpecialRequests));
         var date = command.Date!.Value.Date;
-        db.TourEnquiries.Add(new TourEnquiry(command.TourId, name, email, phone, date, command.People!.Value, requests, false));
+        var enquiry = new TourEnquiry(command.TourId, name, email, phone, date, command.People!.Value, requests, false);
+        db.TourEnquiries.Add(enquiry);
         await db.SaveChangesAsync(cancellationToken);
 
         await enquiries.SendAsync(new EnquiryEmail("Tour Booking Enquiry", $"Tour Booking Enquiry: {tour}",
@@ -89,7 +101,7 @@ internal sealed class SendTourEnquiryHandler(IAppDbContext db, SiteEnquiries enq
             new("Email", email),
             new("Contact Number", phone),
             new("Special Requests", requests),
-        ]), email);
+        ]), email, EnquiryType.Tour, enquiry.Id, cancellationToken);
         return Unit.Value;
     }
 }

@@ -10,7 +10,7 @@
 <EntityTable @ref="_table" T="GeneralEnquirySummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="General Enquiries" Resource="@FuseResource.Enquiries"
              OnExport="ExportAsync" OnDelete="DeleteAsync">
     <AdvancedSearchContent>
-        <EnquiryRepliedFilter Value="_replied" ValueChanged="FilterAsync" />
+        <EnquiryStatusFilter Value="_status" ValueChanged="FilterAsync" />
     </AdvancedSearchContent>
     <RowButtons>
         <RowIconButton Icon="@Icons.Material.Outlined.Visibility" Label="View" OnClick="() => ViewAsync(context)" />
@@ -26,22 +26,22 @@
         new(e => e.Name, "Name", nameof(GeneralEnquirySummary.Name)),
         new(e => e.Email, "Email", nameof(GeneralEnquirySummary.Email)),
         new(e => e.ContactNumber, "Contact Number", nameof(GeneralEnquirySummary.ContactNumber)),
-        EntityField<GeneralEnquirySummary>.Bool(e => e.Replied, "Replied", nameof(GeneralEnquirySummary.Replied)),
+        new(e => EnquiryPages.Label(e.Status), "Status", Template: e => @<EnquiryStatusChip Status="e.Status" />) { Width = "1%" },
     ];
 
     private EntityTable<GeneralEnquirySummary>? _table;
     private string? _keyword;
-    private bool? _replied;
+    private EnquiryStatus? _status;
 
     private async Task<PagedResult<GeneralEnquirySummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
     {
         _keyword = request.Keyword;
-        return await Api.Send(request.Apply(new SearchGeneralEnquiries { Replied = _replied }), cancellationToken);
+        return await Api.Send(request.Apply(new SearchGeneralEnquiries { Status = _status }), cancellationToken);
     }
 
-    private async Task FilterAsync(bool? replied)
+    private async Task FilterAsync(EnquiryStatus? status)
     {
-        _replied = replied;
+        _status = status;
         await _table!.ReloadAsync();
     }
 
@@ -55,16 +55,15 @@
         {
             { d => d.Title, $"Enquiry from {e.Name}" }, { d => d.Submitted, e.Submitted }, { d => d.Email, e.Email },
             { d => d.Fields, [("Name", e.Name), ("Email", e.Email), ("Contact Number", e.ContactNumber), ("Message", details.Message)] },
-            { d => d.Kind, EnquiryKind.General }, { d => d.Id, e.Id }, { d => d.Replied, e.Replied },
+            { d => d.Kind, EnquiryKind.General }, { d => d.Id, e.Id }, { d => d.Status, e.Status },
             { d => d.CanUpdate, EnquiryPages.CanUpdate(AuthState is null ? null : (await AuthState).User) },
-            { d => d.ReplySubject, "Your enquiry to Fuse Hostels & Travel" },
-        }, EnquiryPages.DialogOptions);
+        }, EnquiryPages.ConversationOptions);
         if ((await dialog.Result)?.Data is true)
             await _table!.ReloadAsync();
     }
 
     private async Task ExportAsync() =>
-        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportEnquiries(EnquiryKind.General, _keyword, _replied))));
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportEnquiries(EnquiryKind.General, _keyword, null, _status))));
 
     private async Task DeleteAsync(GeneralEnquirySummary e)
     {

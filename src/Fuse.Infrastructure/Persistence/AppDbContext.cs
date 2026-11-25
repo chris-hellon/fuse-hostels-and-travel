@@ -90,6 +90,8 @@ public sealed class AppDbContext(
     public DbSet<ServiceEnquiry> ServiceEnquiries => Set<ServiceEnquiry>();
     public DbSet<ServiceEnquiryField> ServiceEnquiryFields => Set<ServiceEnquiryField>();
     public DbSet<GeneralEnquiry> GeneralEnquiries => Set<GeneralEnquiry>();
+    public DbSet<EnquiryMessage> EnquiryMessages => Set<EnquiryMessage>();
+    public DbSet<EnquiryState> EnquiryStates => Set<EnquiryState>();
     public DbSet<Gallery> Galleries => Set<Gallery>();
     public DbSet<GalleryImage> GalleryImages => Set<GalleryImage>();
     public DbSet<TravelGuide> TravelGuides => Set<TravelGuide>();

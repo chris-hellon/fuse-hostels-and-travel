@@ -10,6 +10,15 @@ public enum EnquiryKind
     JobApplication,
 }
 
+/// <summary>Where an enquiry stands: New (nothing sent yet), Waiting on us (they wrote last), Replied (we did), Closed (done).</summary>
+public enum EnquiryStatus
+{
+    New,
+    WaitingOnUs,
+    Replied,
+    Closed,
+}
+
 public sealed record GeneralEnquirySummary
 {
     public DefaultIdType Id { get; init; }
@@ -18,6 +27,7 @@ public sealed record GeneralEnquirySummary
     public string ContactNumber { get; init; } = "";
     public DateTime Submitted { get; init; }
     public bool Replied { get; init; }
+    public EnquiryStatus Status { get; init; }
 }
 
 public sealed record GeneralEnquiryDetails
@@ -31,6 +41,7 @@ public sealed record SearchGeneralEnquiries : PagedQuery, IQuery<PagedResult<Gen
 {
     /// <summary>Only replied (true) or not yet (false) ones; all when null.</summary>
     public bool? Replied { get; init; }
+    public EnquiryStatus? Status { get; init; }
 }
 
 [Get("enquiries/general/{Id}"), Permission(FuseAction.View, FuseResource.Enquiries)]
@@ -47,6 +58,7 @@ public sealed record TourEnquirySummary
     public int NumberOfPeople { get; init; }
     public DateTime Submitted { get; init; }
     public bool Replied { get; init; }
+    public EnquiryStatus Status { get; init; }
 }
 
 public sealed record TourEnquiryDetails
@@ -59,6 +71,7 @@ public sealed record TourEnquiryDetails
 public sealed record SearchTourEnquiries : PagedQuery, IQuery<PagedResult<TourEnquirySummary>>
 {
     public bool? Replied { get; init; }
+    public EnquiryStatus? Status { get; init; }
 }
 
 [Get("enquiries/tours/{Id}"), Permission(FuseAction.View, FuseResource.Enquiries)]
@@ -72,6 +85,7 @@ public sealed record JobApplicationSummary
     public string Name { get; init; } = "";
     public string Email { get; init; } = "";
     public DateTime Submitted { get; init; }
+    public EnquiryStatus Status { get; init; }
 }
 
 public sealed record JobApplicationDetails
@@ -88,7 +102,10 @@ public sealed record JobApplicationDetails
 }
 
 [Post("enquiries/job-applications/search"), Permission(FuseAction.Search, FuseResource.Enquiries)]
-public sealed record SearchJobApplications : PagedQuery, IQuery<PagedResult<JobApplicationSummary>>;
+public sealed record SearchJobApplications : PagedQuery, IQuery<PagedResult<JobApplicationSummary>>
+{
+    public EnquiryStatus? Status { get; init; }
+}
 
 [Get("enquiries/job-applications/{Id}"), Permission(FuseAction.View, FuseResource.Enquiries)]
 public sealed record GetJobApplication(DefaultIdType Id) : IQuery<JobApplicationDetails>;
@@ -102,7 +119,11 @@ public sealed record DeleteEnquiry(EnquiryKind Kind, DefaultIdType Id) : IComman
 
 /// <summary>The enquiries of one kind (matching the search) as a spreadsheet, newest first.</summary>
 [Post("enquiries/{Kind}/export"), Permission(FuseAction.Export, FuseResource.Enquiries)]
-public sealed record ExportEnquiries(EnquiryKind Kind, string? Keyword, bool? Replied) : IQuery<FileDownload>;
+public sealed record ExportEnquiries(EnquiryKind Kind, string? Keyword, bool? Replied, EnquiryStatus? Status = null) : IQuery<FileDownload>;
+
+/// <summary>Sets an enquiry's status by hand (mostly Closed). Replied and Closed mark it replied, as legacy's flag.</summary>
+[Put("enquiries/{Kind}/{Id}/status"), Permission(FuseAction.Update, FuseResource.Enquiries)]
+public sealed record SetEnquiryStatus(EnquiryKind Kind, DefaultIdType Id, EnquiryStatus Status) : ICommand;
 
 public sealed class SetEnquiryRepliedValidator : AbstractValidator<SetEnquiryReplied>
 {

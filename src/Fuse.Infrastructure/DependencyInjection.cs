@@ -82,6 +82,11 @@ public static class DependencyInjection
         services.Configure<Mail.MailOptions>(configuration.GetSection(Mail.MailOptions.Section));
         services.Configure<Mail.MailBrand>(configuration.GetSection($"{Mail.MailOptions.Section}:Brand"));
         services.AddSingleton<Mail.GmailAccessTokens>();
+        services.AddHttpClient<Application.Common.Mail.IMailbox, Mail.GmailMailbox>(client =>
+        {
+            client.BaseAddress = new Uri("https://gmail.googleapis.com/gmail/v1/users/me/");
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
         services.AddScoped<Application.Common.Mail.IEmailSender, Mail.EmailSender>();
         services.AddScoped<Application.Common.Mail.IBookingEmails, Mail.BookingEmails>();
         services.AddScoped<Application.Common.Mail.IEnquiryEmails, Mail.EnquiryEmails>();

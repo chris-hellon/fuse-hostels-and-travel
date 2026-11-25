@@ -46,14 +46,7 @@
             <StatStrip Label="Totals" Period="@RangeLabel" Items="Totals" />
         </MudItem>
     }
-
-    @if (_canReports)
-    {
-        <MudItem xs="12">
-            <SellATourPanel @ref="_sellATour" />
-        </MudItem>
-    }
-
+    
     <MudItem xs="12">
         <MudPaper Elevation="25" Class="dashboard-card">
             <div class="dashboard-card__head">
@@ -72,6 +65,13 @@
         </MudPaper>
     </MudItem>
 
+    @if (_canReports)
+    {
+        <MudItem xs="12">
+            <SellATourPanel @ref="_sellATour" />
+        </MudItem>
+    }
+    
     @if (!_isSupplier)
     {
         <MudItem xs="12">

@@ -60,10 +60,10 @@ public sealed class CapturedEmails : IEmailSender
 {
     public ConcurrentBag<EmailMessage> Sent { get; } = [];
 
-    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
+    public Task<bool> SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
         Sent.Add(message);
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 }
 
@@ -102,4 +102,20 @@ public sealed class FakeCaptcha : Application.Common.Security.ICaptcha
     public const string Pass = "captcha-ok";
 
     public Task<bool> VerifyAsync(string response, CancellationToken cancellationToken) => Task.FromResult(response == Pass);
+}
+
+/// <summary>An inbox for tests: emails put in <see cref="Threads"/> are what "Gmail" holds.</summary>
+public sealed class FakeMailbox : Application.Common.Mail.IMailbox
+{
+    public bool IsEnabled { get; set; } = true;
+    public string? Address { get; set; } = "team@tests.invalid";
+
+    /// <summary>Thread id → its emails.</summary>
+    public ConcurrentDictionary<string, List<Application.Common.Mail.MailboxMessage>> Threads { get; } = new();
+
+    public Task<string?> FindThreadAsync(string messageId, CancellationToken cancellationToken) =>
+        Task.FromResult(Threads.FirstOrDefault(t => t.Value.Any(m => m.MessageId == messageId)).Key);
+
+    public Task<IReadOnlyList<Application.Common.Mail.MailboxMessage>> ReadThreadAsync(string threadId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Application.Common.Mail.MailboxMessage>>(Threads.TryGetValue(threadId, out var list) ? [.. list.OrderBy(m => m.SentOnUtc)] : []);
 }

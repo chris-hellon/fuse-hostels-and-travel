@@ -53,6 +53,7 @@ public sealed partial class TestApp : WebApplicationFactory<Program>, IAsyncLife
 
     public FakePayments Payments { get; } = new();
     public CapturedEmails Emails { get; } = new();
+    public FakeMailbox Mailbox { get; } = new();
     public CapturedWebhooks Webhooks { get; } = new();
 
     /// <summary>Database objects that couldn't be copied from the dev database (should be empty; asserted by a test).</summary>
@@ -99,6 +100,7 @@ public sealed partial class TestApp : WebApplicationFactory<Program>, IAsyncLife
             services.AddSingleton<Application.Common.Payments.IPaymentGateway>(Payments);
             services.AddSingleton(Emails);
             services.AddSingleton<Application.Common.Mail.IEmailSender>(Emails);
+            services.AddSingleton<Application.Common.Mail.IMailbox>(Mailbox);
             services.AddSingleton(Webhooks);
             services.AddSingleton<Application.Common.Payments.IPaidBookingWebhook>(Webhooks);
             services.AddSingleton<Fuse.Application.Common.Jobs.IBackgroundJobs, InlineJobs>();

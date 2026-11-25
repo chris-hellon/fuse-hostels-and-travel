@@ -193,14 +193,21 @@ internal sealed class ListSuppliersHandler(IAppDbContext db) : IQueryHandler<Lis
 {
     public async ValueTask<IReadOnlyList<LookupItem>> Handle(ListSuppliers query, CancellationToken cancellationToken)
     {
-        var suppliers = await (from user in db.Users
-                               join userRole in db.UserRoles on user.Id equals userRole.UserId
-                               join role in db.Roles on userRole.RoleId equals role.Id
-                               where role.Name == FuseRoles.Supplier && user.IsActive
-                               orderby user.FullName
-                               select new { user.Id, user.FirstName, user.LastName, user.FullName, user.Email, user.UserName })
+        // In steps, each on an index: the role, its (few) members, then just those users. One join across every user
+        // (tens of thousands of guests) took seconds on the live database.
+        var roleIds = await db.Roles.Where(r => r.Name == FuseRoles.Supplier).Select(r => r.Id).ToListAsync(cancellationToken);
+        var memberIds = await db.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync(cancellationToken);
+        if (memberIds.Count == 0)
+            return [];
+        var suppliers = await db.Users.AsNoTracking().Where(u => memberIds.Contains(u.Id) && u.IsActive)
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.FullName, u.Email, u.UserName })
             .ToListAsync(cancellationToken);
-        return [.. suppliers.Select(u => new LookupItem(u.Id, PersonNames.Display(u.FirstName, u.LastName, u.FullName) is { Length: > 0 } name ? name : u.Email ?? u.UserName!))];
+        return
+        [
+            .. suppliers
+                .Select(u => new LookupItem(u.Id, PersonNames.Display(u.FirstName, u.LastName, u.FullName) is { Length: > 0 } name ? name : u.Email ?? u.UserName!))
+                .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase),
+        ];
     }
 }
 

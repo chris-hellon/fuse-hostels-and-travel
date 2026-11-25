@@ -31,6 +31,8 @@ public sealed class RecurringJobs(IServiceScopeFactory scopes, IBackgroundJobs j
         new("tour-manifest-emails", "TourManifests", "0 0 * * *", _ => true, j => j.ScheduleTourManifestsAsync(CancellationToken.None)),
         // Legacy "Cloudbeds Guest Import": every 30 minutes, at :00 and :30.
         new("cloudbeds-guest-import", "CloudbedsImport", "0,30 * * * *", _ => true, j => j.ImportCloudbedsGuestsAsync(CancellationToken.None)),
+        // New: every 5 minutes, enquirers' replies (and the team's, sent from the inbox) into the enquiries' conversations.
+        new("enquiry-replies", "EnquiryReplies", "*/5 * * * *", _ => true, j => j.ReadEnquiryRepliesAsync(CancellationToken.None)),
     ];
 
     /// <summary>Whether the job is switched on (Jobs:{setting}, else its default).</summary>
@@ -70,6 +72,10 @@ public sealed class RecurringJobs(IServiceScopeFactory scopes, IBackgroundJobs j
     [DisableConcurrentExecution(timeoutInSeconds: 30 * 60), AutomaticRetry(Attempts = 0)]
     public Task ImportCloudbedsGuestsAsync(CancellationToken cancellationToken) =>
         InFuseAsync<CloudbedsGuestImport>(import => import.ImportAsync(cancellationToken));
+
+    [DisableConcurrentExecution(timeoutInSeconds: 10 * 60), AutomaticRetry(Attempts = 0)]
+    public Task ReadEnquiryRepliesAsync(CancellationToken cancellationToken) =>
+        InFuseAsync<Application.Features.Enquiries.EnquiryInbox>(inbox => inbox.SyncRecentAsync(cancellationToken));
 
     /// <summary>Runs in a scope for the one site (outside a request there's no tenant to resolve).</summary>
     private async Task InFuseAsync<TService>(Func<TService, Task> run) where TService : notnull

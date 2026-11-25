@@ -35,8 +35,9 @@ internal sealed class ApplyForJobVacancyHandler(IAppDbContext db, SiteEnquiries 
         var clean = SiteEnquiries.Clean;
         var (first, last, email) = (command.FirstName.Trim(), command.LastName.Trim(), command.Email.Trim());
         var (collaborate, dates, destinations) = (command.HowCanWeCollaborate.Trim(), command.EstimatedDates.Trim(), command.DestinationsVisited.Trim());
-        db.JobVacancyResponses.Add(new JobVacancyResponse(first, last, email, collaborate, dates, destinations,
-            clean(command.Instagram), clean(command.TikTok), clean(command.YouTube), clean(command.Portfolio), clean(command.Equipment), command.JobVacancyId));
+        var application = new JobVacancyResponse(first, last, email, collaborate, dates, destinations,
+            clean(command.Instagram), clean(command.TikTok), clean(command.YouTube), clean(command.Portfolio), clean(command.Equipment), command.JobVacancyId);
+        db.JobVacancyResponses.Add(application);
         await db.SaveChangesAsync(cancellationToken);
 
         await enquiries.SendAsync(new EnquiryEmail("Job Application", $"Job Application: {vacancy.JobTitle}",
@@ -53,7 +54,7 @@ internal sealed class ApplyForJobVacancyHandler(IAppDbContext db, SiteEnquiries 
             new("YouTube", clean(command.YouTube)),
             new("Portfolio", clean(command.Portfolio)),
             new("Equipment", clean(command.Equipment)),
-        ]), email);
+        ]), email, Domain.Catalog.Enquiries.EnquiryType.JobApplication, application.Id, cancellationToken);
         return Unit.Value;
     }
 }

@@ -11,24 +11,47 @@ namespace Fuse.Application.Features.Enquiries;
 
 internal static class EnquiryQueries
 {
-    public static IQueryable<GeneralEnquiry> General(IAppDbContext db, string? keyword, bool? replied)
+    public static IQueryable<GeneralEnquiry> General(IAppDbContext db, string? keyword, bool? replied, EnquiryStatus? status = null)
     {
         var q = db.GeneralEnquiries.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(keyword))
             q = q.Where(e => e.Name.Contains(keyword) || e.Email.Contains(keyword) || e.ContactNumber.Contains(keyword));
+        if (status is { } wanted)
+        {
+            var stage = (EnquiryStage)(int)wanted;
+            q = q.Where(e => (db.EnquiryStates.Where(s => s.EnquiryType == EnquiryType.General && s.EnquiryId == e.Id).Select(s => (EnquiryStage?)s.Stage).FirstOrDefault()
+                              ?? (e.ResponseSent ? EnquiryStage.Replied : EnquiryStage.New)) == stage);
+        }
         return replied is { } r ? q.Where(e => e.ResponseSent == r) : q;
     }
 
-    public static IQueryable<TourEnquiry> Tours(IAppDbContext db, string? keyword, bool? replied)
+    public static IQueryable<TourEnquiry> Tours(IAppDbContext db, string? keyword, bool? replied, EnquiryStatus? status = null)
     {
         var q = db.TourEnquiries.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(keyword))
             q = q.Where(e => e.Name.Contains(keyword) || e.Email.Contains(keyword) || e.ContactNumber.Contains(keyword)
                              || db.Tours.IgnoreQueryFilters().Any(t => t.Id == e.TourId && t.Name.Contains(keyword)));
+        if (status is { } wanted)
+        {
+            var stage = (EnquiryStage)(int)wanted;
+            q = q.Where(e => (db.EnquiryStates.Where(s => s.EnquiryType == EnquiryType.Tour && s.EnquiryId == e.Id).Select(s => (EnquiryStage?)s.Stage).FirstOrDefault()
+                              ?? (e.ResponseSent ? EnquiryStage.Replied : EnquiryStage.New)) == stage);
+        }
         return replied is { } r ? q.Where(e => e.ResponseSent == r) : q;
     }
 
-    public static IQueryable<JobVacancyResponse> Jobs(IAppDbContext db, string? keyword)
+    public static IQueryable<JobVacancyResponse> Jobs(IAppDbContext db, string? keyword, EnquiryStatus? status = null)
+    {
+        if (status is { } wanted)
+        {
+            var stage = (EnquiryStage)(int)wanted;
+            return JobsMatching(db, keyword).Where(e => (db.EnquiryStates.Where(s => s.EnquiryType == EnquiryType.JobApplication && s.EnquiryId == e.Id)
+                .Select(s => (EnquiryStage?)s.Stage).FirstOrDefault() ?? EnquiryStage.New) == stage);
+        }
+        return JobsMatching(db, keyword);
+    }
+
+    private static IQueryable<JobVacancyResponse> JobsMatching(IAppDbContext db, string? keyword)
     {
         // Applications stay when their vacancy is deleted, so the vacancy is read past the soft-delete filter.
         var q = db.JobVacancyResponses.AsNoTracking();
@@ -38,9 +61,11 @@ internal static class EnquiryQueries
         return q;
     }
 
-    public static IQueryable<GeneralEnquirySummary> ToSummary(this IQueryable<GeneralEnquiry> q) => q.Select(e => new GeneralEnquirySummary
+    public static IQueryable<GeneralEnquirySummary> ToSummary(this IQueryable<GeneralEnquiry> q, IAppDbContext db) => q.Select(e => new GeneralEnquirySummary
     {
         Id = e.Id, Name = e.Name, Email = e.Email, ContactNumber = e.ContactNumber, Submitted = e.CreatedOn, Replied = e.ResponseSent,
+        Status = (EnquiryStatus)(int)(db.EnquiryStates.Where(s => s.EnquiryType == EnquiryType.General && s.EnquiryId == e.Id).Select(s => (EnquiryStage?)s.Stage).FirstOrDefault()
+                                      ?? (e.ResponseSent ? EnquiryStage.Replied : EnquiryStage.New)),
     });
 
     // The tour is read past the soft-delete filter: enquiries about a tour since deleted still show.
@@ -48,6 +73,8 @@ internal static class EnquiryQueries
     {
         Id = e.Id, TourName = db.Tours.IgnoreQueryFilters().Where(t => t.Id == e.TourId).Select(t => t.Name).FirstOrDefault() ?? "", Name = e.Name, Email = e.Email, ContactNumber = e.ContactNumber,
         RequestedDate = e.RequestedDate, NumberOfPeople = e.NumberOfPeople, Submitted = e.CreatedOn, Replied = e.ResponseSent,
+        Status = (EnquiryStatus)(int)(db.EnquiryStates.Where(s => s.EnquiryType == EnquiryType.Tour && s.EnquiryId == e.Id).Select(s => (EnquiryStage?)s.Stage).FirstOrDefault()
+                                      ?? (e.ResponseSent ? EnquiryStage.Replied : EnquiryStage.New)),
     });
 
     public static IQueryable<JobApplicationSummary> ToSummary(this IQueryable<JobVacancyResponse> q, IAppDbContext db) => q.Select(e => new JobApplicationSummary
@@ -58,6 +85,8 @@ internal static class EnquiryQueries
         Name = e.FirstName + " " + e.LastName,
         Email = e.Email,
         Submitted = e.CreatedOn,
+        Status = (EnquiryStatus)(int)(db.EnquiryStates.Where(s => s.EnquiryType == EnquiryType.JobApplication && s.EnquiryId == e.Id).Select(s => (EnquiryStage?)s.Stage).FirstOrDefault()
+                                      ?? EnquiryStage.New),
     });
 
     /// <summary>Stored in UTC; shown in the business's time.</summary>
@@ -67,7 +96,7 @@ internal static class EnquiryQueries
 internal sealed class SearchGeneralEnquiriesHandler(IAppDbContext db) : IQueryHandler<SearchGeneralEnquiries, PagedResult<GeneralEnquirySummary>>
 {
     public async ValueTask<PagedResult<GeneralEnquirySummary>> Handle(SearchGeneralEnquiries query, CancellationToken cancellationToken) =>
-        (await EnquiryQueries.General(db, query.Keyword, query.Replied).ToSummary()
+        (await EnquiryQueries.General(db, query.Keyword, query.Replied, query.Status).ToSummary(db)
             .OrderBy(query.OrderBy, e => e.Submitted, descending: true)
             .ToPagedResultAsync(query, cancellationToken))
         .Local(e => e with { Submitted = BusinessClock.FromUtc(e.Submitted) });
@@ -77,23 +106,17 @@ internal sealed class GetGeneralEnquiryHandler(IAppDbContext db) : IQueryHandler
 {
     public async ValueTask<GeneralEnquiryDetails> Handle(GetGeneralEnquiry query, CancellationToken cancellationToken)
     {
-        var e = await db.GeneralEnquiries.AsNoTracking().FirstOrDefaultAsync(x => x.Id == query.Id, cancellationToken)
-                ?? throw new NotFoundException("Enquiry not found.");
-        return new GeneralEnquiryDetails
-        {
-            Summary = new GeneralEnquirySummary
-            {
-                Id = e.Id, Name = e.Name, Email = e.Email, ContactNumber = e.ContactNumber, Submitted = BusinessClock.FromUtc(e.CreatedOn), Replied = e.ResponseSent,
-            },
-            Message = e.Message,
-        };
+        var summary = await db.GeneralEnquiries.AsNoTracking().Where(x => x.Id == query.Id).ToSummary(db).FirstOrDefaultAsync(cancellationToken)
+                      ?? throw new NotFoundException("Enquiry not found.");
+        var message = await db.GeneralEnquiries.AsNoTracking().Where(x => x.Id == query.Id).Select(x => x.Message).FirstAsync(cancellationToken);
+        return new GeneralEnquiryDetails { Summary = summary with { Submitted = BusinessClock.FromUtc(summary.Submitted) }, Message = message };
     }
 }
 
 internal sealed class SearchTourEnquiriesHandler(IAppDbContext db) : IQueryHandler<SearchTourEnquiries, PagedResult<TourEnquirySummary>>
 {
     public async ValueTask<PagedResult<TourEnquirySummary>> Handle(SearchTourEnquiries query, CancellationToken cancellationToken) =>
-        (await EnquiryQueries.Tours(db, query.Keyword, query.Replied).ToSummary(db)
+        (await EnquiryQueries.Tours(db, query.Keyword, query.Replied, query.Status).ToSummary(db)
             .OrderBy(query.OrderBy, e => e.Submitted, descending: true)
             .ToPagedResultAsync(query, cancellationToken))
         .Local(e => e with { Submitted = BusinessClock.FromUtc(e.Submitted) });
@@ -113,7 +136,7 @@ internal sealed class GetTourEnquiryHandler(IAppDbContext db) : IQueryHandler<Ge
 internal sealed class SearchJobApplicationsHandler(IAppDbContext db) : IQueryHandler<SearchJobApplications, PagedResult<JobApplicationSummary>>
 {
     public async ValueTask<PagedResult<JobApplicationSummary>> Handle(SearchJobApplications query, CancellationToken cancellationToken) =>
-        (await EnquiryQueries.Jobs(db, query.Keyword).ToSummary(db)
+        (await EnquiryQueries.Jobs(db, query.Keyword, query.Status).ToSummary(db)
             .OrderBy(query.OrderBy, e => e.Submitted, descending: true)
             .ToPagedResultAsync(query, cancellationToken))
         .Local(e => e with { Submitted = BusinessClock.FromUtc(e.Submitted) });
@@ -139,12 +162,19 @@ internal sealed class SetEnquiryRepliedHandler(IAppDbContext db) : ICommandHandl
 {
     public async ValueTask<Unit> Handle(SetEnquiryReplied command, CancellationToken cancellationToken)
     {
-        if (command.Kind == EnquiryKind.General)
-            (await db.GeneralEnquiries.FirstOrDefaultAsync(e => e.Id == command.Id, cancellationToken) ?? throw new NotFoundException("Enquiry not found."))
-                .Update(null, null, null, null, command.Replied);
-        else
-            (await db.TourEnquiries.FirstOrDefaultAsync(e => e.Id == command.Id, cancellationToken) ?? throw new NotFoundException("Enquiry not found."))
-                .Update(null, null, null, null, null, null, null, command.Replied);
+        await EnquiryMail.EnsureExistsAsync(db, command.Kind, command.Id, cancellationToken);
+        await EnquiryMail.SetStageAsync(db, EnquiryMail.Type(command.Kind), command.Id, command.Replied ? EnquiryStage.Replied : EnquiryStage.New, cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        return Unit.Value;
+    }
+}
+
+internal sealed class SetEnquiryStatusHandler(IAppDbContext db) : ICommandHandler<SetEnquiryStatus>
+{
+    public async ValueTask<Unit> Handle(SetEnquiryStatus command, CancellationToken cancellationToken)
+    {
+        await EnquiryMail.EnsureExistsAsync(db, command.Kind, command.Id, cancellationToken);
+        await EnquiryMail.SetStageAsync(db, EnquiryMail.Type(command.Kind), command.Id, (EnquiryStage)(int)command.Status, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         return Unit.Value;
     }
@@ -184,7 +214,7 @@ internal sealed class ExportEnquiriesHandler(IAppDbContext db, ISpreadsheetWrite
         {
             case EnquiryKind.General:
             {
-                var rows = await EnquiryQueries.General(db, query.Keyword, query.Replied).OrderByDescending(e => e.CreatedOn).Take(Max)
+                var rows = await EnquiryQueries.General(db, query.Keyword, query.Replied, query.Status).OrderByDescending(e => e.CreatedOn).Take(Max)
                     .Select(e => new { e.Name, e.Email, e.ContactNumber, e.Message, e.CreatedOn, e.ResponseSent }).ToListAsync(cancellationToken);
                 return spreadsheets.Write($"General enquiries {stamp}.xlsx", rows,
                 [
@@ -194,7 +224,7 @@ internal sealed class ExportEnquiriesHandler(IAppDbContext db, ISpreadsheetWrite
             }
             case EnquiryKind.Tour:
             {
-                var rows = await EnquiryQueries.Tours(db, query.Keyword, query.Replied).OrderByDescending(e => e.CreatedOn).Take(Max)
+                var rows = await EnquiryQueries.Tours(db, query.Keyword, query.Replied, query.Status).OrderByDescending(e => e.CreatedOn).Take(Max)
                     .Select(e => new { Tour = db.Tours.IgnoreQueryFilters().Where(t => t.Id == e.TourId).Select(t => t.Name).FirstOrDefault(), e.Name, e.Email, e.ContactNumber, e.RequestedDate, e.NumberOfPeople, e.AdditionalInformation, e.CreatedOn, e.ResponseSent })
                     .ToListAsync(cancellationToken);
                 return spreadsheets.Write($"Tour enquiries {stamp}.xlsx", rows,
@@ -206,7 +236,7 @@ internal sealed class ExportEnquiriesHandler(IAppDbContext db, ISpreadsheetWrite
             }
             default:
             {
-                var ids = EnquiryQueries.Jobs(db, query.Keyword).Select(e => e.Id);
+                var ids = EnquiryQueries.Jobs(db, query.Keyword, query.Status).Select(e => e.Id);
                 var rows = await db.JobVacancyResponses.AsNoTracking().Where(e => ids.Contains(e.Id)).OrderByDescending(e => e.CreatedOn).Take(Max)
                     .Select(e => new
                     {

@@ -1,0 +1,17 @@
+@using Fuse.Contracts.Enquiries
+
+@* The enquiry lists' Status filter: all, or one status. *@
+
+<MudSelect T="EnquiryStatus?" Label="Status" Value="Value" ValueChanged="ValueChanged" Dense="true" Clearable="true" AnchorOrigin="Origin.BottomLeft"
+           Style="max-width: 240px;" ToStringFunc="@(s => s is { } status ? EnquiryPages.Label(status) : "All")">
+    <MudSelectItem T="EnquiryStatus?" Value="null">All</MudSelectItem>
+    @foreach (var status in EnquiryPages.Statuses)
+    {
+        <MudSelectItem T="EnquiryStatus?" Value="status">@EnquiryPages.Label(status)</MudSelectItem>
+    }
+</MudSelect>
+
+@code {
+    [Parameter] public EnquiryStatus? Value { get; set; }
+    [Parameter] public EventCallback<EnquiryStatus?> ValueChanged { get; set; }
+}

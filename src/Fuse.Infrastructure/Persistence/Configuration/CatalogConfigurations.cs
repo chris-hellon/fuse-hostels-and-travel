@@ -452,6 +452,27 @@ internal sealed class EventTimeSlotConfig : IEntityTypeConfiguration<EventTimeSl
     public void Configure(EntityTypeBuilder<EventTimeSlot> builder) => builder.IsMultiTenant();
 }
 
+internal sealed class EnquiryMessageConfig : IEntityTypeConfiguration<EnquiryMessage>
+{
+    public void Configure(EntityTypeBuilder<EnquiryMessage> builder)
+    {
+        builder.IsMultiTenant();
+        builder.HasIndex(m => new { m.EnquiryType, m.EnquiryId });
+        builder.HasIndex(m => m.MessageId);
+        builder.HasIndex(m => m.GmailMessageId);
+        builder.HasIndex(m => m.SentOn);
+    }
+}
+
+internal sealed class EnquiryStateConfig : IEntityTypeConfiguration<EnquiryState>
+{
+    public void Configure(EntityTypeBuilder<EnquiryState> builder)
+    {
+        builder.IsMultiTenant();
+        builder.HasIndex(s => new { s.EnquiryType, s.EnquiryId }).IsUnique();
+    }
+}
+
 internal sealed class TourEnquiriesConfig : IEntityTypeConfiguration<TourEnquiry>
 {
     public void Configure(EntityTypeBuilder<TourEnquiry> builder)

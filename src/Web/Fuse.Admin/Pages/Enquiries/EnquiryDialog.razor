@@ -1,43 +1,180 @@
 @using Fuse.Contracts.Enquiries
+@implements IAsyncDisposable
+@inject IJSRuntime Js
 
-@* One enquiry, read-only (legacy's view): what they sent, Reply (the email app, to them), and marking it replied
-   (general and tour enquiries). Closes with true when the replied flag changed, so the list reloads. *@
+@* One enquiry: its details on the left; on the right its email conversation (replies sent from here, and the enquirer's
+   answers read from the team's inbox) and a reply in the admin's editor. The status (top right) follows the
+   conversation, and can be set by hand (mostly Closed). Closes with true when anything changed, so the list reloads. *@
 
-<MudDialog>
+<MudDialog ContentClass="enquiry-dialog__content">
     <TitleContent>
-        <MudText Typo="Typo.h6">@Title</MudText>
-        <MudText Typo="Typo.caption" Class="mud-text-secondary">Sent @Submitted.ToString("dddd d MMMM yyyy, h:mm tt")</MudText>
+        <div class="enquiry-dialog__title">
+            <div>
+                <MudText Typo="Typo.h6">@Title</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Sent @Submitted.ToString("dddd d MMMM yyyy, h:mm tt")</MudText>
+            </div>
+            @if (CanUpdate)
+            {
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Disabled="_savingStatus">
+                    <ActivatorContent Context="menu">
+                        <button type="button" class="@($"{EnquiryPages.CssClass(_status)} enquiry-status--button")" title="Change the status" @onclick="e => menu.ToggleAsync(e)">
+                            @EnquiryPages.Label(_status)
+                            <MudIcon Icon="@(_savingStatus ? Icons.Material.Filled.HourglassTop : Icons.Material.Filled.ArrowDropDown)" Size="Size.Small" />
+                        </button>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @foreach (var status in EnquiryPages.Statuses)
+                        {
+                            <MudMenuItem OnClick="() => SetStatusAsync(status)">
+                                <EnquiryStatusChip Status="status" />
+                            </MudMenuItem>
+                        }
+                    </ChildContent>
+                </MudMenu>
+            }
+            else
+            {
+                <EnquiryStatusChip Status="_status" />
+            }
+        </div>
     </TitleContent>
     <DialogContent>
-        <MudSimpleTable Dense="true" Elevation="0" Class="enquiry-details">
-            <tbody>
+        <div class="enquiry-dialog">
+            <aside class="enquiry-dialog__details">
                 @foreach (var (label, value) in Fields.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
                 {
-                    <tr>
-                        <th style="width: 30%; vertical-align: top;">@label</th>
-                        <td style="white-space: pre-wrap;">
-                            @if (label == "Email")
+                    <div class="enquiry-detail">
+                        <div class="enquiry-detail__label">@label</div>
+                        @if (label == "Email")
+                        {
+                            <div class="enquiry-detail__value"><MudLink Href="@($"mailto:{value}")">@value</MudLink></div>
+                        }
+                        else if (value!.Length > 60 || value.Contains('\n'))
+                        {
+                            var open = _openFields.Contains(label);
+                            <div class="@($"enquiry-detail__value enquiry-detail__value--long{(open ? "" : " enquiry-detail__value--clamped")}")">@value</div>
+                            @if (value.Length > 240 || value.Count(c => c == '\n') > 4)
                             {
-                                <MudLink Href="@($"mailto:{value}")">@value</MudLink>
+                                <button type="button" class="enquiry-link" @onclick="() => ToggleField(label)">
+                                    @(open ? "Show less" : $"Show full {label.ToLowerInvariant()}")
+                                    <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <div class="enquiry-detail__value">@value</div>
+                        }
+                    </div>
+                }
+            </aside>
+
+            <section class="enquiry-dialog__conversation">
+                <div class="d-flex align-center mb-2">
+                    <MudText Typo="Typo.subtitle1" Class="flex-grow-1"><b>Conversation</b></MudText>
+                    @if (_conversation?.ReadsInbox == true)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="CheckInboxAsync" Disabled="_checking"
+                                   StartIcon="@(_checking ? null : Icons.Material.Filled.Refresh)">
+                            @if (_checking)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" Style="width: 16px; height: 16px;" />
+                                <span>Checking…</span>
                             }
                             else
                             {
-                                @value
+                                <span>Check for replies</span>
                             }
-                        </td>
-                    </tr>
+                        </MudButton>
+                    }
+                </div>
+
+                <div class="enquiry-dialog__thread" @ref="_thread">
+                    @if (_conversation is null)
+                    {
+                        <MudProgressLinear Indeterminate="true" Color="Color.Secondary" />
+                    }
+                    else if (_conversation.Messages.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">No emails yet. Replies sent from here@(_conversation.ReadsInbox ? ", and the answers to them," : "") show here.</MudText>
+                    }
+                    else
+                    {
+                        var messages = _conversation.Messages;
+                        var earlier = Math.Max(0, messages.Count - RecentShown);
+                        @if (earlier > 0 && !_showEarlier)
+                        {
+                            <div class="text-center mb-3">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => _showEarlier = true">
+                                    Show @earlier earlier @(earlier == 1 ? "email" : "emails")
+                                </MudButton>
+                            </div>
+                        }
+                        @for (var i = 0; i < messages.Count; i++)
+                        {
+                            var message = messages[i];
+                            if (i < earlier && !_showEarlier)
+                                continue;
+                            var sent = message.Kind == EnquiryMessageKind.Sent;
+                            var kind = sent ? "enquiry-message--sent" : "enquiry-message--received";
+                            @if (i < earlier && !_openMessages.Contains(message.Id))
+                            {
+                                // Older ones fold to a line: who, when, the first words. Click to read.
+                                <button type="button" class="@($"enquiry-message enquiry-message--folded {kind}")" @onclick="() => _openMessages.Add(message.Id)">
+                                    <span class="enquiry-message__who">@(sent ? message.SentByName ?? "You" : message.FromName ?? message.From)</span>
+                                    <span class="enquiry-message__when">@message.SentOn.ToString("d MMM")</span>
+                                    <span class="enquiry-message__preview">@Preview(message.HtmlBody)</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <div class="@($"enquiry-message {kind}")">
+                                    <div class="enquiry-message__head">
+                                        <MudIcon Icon="@(sent ? Icons.Material.Filled.Reply : Icons.Material.Filled.MarkEmailUnread)" Size="Size.Small" />
+                                        <span class="enquiry-message__who">@Who(message)</span>
+                                        <span class="enquiry-message__when">@message.SentOn.ToString("ddd d MMM yyyy, h:mm tt")</span>
+                                    </div>
+                                    <div class="enquiry-message__body">@((MarkupString)message.HtmlBody)</div>
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+
+                @if (CanUpdate && _conversation is not null)
+                {
+                    <div class="@($"enquiry-reply{(_sending ? " enquiry-reply--sending" : "")}")">
+                        <MudTextField T="string" Label="Subject" @bind-Value="_subject" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Disabled="_sending" />
+                        <RichText @ref="_editor" @bind-Value="_body" Height="90" Label="@($"Reply to {Email}")" />
+                        @if (_sending)
+                        {
+                            <div class="enquiry-reply__overlay" role="status">
+                                <MudProgressCircular Indeterminate="true" Color="Color.Primary" Size="Size.Medium" />
+                                <span>Sending your reply…</span>
+                            </div>
+                        }
+                    </div>
                 }
-            </tbody>
-        </MudSimpleTable>
-        @if (_replied is { } replied)
-        {
-            <MudSwitch T="bool" Class="mt-4" Color="Color.Success" Value="replied" ValueChanged="SetRepliedAsync" Disabled="@(!CanUpdate || _saving)"
-                       Label="@(replied ? "Replied" : "Not replied yet")" />
-        }
+            </section>
+        </div>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Close">Close</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Reply" Href="@ReplyLink" Target="_blank">Reply by email</MudButton>
+        <MudButton OnClick="Close" Disabled="_sending">Close</MudButton>
+        @if (CanUpdate && _conversation is not null)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendAsync" Disabled="_sending"
+                       StartIcon="@(_sending ? null : Icons.Material.Filled.Send)">
+                @if (_sending)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" Style="width: 16px; height: 16px;" />
+                    <span>Sending…</span>
+                }
+                else
+                {
+                    <span>Send reply</span>
+                }
+            </MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -51,25 +188,137 @@
     [Parameter, EditorRequired] public IReadOnlyList<(string Label, string? Value)> Fields { get; set; } = [];
     [Parameter] public EnquiryKind Kind { get; set; }
     [Parameter] public DefaultIdType Id { get; set; }
-    /// <summary>Whether it's been replied to; null for job applications (no such flag).</summary>
-    [Parameter] public bool? Replied { get; set; }
+    [Parameter] public EnquiryStatus Status { get; set; }
     [Parameter] public bool CanUpdate { get; set; }
-    /// <summary>The email's subject when replying.</summary>
-    [Parameter] public string ReplySubject { get; set; } = "Your enquiry";
 
-    private bool? _replied;
-    private bool _saving, _changed;
+    /// <summary>The newest emails shown in full; older ones fold behind "Show N earlier emails".</summary>
+    private const int RecentShown = 3;
 
-    protected override void OnInitialized() => _replied = Replied;
+    private EnquiryStatus _status;
+    private bool _showEarlier, _scrollToEnd;
+    private readonly HashSet<DefaultIdType> _openMessages = [];
+    private readonly HashSet<string> _openFields = [];
+    private ElementReference _thread;
+    private IJSObjectReference? _module;
+    private bool _changed, _sending, _checking, _savingStatus;
+    private EnquiryConversation? _conversation;
+    private string? _subject, _body;
+    private RichText? _editor;
 
-    private string ReplyLink => $"mailto:{Email}?subject={Uri.EscapeDataString($"Re: {ReplySubject}")}";
-
-    private async Task SetRepliedAsync(bool replied)
+    protected override async Task OnInitializedAsync()
     {
-        _saving = true;
-        if (await Snackbar.TryAsync(async () => await Api.Send(new SetEnquiryReplied(Kind, Id, replied))))
-            (_replied, _changed) = (replied, true);
-        _saving = false;
+        _status = Status;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await Snackbar.TryAsync(async () => _conversation = await Api.Send(new GetEnquiryConversation(Kind, Id)));
+        if (_conversation is not null)
+            _status = _conversation.Status;
+        _subject ??= _conversation?.ReplySubject;
+        _scrollToEnd = true;
+        RefreshTitle();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollToEnd || _conversation is null)
+            return;
+        _scrollToEnd = false;
+        try
+        {
+            _module ??= await Js.InvokeAsync<IJSObjectReference>("import", "./_content/Fuse.Admin/enquiry-dialog.js");
+            await _module.InvokeVoidAsync("scrollToEnd", _thread);
+        }
+        catch (JSException) { }
+    }
+
+    private void ToggleField(string label)
+    {
+        if (!_openFields.Remove(label))
+            _openFields.Add(label);
+    }
+
+    /// <summary>An email's first words, for its folded line.</summary>
+    private static string Preview(string html)
+    {
+        var text = System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " "));
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        return text.Length <= 120 ? text : text[..120] + "…";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    /// <summary>The title bar (with the status) is drawn by the dialog itself, which doesn't redraw with this content.</summary>
+    private void RefreshTitle() => Dialog.StateHasChanged();
+
+    private static string Who(EnquiryMessageView m) => m.Kind == EnquiryMessageKind.Sent
+        ? m.SentByName is { } staff ? $"{staff} → {m.To}" : $"{m.FromName ?? m.From} → {m.To}"
+        : m.FromName is { } name ? $"{name} <{m.From}>" : m.From;
+
+    private async Task SendAsync()
+    {
+        // The loader shows straight away: the send itself (Gmail) takes a few seconds.
+        _sending = true;
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            if (_editor is not null)
+                await _editor.FlushAsync();
+            if (await Snackbar.TryAsync(async () => await Api.Send(new ReplyToEnquiry(Kind, Id, _subject ?? "", _body ?? "")), $"Reply sent to {Email}."))
+            {
+                (_body, _subject, _changed) = ("", null, true);
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private async Task CheckInboxAsync()
+    {
+        _checking = true;
+        StateHasChanged();
+        var found = 0;
+        try
+        {
+            if (await Snackbar.TryAsync(async () => found = await Api.Send(new CheckEnquiryInbox(Kind, Id))))
+            {
+                Snackbar.Add(found == 0 ? "No new emails." : found == 1 ? "1 new email." : $"{found} new emails.", found == 0 ? Severity.Normal : Severity.Success);
+                if (found > 0)
+                {
+                    _changed = true;
+                    await LoadAsync();
+                }
+            }
+        }
+        finally
+        {
+            _checking = false;
+        }
+    }
+
+    private async Task SetStatusAsync(EnquiryStatus status)
+    {
+        if (status == _status)
+            return;
+        _savingStatus = true;
+        RefreshTitle();
+        if (await Snackbar.TryAsync(async () => await Api.Send(new SetEnquiryStatus(Kind, Id, status)), $"Marked {EnquiryPages.Label(status).ToLowerInvariant()}."))
+            (_status, _changed) = (status, true);
+        _savingStatus = false;
+        RefreshTitle();
     }
 
     private void Close() => Dialog.Close(DialogResult.Ok(_changed));

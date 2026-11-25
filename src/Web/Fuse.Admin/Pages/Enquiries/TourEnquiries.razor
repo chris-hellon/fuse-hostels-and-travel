@@ -11,7 +11,7 @@
 <EntityTable @ref="_table" T="TourEnquirySummary" Fields="Fields" Load="LoadAsync" EntityNamePlural="Tour Enquiries" Resource="@FuseResource.Enquiries"
              OnExport="ExportAsync" OnDelete="DeleteAsync">
     <AdvancedSearchContent>
-        <EnquiryRepliedFilter Value="_replied" ValueChanged="FilterAsync" />
+        <EnquiryStatusFilter Value="_status" ValueChanged="FilterAsync" />
     </AdvancedSearchContent>
     <RowButtons>
         <RowIconButton Icon="@Icons.Material.Outlined.Visibility" Label="View" OnClick="() => ViewAsync(context)" />
@@ -29,22 +29,22 @@
         new(e => e.NumberOfPeople, "People", nameof(TourEnquirySummary.NumberOfPeople)),
         new(e => e.Name, "Name", nameof(TourEnquirySummary.Name)),
         new(e => e.Email, "Email", nameof(TourEnquirySummary.Email)),
-        EntityField<TourEnquirySummary>.Bool(e => e.Replied, "Replied", nameof(TourEnquirySummary.Replied)),
+        new(e => EnquiryPages.Label(e.Status), "Status", Template: e => @<EnquiryStatusChip Status="e.Status" />) { Width = "1%" },
     ];
 
     private EntityTable<TourEnquirySummary>? _table;
     private string? _keyword;
-    private bool? _replied;
+    private EnquiryStatus? _status;
 
     private async Task<PagedResult<TourEnquirySummary>> LoadAsync(GridRequest request, CancellationToken cancellationToken)
     {
         _keyword = request.Keyword;
-        return await Api.Send(request.Apply(new SearchTourEnquiries { Replied = _replied }), cancellationToken);
+        return await Api.Send(request.Apply(new SearchTourEnquiries { Status = _status }), cancellationToken);
     }
 
-    private async Task FilterAsync(bool? replied)
+    private async Task FilterAsync(EnquiryStatus? status)
     {
-        _replied = replied;
+        _status = status;
         await _table!.ReloadAsync();
     }
 
@@ -60,16 +60,15 @@
             { d => d.Fields,
                 [("Tour", e.TourName), ("Requested Date", e.RequestedDate.ToString("dddd d MMMM yyyy")), ("Number of People", e.NumberOfPeople.ToString()),
                  ("Name", e.Name), ("Email", e.Email), ("Contact Number", e.ContactNumber), ("Special Requests", details.AdditionalInformation)] },
-            { d => d.Kind, EnquiryKind.Tour }, { d => d.Id, e.Id }, { d => d.Replied, e.Replied },
+            { d => d.Kind, EnquiryKind.Tour }, { d => d.Id, e.Id }, { d => d.Status, e.Status },
             { d => d.CanUpdate, EnquiryPages.CanUpdate(AuthState is null ? null : (await AuthState).User) },
-            { d => d.ReplySubject, $"Your enquiry about {e.TourName}" },
-        }, EnquiryPages.DialogOptions);
+        }, EnquiryPages.ConversationOptions);
         if ((await dialog.Result)?.Data is true)
             await _table!.ReloadAsync();
     }
 
     private async Task ExportAsync() =>
-        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportEnquiries(EnquiryKind.Tour, _keyword, _replied))));
+        await Snackbar.TryAsync(async () => await Files.SaveAsync(await Api.Send(new ExportEnquiries(EnquiryKind.Tour, _keyword, null, _status))));
 
     private async Task DeleteAsync(TourEnquirySummary e)
     {

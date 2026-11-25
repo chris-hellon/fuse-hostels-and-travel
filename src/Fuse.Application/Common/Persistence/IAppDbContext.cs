@@ -79,6 +79,8 @@ public interface IAppDbContext
     DbSet<ServiceEnquiry> ServiceEnquiries { get; }
     DbSet<ServiceEnquiryField> ServiceEnquiryFields { get; }
     DbSet<GeneralEnquiry> GeneralEnquiries { get; }
+    DbSet<EnquiryMessage> EnquiryMessages { get; }
+    DbSet<EnquiryState> EnquiryStates { get; }
     DbSet<Gallery> Galleries { get; }
     DbSet<GalleryImage> GalleryImages { get; }
     DbSet<TravelGuide> TravelGuides { get; }

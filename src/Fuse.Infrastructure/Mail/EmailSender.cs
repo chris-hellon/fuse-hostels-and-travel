@@ -18,7 +18,7 @@ namespace Fuse.Infrastructure.Mail;
 internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessTokens tokens, IHostEnvironment environment, ILogger<EmailSender> logger)
     : IEmailSender
 {
-    public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
+    public async Task<bool> SendAsync(EmailMessage message, CancellationToken cancellationToken)
     {
         var settings = options.Value;
         var to = Deliverable(message.To, settings);
@@ -27,7 +27,7 @@ internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessToke
         {
             logger.LogWarning("Email \"{Subject}\" not sent: none of its recipients may receive email here ({Recipients})",
                 message.Subject, string.Join(", ", message.To));
-            return;
+            return false;
         }
 
         // Gmail OAuth sends only as its own mailbox (or a verified alias), as legacy.
@@ -40,6 +40,13 @@ internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessToke
         email.Sender = from;
         // As legacy: machine-generated, so recipients' auto-replies and out-of-office responders stay quiet.
         email.Headers.Add("Auto-Submitted", "auto-generated");
+        // An enquiry's emails: found again in the inbox by their Message-ID, and threaded under the conversation.
+        if (!string.IsNullOrWhiteSpace(message.MessageId))
+            email.MessageId = message.MessageId;
+        if (!string.IsNullOrWhiteSpace(message.InReplyTo))
+            email.InReplyTo = message.InReplyTo;
+        foreach (var reference in message.References.Where(r => !string.IsNullOrWhiteSpace(r)))
+            email.References.Add(reference);
         foreach (var address in to)
             email.To.Add(MailboxAddress.Parse(address));
         foreach (var address in bcc)
@@ -61,7 +68,7 @@ internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessToke
             await email.WriteToAsync(path, cancellationToken);
             logger.LogInformation("Email \"{Subject}\" to {To} written to {Path} ({Reason})", message.Subject, string.Join(", ", to), path,
                 automatedOutsideProduction ? "automated emails are only sent in production" : "Mail:Mode is Pickup");
-            return;
+            return true;
         }
 
         using var smtp = new SmtpClient { CheckCertificateRevocation = settings.CheckCertificateRevocation };
@@ -98,6 +105,7 @@ internal sealed class EmailSender(IOptions<MailOptions> options, GmailAccessToke
         var response = await smtp.SendAsync(email, cancellationToken);
         await smtp.DisconnectAsync(true, cancellationToken);
         logger.LogInformation("Email \"{Subject}\" to {To} accepted: {Response}", message.Subject, string.Join(", ", to), response);
+        return true;
     }
 
     private List<string> Deliverable(IEnumerable<string> addresses, MailOptions settings)

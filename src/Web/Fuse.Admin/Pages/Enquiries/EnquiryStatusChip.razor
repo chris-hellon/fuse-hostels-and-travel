@@ -1,0 +1,8 @@
+@using Fuse.Contracts.Enquiries
+
+@* An enquiry's status as a small coloured label (lists and the enquiry dialog). *@
+<span class="@EnquiryPages.CssClass(Status)">@EnquiryPages.Label(Status)</span>
+
+@code {
+    [Parameter] public EnquiryStatus Status { get; set; }
+}
