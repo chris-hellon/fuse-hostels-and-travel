@@ -58,8 +58,9 @@
             { d => d.Kind, EnquiryKind.General }, { d => d.Id, e.Id }, { d => d.Status, e.Status },
             { d => d.CanUpdate, EnquiryPages.CanUpdate(AuthState is null ? null : (await AuthState).User) },
         }, EnquiryPages.ConversationOptions);
-        if ((await dialog.Result)?.Data is true)
-            await _table!.ReloadAsync();
+        // Always: the row's status can change just by opening it (replies read from the inbox).
+        await dialog.Result;
+        await _table!.ReloadAsync();
     }
 
     private async Task ExportAsync() =>

@@ -147,15 +147,28 @@
         _isAdmin = user.IsInRole(FuseRoles.Admin);
         _isSupplier = user.IsInRole(FuseRoles.Supplier) && !_isAdmin;
         _canReports = !_isSupplier && user.HasPermission(FuseAction.View, FuseResource.Reports);
+        // Loaded once, while the server draws the page, and handed to the browser (rather than both asking the database).
+        if (InitialTours is not null)
+        {
+            _tours = InitialTours;
+            _stats = _totals = InitialStats;
+            return;
+        }
         var tours = Api.Send(new ListDashboardTours()).AsTask();
         await Task.WhenAll(LoadStatsAsync(), tours);
-        _tours = tours.Result;
+        _tours = InitialTours = tours.Result;
+        InitialStats = _stats;
     }
 
+    [PersistentState] public IReadOnlyList<LookupItem>? InitialTours { get; set; }
+    [PersistentState] public DashboardStats? InitialStats { get; set; }
+
+    // Each part of the page shows as soon as its own data arrives (StateHasChanged), not when the slowest has finished.
     private Task LoadStatsAsync() => _isSupplier ? Task.CompletedTask : Snackbar.TryAsync(async () =>
     {
         var (from, to) = Window();
         _stats = _totals = await Api.Send(new GetDashboardStats(from, to));
+        StateHasChanged();
     });
 
     private async Task SelectRangeAsync(Range range)

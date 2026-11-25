@@ -88,7 +88,19 @@
     private IReadOnlyList<ViewSwitch<string>.Option>? _options;
     private IReadOnlyList<string>? _optionsFor;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    /// <summary>The first counts, loaded while the server draws the page and handed to the browser (not asked for twice).</summary>
+    [PersistentState] public SellATourSummary? InitialSummary { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (InitialSummary is not null)
+        {
+            (_summary, _showTable) = (InitialSummary, true);
+            return;
+        }
+        await LoadAsync();
+        InitialSummary = _summary;
+    }
 
     /// <summary>"All" then each hostel (kept while the hostels are the same, so the tabs don't re-render needlessly).</summary>
     private IReadOnlyList<ViewSwitch<string>.Option> HostelOptions(IReadOnlyList<string> hostels)
@@ -119,6 +131,7 @@
         {
             _loading = false;
         }
+        StateHasChanged(); // the counts show now, not when the rest of the dashboard has loaded
         if (!_showTable)
         {
             _showTable = true; // loads its first page as it mounts

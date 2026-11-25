@@ -7,20 +7,9 @@ using Fuse.Contracts.Tours;
 
 namespace Fuse.Application.Features.Dashboard;
 
-internal sealed class GetDashboardStatsHandler(IAppDbContext db, ITenantContext tenant, IBusinessClock clock)
+internal sealed class GetDashboardStatsHandler(IAppDbContext db, IBusinessClock clock)
     : IQueryHandler<GetDashboardStats, DashboardStats>
 {
-    /// <summary>The proc's range columns (a class: Dapper maps by name and the proc returns more columns).</summary>
-    private sealed class Totals
-    {
-        public int TotalBookingsCount { get; init; }
-        public decimal TotalBookingsRevenue { get; init; }
-        public int TotalCancelledCount { get; init; }
-        public decimal TotalCancelledRevenue { get; init; }
-        public int TotalRefundedCount { get; init; }
-        public decimal TotalRefundedRevenue { get; init; }
-    }
-
     public async ValueTask<DashboardStats> Handle(GetDashboardStats query, CancellationToken cancellationToken)
     {
         var today = clock.Today;
@@ -29,10 +18,7 @@ internal sealed class GetDashboardStatsHandler(IAppDbContext db, ITenantContext 
         if (to < from)
             (from, to) = (to, from);
 
-        // The range totals come from the tuned GetDashboard proc. Its own "today" figures use the
-        // database clock (UTC on Azure), so today's are worked out here in business time instead.
-        var totals = (await db.QueryProcedureAsync<Totals>("GetDashboard", new { tenant.TenantId, FromDate = from, ToDate = to }, cancellationToken))
-            .FirstOrDefault() ?? new Totals();
+        var totals = await RangeAsync(from, to.AddDays(1), cancellationToken);
         var todays = await TodayAsync(today, cancellationToken);
 
         return new DashboardStats
@@ -40,64 +26,123 @@ internal sealed class GetDashboardStatsHandler(IAppDbContext db, ITenantContext 
             TodaysBookings = todays.Bookings,
             TodaysDepartures = todays.Departures,
             TodaysRevenue = todays.Revenue,
-            TotalBookings = totals.TotalBookingsCount,
-            TotalRevenue = totals.TotalBookingsRevenue,
-            TotalCancelled = totals.TotalCancelledCount,
-            TotalCancelledValue = totals.TotalCancelledRevenue,
-            TotalRefunded = totals.TotalRefundedCount,
-            TotalRefundedValue = totals.TotalRefundedRevenue,
+            TotalBookings = totals.Count(i => !i.Cancelled && !i.Refunded),
+            TotalRevenue = totals.Where(i => i.IsPaid && !i.Refunded).Sum(i => i.Value),
+            TotalCancelled = totals.Count(i => i.Cancelled),
+            TotalCancelledValue = totals.Where(i => i.IsPaid && i.Cancelled).Sum(i => i.Value),
+            TotalRefunded = totals.Count(i => i.Refunded),
+            TotalRefundedValue = totals.Where(i => i.Refunded).Sum(i => i.Value),
         };
+    }
+
+    private sealed record Item(bool IsPaid, bool Cancelled, bool Refunded, decimal Value);
+
+    /// <summary>The soft-delete query filter (AppDbContext.SoftDeleteFilter), lifted where the procedure didn't apply it.</summary>
+    private static readonly string[] SoftDelete = ["SoftDelete"];
+
+    /// <summary>
+    /// The range totals, by the GetDashboard procedure's rules (each booked tour; its value = price × (lead + additional
+    /// guests), additional guests counted whether removed or not, as the procedure did). Only the range's bookings are
+    /// read (by booking date, an index), not every booking ever made as the procedure did, which took seconds on the live
+    /// database and slowed the rest of the dashboard with it.
+    /// </summary>
+    private async Task<IReadOnlyList<Item>> RangeAsync(DateTime from, DateTime toExclusive, CancellationToken cancellationToken)
+    {
+        // Soft deletes by hand, as the procedure: deleted bookings and tours are left out, but a deleted departure or
+        // price (which it joined regardless) still counts.
+        var rows = await db.BookingItems.IgnoreQueryFilters(SoftDelete).AsNoTracking()
+            .Where(i => i.DeletedOn == null && i.Booking.DeletedOn == null && i.TourId != null && i.TourDate != null && i.TourDate.TourPrice != null
+                        && i.Booking.BookingDate >= from && i.Booking.BookingDate < toExclusive)
+            .Select(i => new
+            {
+                i.Booking.IsPaid,
+                Cancelled = i.Booking.Cancelled == true,
+                Refunded = i.Booking.Refunded == true,
+                Price = i.TourDate!.TourPrice!.Price,
+                Additional = db.BookingItemGuests.IgnoreQueryFilters(SoftDelete).Count(g => g.BookingItemId == i.Id),
+            })
+            .ToListAsync(cancellationToken);
+        return [.. rows.Select(r => new Item(r.IsPaid, r.Cancelled, r.Refunded, r.Price * (1 + r.Additional)))];
     }
 
     /// <summary>The proc's "Today" rules: per booked tour, guests = lead + additional, value = price × guests.</summary>
     private async Task<(int Bookings, int Departures, decimal Revenue)> TodayAsync(DateTime today, CancellationToken cancellationToken)
     {
         var tomorrow = today.AddDays(1);
-        var items = await db.BookingItems.AsNoTracking()
-            .Where(i => i.TourId != null && i.TourDate != null
-                        && ((i.Booking.BookingDate >= today && i.Booking.BookingDate < tomorrow) || (i.StartDate >= today && i.StartDate < tomorrow)))
-            .Select(i => new
-            {
-                i.Id,
-                i.Booking.BookingDate,
-                i.StartDate,
-                i.Booking.IsPaid,
-                Cancelled = i.Booking.Cancelled == true,
-                Refunded = i.Booking.Refunded == true,
-                Price = i.TourDate!.TourPrice.Price,
-            })
+        // Booked today, and departing today, in one round trip (UNION ALL): two halves that can each use an index,
+        // which one OR across both tables can't.
+        var live = db.BookingItems.AsNoTracking().Where(i => i.TourId != null && i.TourDate != null && i.Booking.Cancelled != true && i.Booking.Refunded != true);
+        var rows = await live.Where(i => i.Booking.BookingDate >= today && i.Booking.BookingDate < tomorrow)
+            .Select(i => new { Booked = true, i.Id, i.Booking.IsPaid, Price = i.TourDate!.TourPrice.Price, Guests = 1 + i.Guests!.Count() })
+            .Concat(live.Where(i => i.StartDate >= today && i.StartDate < tomorrow)
+                .Select(i => new { Booked = false, i.Id, i.Booking.IsPaid, Price = i.TourDate!.TourPrice.Price, Guests = 1 + i.Guests!.Count() }))
             .ToListAsync(cancellationToken);
-        if (items.Count == 0)
-            return (0, 0, 0);
 
-        var ids = items.Select(i => i.Id).ToList();
-        var additional = await db.BookingItemGuests.AsNoTracking().Where(g => ids.Contains(g.BookingItemId))
-            .GroupBy(g => g.BookingItemId).Select(g => new { g.Key, Count = g.Count() })
-            .ToDictionaryAsync(g => g.Key, g => g.Count, cancellationToken);
-
-        var live = items.Where(i => !i.Cancelled && !i.Refunded).ToList();
-        var bookedToday = live.Where(i => i.BookingDate >= today && i.BookingDate < tomorrow).ToList();
-        int Guests(DefaultIdType id) => 1 + additional.GetValueOrDefault(id);
-
+        var booked = rows.Where(r => r.Booked).ToList();
         return (
-            bookedToday.Count,
-            live.Where(i => i.StartDate >= today && i.StartDate < tomorrow).Sum(i => Guests(i.Id)),
-            bookedToday.Where(i => i.IsPaid).Sum(i => i.Price * Guests(i.Id)));
+            booked.Count,
+            rows.Where(r => !r.Booked).Sum(r => r.Guests),
+            booked.Where(r => r.IsPaid).Sum(r => r.Price * r.Guests));
     }
 }
 
 internal sealed class SearchDeparturesHandler(IAppDbContext db, ITenantContext tenant, SupplierScope scope, IBusinessClock clock)
     : IQueryHandler<SearchDepartures, PagedResult<DepartureRow>>
 {
+    /// <summary>A GetDashboardDepartures row: one person on a departure, and what decides their status.</summary>
+    private sealed class Row
+    {
+        public int Reference { get; init; }
+        public string? TourName { get; init; }
+        public string? GuestId { get; init; }
+        public string? GuestName { get; init; }
+        public DateTime StartDate { get; init; }
+        public DateTime EndDate { get; init; }
+        public string? PickupLocation { get; init; }
+        public bool? WaiverSigned { get; init; }
+        public bool? Cancelled { get; init; }
+        public bool? NoShow { get; init; }
+        public bool? CheckedIn { get; init; }
+        public bool? BookingRefunded { get; init; }
+        public bool? TourRefunded { get; init; }
+        public bool IsPaid { get; init; }
+
+        // As the export's Status (BookingExportRow.Status).
+        public DepartureRow ToDeparture() => new()
+        {
+            Reference = Reference,
+            TourName = TourName ?? "",
+            GuestId = GuestId,
+            GuestName = GuestName,
+            StartDate = StartDate,
+            EndDate = EndDate,
+            PickupLocation = PickupLocation,
+            WaiverSigned = WaiverSigned == true,
+            Status = Cancelled == true ? BookingState.Cancelled
+                : NoShow == true ? BookingState.NoShow
+                : CheckedIn == true ? BookingState.CheckedIn
+                : BookingRefunded == true || TourRefunded == true ? BookingState.Refunded
+                : IsPaid ? BookingState.Paid
+                : BookingState.Unpaid,
+        };
+    }
+
     public async ValueTask<PagedResult<DepartureRow>> Handle(SearchDepartures query, CancellationToken cancellationToken)
     {
+        var tours = await scope.TourIdsAsync(cancellationToken);
+        if (tours is { Count: 0 })
+            return PagedResult<DepartureRow>.Empty(query.PageSize);
+
         var day = clock.Today.AddDays(query.DaysFromToday);
-        var rows = await BookingExports.QueryAsync(db, tenant, scope, new BookingExports.Filter
+        // Its own small procedure (the table's columns only): the bookings export one took seconds on the live database.
+        var rows = await db.QueryProcedureAsync<Row>("GetDashboardDepartures", new
         {
-            TourStart = day,
-            TourEnd = day.AddDays(1).AddSeconds(-1),
-            TourId = query.TourId,
-            Keyword = query.Keyword,
+            tenant.TenantId,
+            FromDate = day,
+            ToDate = day.AddDays(1),
+            query.TourId,
+            Search = string.IsNullOrWhiteSpace(query.Keyword) ? null : query.Keyword,
+            TourIds = StoredProcedures.GuidList(tours ?? []),
         }, cancellationToken);
 
         return rows.Select(r => r.ToDeparture()).AsQueryable()
